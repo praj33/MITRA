@@ -6,6 +6,7 @@ from datetime import datetime
 import os
 
 from app.core.assistant_orchestrator import handle_assistant_request
+from app.core.pydantic_compat import model_to_dict
 from app.core.security import verify_token_string
 
 router = APIRouter()
@@ -207,7 +208,7 @@ async def assistant_endpoint(
     Backend is LOCKED and frontend-safe.
     """
     try:
-        request_payload = request.model_dump()
+        request_payload = model_to_dict(request)
         authenticated_user_context = _build_authenticated_user_context(
             request_context=request.context,
             x_api_key=x_api_key,

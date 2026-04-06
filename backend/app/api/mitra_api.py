@@ -7,6 +7,7 @@ from fastapi.responses import JSONResponse
 from pydantic import BaseModel
 
 from app.core.logging import get_logger
+from app.core.pydantic_compat import model_to_dict
 from app.services.mitra_control_plane_service import MitraAuthorityInput, MitraControlPlaneService
 
 
@@ -102,10 +103,11 @@ async def evaluate_mitra_event(
         authenticated_user_context.setdefault("session_id", request_context.session_id)
 
     try:
+        request_payload = model_to_dict(request)
         authority_result = control_plane_service.evaluate(
             MitraAuthorityInput(
                 input_text=event_text,
-                raw_input=request.model_dump(),
+                raw_input=request_payload,
                 category=category,
                 request_confidence=event.confidence,
                 user_id=resolved_user_id,
@@ -116,7 +118,7 @@ async def evaluate_mitra_event(
                 preferred_language=request_context.preferred_language,
                 authenticated_user_context=authenticated_user_context,
                 system_context=request_context.system_context,
-                trace_seed_payload=request.model_dump(),
+                trace_seed_payload=request_payload,
                 source="/api/mitra/evaluate",
                 age_gate_status=request_context.age_gate_status,
                 region_policy=request_context.region_policy,
