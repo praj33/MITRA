@@ -1,0 +1,11 @@
+{
+  "test": "telegram_inbound",
+  "webhook_endpoint": "/webhook/telegram",
+  "flow": "Inbound -> Safety -> Intelligence -> Enforcement -> Orchestration",
+  "enforcement_gated": true,
+  "result": {
+    "status": "processed",
+    "trace_id": "trace_397742f53110",
+    "processed_at": "2026-03-09T07:34:13.783245"
+  }
+}

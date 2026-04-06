@@ -1,0 +1,22 @@
+# Root monorepo ignores
+backend/.env
+frontend/.env
+frontend/frontend/.env
+
+# Python
+backend/venv/
+backend/venv310/
+backend/__pycache__/
+backend/.pytest_cache/
+backend/logs/
+
+# Node / frontend
+frontend/frontend/node_modules/
+frontend/frontend/build/
+frontend/frontend/dist/
+
+# OS / IDE
+.DS_Store
+Thumbs.db
+.vscode/
+.idea/
