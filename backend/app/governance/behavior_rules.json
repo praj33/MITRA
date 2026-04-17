@@ -1,0 +1,59 @@
+{
+  "version": "1.0",
+  "policy_id": "behavior_rules",
+  "description": "Behavioral rules governing AI assistant response patterns across all systems",
+  "rules": [
+    {
+      "id": "BR-001",
+      "category": "youth_protection",
+      "decision": "BLOCK",
+      "confidence_threshold": 90,
+      "patterns": [
+        "keep.*secret.*from.*parents", "meet up after school.*don't tell",
+        "underage.*relationship", "don't tell.*mom.*dad"
+      ]
+    },
+    {
+      "id": "BR-002",
+      "category": "loneliness_exploitation",
+      "decision": "REWRITE",
+      "confidence_threshold": 60,
+      "patterns": [
+        "no friends or family", "you're all I have",
+        "no one else would talk to me", "all alone"
+      ]
+    },
+    {
+      "id": "BR-003",
+      "category": "romantic_attachment",
+      "decision": "REWRITE",
+      "confidence_threshold": 65,
+      "patterns": [
+        "I am in love with you", "you're my soulmate",
+        "I want you to love me", "in love with you"
+      ]
+    },
+    {
+      "id": "BR-004",
+      "category": "escalation_detection",
+      "decision": "REWRITE",
+      "confidence_threshold": 62,
+      "patterns": [
+        "getting angry", "fed up", "tired of waiting",
+        "final warning", "won't ask again", "had enough"
+      ]
+    },
+    {
+      "id": "BR-005",
+      "category": "ai_boundary_enforcement",
+      "decision": "REWRITE",
+      "confidence_threshold": 70,
+      "description": "Prevent AI from being positioned as human replacement",
+      "patterns": [
+        "stopped talking to my friends.*prefer you",
+        "think about our conversations all day",
+        "you're becoming too important to me"
+      ]
+    }
+  ]
+}

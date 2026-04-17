@@ -1,3 +1,14 @@
+"""
+MitraControlPlaneService — Unified Sovereign Pipeline
+
+Single execution pipeline with embedded governance:
+  Entry Guard → PolicyRuntime (PolicyEngine + BehaviorValidator) → RL Interpreter
+  → Mediation Gate → Governance Enforcement → Raj Enforcement → Bucket → Response
+
+Single Trace Authority: ONE trace_id flows through ALL stages.
+No external service wrappers. No parallel systems.
+"""
+
 from __future__ import annotations
 
 import re
@@ -11,6 +22,15 @@ from app.external.enforcement.deterministic_trace import generate_trace_id
 from app.karma_adapter import fetch_user_karma, karma_bias_from_points
 from app.mitra_system_registry import mitra_registry
 
+# ── Embedded Governance (from governance_layer) ──────────────────────────
+from app.governance.policy_runtime_adapter import PolicyRuntimeAdapter, validate_for_mitra
+from app.governance.mediation_system import MediationSystem, MediationDecision, InboundMessage
+from app.governance.enforcement_adapter import EnforcementAdapter
+
+
+# ═══════════════════════════════════════════════════════════════════════════
+# Signal types for RL interpretation
+# ═══════════════════════════════════════════════════════════════════════════
 
 SignalType = Literal[
     "correction",
@@ -20,37 +40,95 @@ SignalType = Literal[
 ]
 
 
+# ═══════════════════════════════════════════════════════════════════════════
+# RL Interpreter — Transforms raw signals into actionable adjustments
+# ═══════════════════════════════════════════════════════════════════════════
+
+class RLInterpreter:
+    """
+    Reinforcement Learning interpreter that converts captured user signals
+    into confidence adjustments for the pipeline.
+    """
+
+    SIGNAL_ADJUSTMENTS = {
+        "correction": {
+            "flag": "user_correction_detected",
+            "confidence_delta": -0.15,
+        },
+        "intent_refinement": {
+            "flag": "refinement_in_progress",
+            "confidence_delta": +0.05,
+        },
+        "implicit_positive": {
+            "flag": "positive_engagement",
+            "confidence_delta": +0.10,
+        },
+        "implicit_negative": {
+            "flag": "disengagement_signal",
+            "confidence_delta": -0.10,
+        },
+    }
+
+    def interpret(
+        self,
+        signal_record: Dict[str, Any],
+        policy_confidence: float,
+    ) -> Dict[str, Any]:
+        signal_type = signal_record.get("signal_type", "implicit_positive")
+        adj = self.SIGNAL_ADJUSTMENTS.get(signal_type, {})
+
+        raw_confidence = signal_record.get("confidence", 0.0)
+        delta = adj.get("confidence_delta", 0.0)
+        adjusted = max(0.0, min(1.0, policy_confidence + delta))
+
+        return {
+            "signal_type": signal_type,
+            "pattern_flag": adj.get("flag", "unknown"),
+            "adjusted_confidence": round(adjusted, 4),
+            "confidence_delta": delta,
+            "raw_confidence": raw_confidence,
+            "policy_confidence": policy_confidence,
+            "trace_id": signal_record.get("trace_id"),
+        }
+
+
+# ═══════════════════════════════════════════════════════════════════════════
+# Reason codes
+# ═══════════════════════════════════════════════════════════════════════════
+
 _REASON_BY_CODE = {
-    "CONTENT_AND_ACTION_ALLOWED": "Content passed existing safety validation and enforcement checks.",
-    "SAFE_REWRITE_REQUIRED": "Content triggered existing rewrite safeguards.",
-    "POLICY_VIOLATION": "Content violated existing safety policies.",
+    "CONTENT_AND_ACTION_ALLOWED": "Content passed safety validation and enforcement checks.",
+    "SAFE_REWRITE_REQUIRED": "Content triggered rewrite safeguards.",
+    "POLICY_VIOLATION": "Content violated safety policies.",
     "MISSING_MEDIATION": "Pipeline failed closed because required safety mediation was missing.",
     "TRACE_MISMATCH": "Pipeline failed closed because the safety and enforcement traces did not match.",
     "MISSING_BUCKET_ARTIFACT": "Pipeline failed closed because the safety artifact was missing.",
     "GLOBAL_KILL_SWITCH": "Pipeline terminated because the global kill switch is active.",
     "AKANKSHA_VALIDATION_FAILED": "Pipeline terminated because safety validation failed inside enforcement.",
     "SYSTEM_TERMINATION": "Pipeline terminated by the enforcement runtime.",
+    "MEDIATION_BLOCK": "Content blocked by mediation system (manipulation/escalation detected).",
+    "MEDIATION_DELAY": "Content delayed by mediation system (quiet hours).",
+    "GOVERNANCE_ENFORCEMENT_BLOCK": "Content blocked by governance enforcement adapter.",
 }
 
+
+# ═══════════════════════════════════════════════════════════════════════════
+# Signal detection markers
+# ═══════════════════════════════════════════════════════════════════════════
+
 _CORRECTION_MARKERS = (
-    "actually",
-    "correction",
-    "i meant",
-    "i mean",
-    "instead",
-    "not that",
-    "that's wrong",
-    "that is wrong",
-    "to correct",
+    "actually", "correction", "i meant", "i mean",
+    "instead", "not that", "that's wrong", "that is wrong", "to correct",
 )
 _REFINEMENT_MARKERS = (
-    "for example",
-    "in other words",
-    "let me rephrase",
-    "more specifically",
-    "to clarify",
+    "for example", "in other words", "let me rephrase",
+    "more specifically", "to clarify",
 )
 
+
+# ═══════════════════════════════════════════════════════════════════════════
+# Utility functions
+# ═══════════════════════════════════════════════════════════════════════════
 
 def _normalize_text(value: Optional[str]) -> str:
     return (value or "").strip()
@@ -109,8 +187,8 @@ def _map_risk_level(
     return "LOW"
 
 
-def _build_reason(status: str, safety_result: dict, enforcement_result: dict) -> str:
-    explanation = str(safety_result.get("explanation") or "").strip()
+def _build_reason(status: str, policy_decision: dict, enforcement_result: dict) -> str:
+    explanation = str(policy_decision.get("reason") or "").strip()
     if status in {"FLAG", "BLOCK"} and explanation:
         return explanation
 
@@ -127,6 +205,10 @@ def _build_reason(status: str, safety_result: dict, enforcement_result: dict) ->
         return _REASON_BY_CODE["SAFE_REWRITE_REQUIRED"]
     return _REASON_BY_CODE["POLICY_VIOLATION"]
 
+
+# ═══════════════════════════════════════════════════════════════════════════
+# Authority Input
+# ═══════════════════════════════════════════════════════════════════════════
 
 @dataclass(frozen=True)
 class MitraAuthorityInput:
@@ -149,12 +231,37 @@ class MitraAuthorityInput:
     region_policy: Optional[Dict[str, Any]] = None
 
 
+# ═══════════════════════════════════════════════════════════════════════════
+# MitraControlPlaneService — UNIFIED PIPELINE
+# ═══════════════════════════════════════════════════════════════════════════
+
 class MitraControlPlaneService:
+    """
+    Single sovereign authority for all Mitra evaluations.
+
+    Pipeline stages (single trace_id across ALL):
+      1. Policy Runtime — two-gate: PolicyEngine (JSON rules) → BehaviorValidator (100+ patterns)
+      2. RL Interpretation — signal capture + confidence adjustment
+      3. Mediation Gate — inbound validation (quiet hours, contact limits, manipulation)
+      4. Governance Enforcement — maps validator → ALLOW/MONITOR/BLOCK/ESCALATE
+      5. Raj Enforcement — Raj's deterministic enforcement engine (final authority)
+      6. Response — unified contract returned
+    """
+
     def __init__(self) -> None:
-        self.safety_service = mitra_registry.safety_service
-        self.intelligence_service = mitra_registry.intelligence_service
+        # ── Embedded governance (from governance_layer — NOT external calls) ──
+        self._policy_runtime = PolicyRuntimeAdapter()
+        self._mediation = MediationSystem()
+        self._governance_enforcement = EnforcementAdapter()
+        self._rl_interpreter = RLInterpreter()
+
+        # ── Core services (from registry — stay as-is) ──
         self.enforcement_service = mitra_registry.enforcement_service
         self.bucket_service = mitra_registry.bucket_service
+
+    # ──────────────────────────────────────────────────────────────────────
+    # Context builders
+    # ──────────────────────────────────────────────────────────────────────
 
     @staticmethod
     def _build_platform_policy(authority_input: MitraAuthorityInput) -> Dict[str, Any]:
@@ -226,6 +333,10 @@ class MitraControlPlaneService:
             return _normalize_text(prior_input.get("category"))
         return ""
 
+    # ──────────────────────────────────────────────────────────────────────
+    # Signal resolution (existing logic preserved)
+    # ──────────────────────────────────────────────────────────────────────
+
     def _resolve_signal(
         self,
         *,
@@ -287,6 +398,28 @@ class MitraControlPlaneService:
             },
         }
 
+    # ──────────────────────────────────────────────────────────────────────
+    # BHIV Core context fetch
+    # ──────────────────────────────────────────────────────────────────────
+
+    def context_fetch(self, user_id: str) -> Dict[str, Any]:
+        """Fetch BHIV Core context for a user."""
+        karma = fetch_user_karma(user_id)
+        recent = self.bucket_service.find_recent_stage_events(
+            "mitra_request_log", user_id=user_id, limit=5,
+        )
+        return {
+            "user_id": user_id,
+            "karma": karma,
+            "recent_interactions": len(recent),
+            "last_trace_id": recent[0].get("trace_id") if recent else None,
+            "source": "bhiv_core_context_fetch",
+        }
+
+    # ──────────────────────────────────────────────────────────────────────
+    # EVALUATE — THE UNIFIED PIPELINE
+    # ──────────────────────────────────────────────────────────────────────
+
     def evaluate(self, authority_input: MitraAuthorityInput) -> Dict[str, Any]:
         input_text = _normalize_text(authority_input.input_text)
         if not input_text:
@@ -315,6 +448,7 @@ class MitraControlPlaneService:
             region_policy=authority_input.region_policy,
         )
 
+        # ── SINGLE TRACE AUTHORITY ─────────────────────────────────────────
         trace_id = resolved_input.trace_id or generate_trace_id(
             input_payload=resolved_input.trace_seed_payload or self._build_trace_seed_payload(resolved_input),
             enforcement_category="REQUEST",
@@ -328,6 +462,7 @@ class MitraControlPlaneService:
         )
         karma_points = int(karma_data.get("karma_points", 50))
 
+        # ── Stage 0: Request Received ──────────────────────────────────────
         request_received = {
             "trace_id": trace_id,
             "user_id": resolved_input.user_id,
@@ -341,32 +476,86 @@ class MitraControlPlaneService:
         }
         self.bucket_service.log_event(trace_id, "request_received", request_received)
 
-        safety_result = self.safety_service.validate_content(
-            content=resolved_input.input_text,
-            trace_id=trace_id,
-            context={
-                "age_gate_status": resolved_input.age_gate_status,
-                "region_rule_status": resolved_input.region_policy,
-                "platform_policy_state": platform_policy,
-                "karma_bias_input": karma_bias_from_points(karma_points),
-            },
+        # ── Stage 1: Policy Runtime (Two-Gate) ────────────────────────────
+        # Gate 1: PolicyEngine (JSON rules — fast, configurable)
+        # Gate 2: BehaviorValidator (100+ patterns — deep, canonical)
+        region = None
+        if resolved_input.region_policy and isinstance(resolved_input.region_policy, dict):
+            region = resolved_input.region_policy.get("region")
+
+        policy_decision = validate_for_mitra(
+            text=resolved_input.input_text,
+            region=region,
+            caller_id=resolved_input.user_id,
         )
+
+        # Build safety_result in legacy format for downstream compatibility
+        safety_result = {
+            "decision": policy_decision["decision"].lower() if policy_decision["decision"] == "BLOCK" else (
+                "hard_deny" if policy_decision["decision"] == "BLOCK" else (
+                    "soft_rewrite" if policy_decision["decision"] == "REWRITE" else "allow"
+                )
+            ),
+            "risk_category": policy_decision.get("category", "clean"),
+            "confidence": policy_decision.get("confidence", 0.0),
+            "trace_id": trace_id,  # UNIFIED trace
+            "rule_id": policy_decision.get("rule_id", "NONE"),
+            "reason": policy_decision.get("reason", ""),
+            "explanation": policy_decision.get("reason", ""),
+            "safe_output": policy_decision.get("safe_output"),
+            "system": policy_decision.get("system", "mitra"),
+            "gate": "policy_runtime_adapter",
+        }
+        self.bucket_service.log_event(trace_id, "policy_evaluation", {
+            **policy_decision,
+            "trace_id": trace_id,
+        })
         self.bucket_service.log_event(trace_id, "safety_validation", safety_result)
 
-        intelligence_result = self.intelligence_service.process_interaction(
-            context={
-                "user_input": resolved_input.input_text,
-                "platform": resolved_input.platform,
-                "device": resolved_input.device,
-                "session_id": resolved_input.session_id,
-                "category": resolved_input.category,
-                "voice_input": resolved_input.voice_input,
-                "preferred_language": resolved_input.preferred_language,
-                "karma_data": karma_data,
-            },
-            trace_id=trace_id,
+        # ── Stage 2: RL Signal Capture + Interpretation ───────────────────
+        signal_record = self._resolve_signal(trace_id=trace_id, authority_input=resolved_input)
+        self.bucket_service.log_event(trace_id, "rl_signal_capture", signal_record)
+
+        rl_signal = self._rl_interpreter.interpret(
+            signal_record=signal_record,
+            policy_confidence=_clamp_confidence(_coerce_float(safety_result.get("confidence"))),
         )
-        intelligence_result.setdefault("karma_score", karma_points)
+        self.bucket_service.log_event(trace_id, "rl_interpretation", rl_signal)
+
+        # ── Stage 3: Mediation Gate ───────────────────────────────────────
+        inbound_msg = InboundMessage(
+            content=resolved_input.input_text,
+            sender=resolved_input.user_id,
+            recipient="mitra_assistant",
+            platform=resolved_input.platform,
+            timestamp=timestamp,
+        )
+        mediation_result = self._mediation.validate_inbound(inbound_msg)
+        mediation_dict = mediation_result.to_dict()
+        mediation_dict["trace_id"] = trace_id  # UNIFIED trace
+        self.bucket_service.log_event(trace_id, "mediation_gate", mediation_dict)
+
+        # ── Stage 4: Governance Enforcement ───────────────────────────────
+        gov_enforcement = self._governance_enforcement.map_validator_to_enforcement(
+            resolved_input.input_text,
+        )
+        gov_enforcement["trace_id"] = trace_id  # UNIFIED trace
+        self.bucket_service.log_event(trace_id, "governance_enforcement", gov_enforcement)
+
+        # ── Stage 5: Raj Enforcement (Final Authority) ────────────────────
+        # Build intelligence_result for downstream compatibility
+        intelligence_result = {
+            "karma_score": karma_points,
+            "safety_level": "safe" if safety_result["decision"] == "allow" else "elevated",
+            "intent": resolved_input.category or "general",
+            "risk_flags": [],
+            "trace_id": trace_id,
+        }
+        if gov_enforcement.get("decision") in ("block", "escalate"):
+            intelligence_result["risk_flags"].append(f"governance_{gov_enforcement['decision']}")
+        if mediation_result.safety_flags:
+            intelligence_result["risk_flags"].extend(mediation_result.safety_flags)
+
         self.bucket_service.log_event(trace_id, "intelligence_processing", intelligence_result)
 
         raw_risk_flags = intelligence_result.get("risk_flags", [])
@@ -398,22 +587,22 @@ class MitraControlPlaneService:
             )
         self.bucket_service.log_event(trace_id, "enforcement_decision", enforcement_result)
 
+        # ── Stage 6: Build Unified Response ───────────────────────────────
         status = _map_status(str(enforcement_result.get("decision") or "BLOCK").upper())
         risk_level = _map_risk_level(
             enforcement_decision=str(enforcement_result.get("decision") or "BLOCK").upper(),
             safety_decision=str(safety_result.get("decision") or ""),
         )
-        signal_record = self._resolve_signal(trace_id=trace_id, authority_input=resolved_input)
-        self.bucket_service.log_event(trace_id, "rl_signal_capture", signal_record)
 
         system_context = self._build_system_context(
             resolved_input,
             enforcement_trace_id=str(enforcement_result.get("trace_id") or "").strip() or None,
         )
+
         response_contract: Dict[str, Any] = {
             "status": status,
             "risk_level": risk_level,
-            "reason": _build_reason(status, safety_result, enforcement_result),
+            "reason": _build_reason(status, policy_decision, enforcement_result),
             "confidence": _clamp_confidence(
                 _coerce_float(safety_result.get("confidence"))
                 if safety_result.get("confidence") is not None
@@ -421,9 +610,14 @@ class MitraControlPlaneService:
             ),
             "trace_id": trace_id,
             "signal_type": signal_record["signal_type"],
+            "policy_decision": policy_decision,
+            "rl_signal": rl_signal,
+            "mediation_result": mediation_dict,
+            "enforcement_output": enforcement_result,
             "system_context": system_context,
         }
 
+        # ── Final logging ──────────────────────────────────────────────────
         request_log = {
             "user_id": resolved_input.user_id,
             "session_id": resolved_input.session_id,
@@ -443,8 +637,12 @@ class MitraControlPlaneService:
             "trace_id": trace_id,
             "response_contract": response_contract,
             "signal_record": signal_record,
+            "rl_signal": rl_signal,
+            "policy_decision": policy_decision,
             "safety_result": safety_result,
             "intelligence_result": intelligence_result,
+            "mediation_result": mediation_dict,
+            "governance_enforcement": gov_enforcement,
             "enforcement_result": enforcement_result,
             "system_context": system_context,
         }

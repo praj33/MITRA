@@ -1,0 +1,16 @@
+{
+  "current_version": "v1.0.0",
+  "versions": {
+    "v1.0.0": {
+      "policy_version_id": "v1.0.0",
+      "released": "2026-01-05",
+      "description": "Initial production policy set",
+      "files": {
+        "content_rules":  { "file": "content_rules.json",  "version": "1.0", "rules": 7 },
+        "behavior_rules": { "file": "behavior_rules.json", "version": "1.0", "rules": 5 },
+        "regional_rules": { "file": "regional_rules.json", "version": "1.0", "regions": ["EU","UK","AU","DEFAULT"] }
+      },
+      "breaking_change": false
+    }
+  }
+}

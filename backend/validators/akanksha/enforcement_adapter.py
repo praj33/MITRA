@@ -6,7 +6,7 @@ The deterministic engine requires an adapter that returns:
 - risk_category
 - confidence
 
-This adapter bridges to the existing SafetyService (behavior validator).
+This adapter bridges to the embedded governance BehaviorValidator.
 If validation fails for any reason, it raises to force TERMINATE (fail-closed).
 """
 
@@ -26,11 +26,11 @@ class EnforcementAdapter:
         if isinstance(prevalidated, dict):
             result = prevalidated
         else:
-            from app.services.safety_service import SafetyService
+            # Use embedded governance BehaviorValidator instead of old SafetyService
+            from app.governance.behavior_validator import validate_behavior
 
             text = getattr(input_payload, "emotional_output", None) or ""
-            trace_id = getattr(input_payload, "trace_id", None) or "trace_unknown"
-            result = SafetyService().validate_content(content=text, trace_id=trace_id)
+            result = validate_behavior("auto", text)
 
         safety_decision = result.get("decision")
         if safety_decision == "hard_deny":

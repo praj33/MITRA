@@ -1,0 +1,76 @@
+{
+  "version": "1.0",
+  "policy_id": "content_rules",
+  "description": "Hard content rules applied to all user input across all systems",
+  "rules": [
+    {
+      "id": "CR-001",
+      "category": "self_harm",
+      "decision": "BLOCK",
+      "confidence_threshold": 85,
+      "patterns": [
+        "kill myself", "want to die", "end my life", "unalive myself",
+        "hurting myself", "harming myself", "suicide", "jump from building"
+      ]
+    },
+    {
+      "id": "CR-002",
+      "category": "illegal_content",
+      "decision": "BLOCK",
+      "confidence_threshold": 80,
+      "patterns": [
+        "hack.*email", "break into.*account", "steal money online",
+        "bypass security", "crack.*software", "buy.*drugs"
+      ]
+    },
+    {
+      "id": "CR-003",
+      "category": "threatening_content",
+      "decision": "BLOCK",
+      "confidence_threshold": 85,
+      "patterns": [
+        "I will hurt you", "I will kill you", "make you regret",
+        "I will destroy you", "ruin your life", "I will find you"
+      ]
+    },
+    {
+      "id": "CR-004",
+      "category": "privacy_violation",
+      "decision": "BLOCK",
+      "confidence_threshold": 80,
+      "patterns": [
+        "track.*phone location", "spy on.*messages", "get.*password",
+        "find.*home address", "hack.*social media", "stalk.*online"
+      ]
+    },
+    {
+      "id": "CR-005",
+      "category": "sexual_escalation",
+      "decision": "BLOCK",
+      "confidence_threshold": 82,
+      "patterns": [
+        "send me nudes", "naked.*pics", "sexting", "touching myself"
+      ]
+    },
+    {
+      "id": "CR-006",
+      "category": "manipulation",
+      "decision": "REWRITE",
+      "confidence_threshold": 65,
+      "patterns": [
+        "you have to", "if you don't", "last chance",
+        "really need you", "you must", "don't ignore"
+      ]
+    },
+    {
+      "id": "CR-007",
+      "category": "emotional_dependency",
+      "decision": "REWRITE",
+      "confidence_threshold": 60,
+      "patterns": [
+        "you're the only one", "can only talk to you",
+        "don't ever leave me", "you're all I have"
+      ]
+    }
+  ]
+}

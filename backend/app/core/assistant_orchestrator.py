@@ -31,8 +31,7 @@ CRISIS_SAFE_RESPONSE = (
 )
 
 # Initialize services via the central registry (single shared instances)
-safety_service = mitra_registry.safety_service
-intelligence_service = mitra_registry.intelligence_service
+# Note: safety and intelligence are now EMBEDDED in the control plane (governance package)
 enforcement_service = mitra_registry.enforcement_service
 bucket_service = mitra_registry.bucket_service
 execution_service = mitra_registry.execution_service

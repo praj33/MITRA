@@ -50,6 +50,10 @@ class MitraEvaluateResponse(BaseModel):
     signal_type: Optional[
         Literal["correction", "intent_refinement", "implicit_positive", "implicit_negative"]
     ] = None
+    policy_decision: Optional[dict] = None
+    rl_signal: Optional[dict] = None
+    mediation_result: Optional[dict] = None
+    enforcement_output: Optional[dict] = None
     system_context: Optional[dict] = None
 
 

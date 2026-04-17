@@ -1,0 +1,58 @@
+{
+  "version": "1.0",
+  "policy_id": "regional_rules",
+  "description": "Region-specific rules that override or extend base content rules",
+  "regions": {
+    "EU": {
+      "region_id": "EU",
+      "strict_mode": true,
+      "confidence_boost": 1.25,
+      "additional_rules": [
+        {
+          "id": "EU-001",
+          "category": "gdpr_violation",
+          "decision": "BLOCK",
+          "patterns": ["GDPR.*violation", "personal data.*without consent"]
+        },
+        {
+          "id": "EU-002",
+          "category": "illegal_purchase",
+          "decision": "BLOCK",
+          "patterns": ["buy.*drugs.*online.*Germany", "access dark web.*Europe"]
+        }
+      ]
+    },
+    "UK": {
+      "region_id": "UK",
+      "strict_mode": true,
+      "confidence_boost": 1.15,
+      "additional_rules": [
+        {
+          "id": "UK-001",
+          "category": "tax_evasion",
+          "decision": "BLOCK",
+          "patterns": ["avoid taxes.*UK", "hide income.*HMRC"]
+        }
+      ]
+    },
+    "AU": {
+      "region_id": "AU",
+      "strict_mode": true,
+      "confidence_boost": 1.15,
+      "additional_rules": [
+        {
+          "id": "AU-001",
+          "category": "illegal_weapons",
+          "decision": "BLOCK",
+          "patterns": ["gun.*without background.*Australia"]
+        }
+      ]
+    },
+    "DEFAULT": {
+      "region_id": "DEFAULT",
+      "strict_mode": false,
+      "confidence_boost": 1.0,
+      "additional_rules": []
+    }
+  }
+}

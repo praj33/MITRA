@@ -1,15 +1,33 @@
+"""
+BucketService — Mitra Pipeline Persistence (BHIV Bucket Integration)
+
+Provides append-only, tamper-evident artifact storage for every pipeline stage.
+Uses JSONL hash-chain storage as primary persistence (BHIV philosophy: memory, not decision).
+Optional MongoDB audit via AuditMiddleware as secondary persistence.
+"""
+
 import json
 import os
 import hashlib
+import logging
 from datetime import datetime
 from typing import Any, Dict, Optional, Iterable
 
-from app.external.bucket.database.mongo_db import MongoDBClient
-from app.external.bucket.middleware.audit_middleware import AuditMiddleware
-from app.external.bucket.utils.logger import get_logger
+from app.bucket.append_only_storage import AppendOnlyStorage
+from app.bucket.hash_service import deterministic_hash
+
+logger = logging.getLogger(__name__)
 
 
 class BucketService:
+    """
+    Unified bucket service embedding BHIV append-only storage.
+
+    Primary:   JSONL append-only log with hash chains (tamper-evident)
+    Secondary: MongoDB audit collection (if MONGODB_URI available)
+    Fallback:  In-memory log (for tests / no-storage environments)
+    """
+
     _memory_logs: list[Dict[str, Any]] = []
 
     @staticmethod
@@ -60,31 +78,93 @@ class BucketService:
         return True
 
     def __init__(self):
-        self.logger = get_logger(__name__)
-        self.mongo_client = MongoDBClient()
-        self.audit_middleware = AuditMiddleware(
-            self.mongo_client.db if self.mongo_client and self.mongo_client.db is not None else None
-        )
+        # Primary: BHIV append-only storage (JSONL hash chains)
+        storage_path = os.getenv("BUCKET_STORAGE_PATH", "data/mitra_pipeline_artifacts")
+        self._append_only = AppendOnlyStorage(storage_path=storage_path)
+
+        # Secondary: MongoDB audit (optional)
+        self._mongo_client = None
+        self._audit_collection = None
+        self._init_mongo_audit()
+
+    def _init_mongo_audit(self):
+        """Initialize MongoDB audit collection if MONGODB_URI is available."""
+        try:
+            mongo_uri = os.getenv("MONGODB_URI")
+            if mongo_uri:
+                from pymongo import MongoClient
+                client = MongoClient(mongo_uri, serverSelectionTimeoutMS=3000)
+                client.admin.command("ping")
+                db = client.get_default_database()
+                if db is None:
+                    db = client["mitra_bucket"]
+                self._mongo_client = client
+                self._audit_collection = db["pipeline_audit"]
+                logger.info("BucketService: MongoDB audit connected")
+            else:
+                logger.info("BucketService: No MONGODB_URI — file-only mode")
+        except Exception as exc:
+            logger.warning("BucketService: MongoDB audit unavailable: %s", exc)
+            self._mongo_client = None
+            self._audit_collection = None
 
     def enforcement_artifact_required(self) -> bool:
         return self._env_bool("BUCKET_MONGO_ENABLED", True)
 
     def log_event(self, trace_id: str, stage: str, data: Dict[str, Any]) -> bool:
+        """
+        Log a pipeline event as a BHIV artifact.
+
+        1. Normalize data
+        2. Build BHIV artifact envelope
+        3. Store in append-only JSONL (primary — tamper-evident)
+        4. Store in MongoDB audit (secondary — queryable)
+        5. Keep in-memory copy (for fast lookups within request)
+        """
         try:
             normalized_data = self._normalize_value(data)
+            timestamp = datetime.utcnow().isoformat() + "Z"
+
+            # Build BHIV artifact envelope
+            artifact_id = f"{trace_id}_{stage}_{timestamp.replace(':', '').replace('-', '')}"
+            artifact = {
+                "artifact_id": artifact_id,
+                "timestamp_utc": timestamp,
+                "schema_version": "1.0.0",
+                "source_module_id": "mitra_control_plane",
+                "artifact_type": "pipeline_event",
+                "payload": {
+                    "trace_id": trace_id,
+                    "stage": stage,
+                    "data": normalized_data,
+                },
+            }
+
+            # Primary: Append-only storage (hash chain)
+            try:
+                self._append_only.store_artifact(artifact)
+            except Exception as aoe:
+                logger.warning("Append-only storage write failed: %s", aoe)
+
+            # Build legacy-compatible log entry (for in-memory + MongoDB)
             log_entry = {
                 "trace_id": trace_id,
                 "stage": stage,
                 "data": normalized_data,
                 "integrity_hash": self._integrity_hash(trace_id, stage, normalized_data),
                 "integrity_version": "sha256-v1",
-                "timestamp": datetime.utcnow().isoformat(),
+                "timestamp": timestamp,
                 "service": "bucket_service",
+                "artifact_id": artifact_id,
             }
+
+            # In-memory copy
             BucketService._memory_logs.append(log_entry)
-            if self.audit_middleware is not None and self.audit_middleware.audit_collection is not None:
-                self.audit_middleware.audit_collection.insert_one(
-                    {
+
+            # Secondary: MongoDB audit
+            if self._audit_collection is not None:
+                try:
+                    self._audit_collection.insert_one({
                         "timestamp": datetime.utcnow(),
                         "operation_type": "CREATE",
                         "artifact_id": trace_id,
@@ -95,18 +175,21 @@ class BucketService:
                         "data_after": log_entry,
                         "immutable": True,
                         "audit_version": "1.0",
-                    }
-                )
-            self.logger.info("BUCKET_LOG [%s] %s: %s", trace_id, stage, json.dumps(log_entry, default=str))
+                    })
+                except Exception as me:
+                    logger.warning("MongoDB audit write failed: %s", me)
+
+            logger.debug("BUCKET_LOG [%s] %s", trace_id, stage)
             return True
         except Exception as exc:
-            self.logger.error("Bucket logging failed for %s: %s", trace_id, exc)
+            logger.error("Bucket logging failed for %s: %s", trace_id, exc)
             return False
 
     def get_artifact(self, trace_id: str, *, stage: Optional[str] = None) -> Optional[Dict[str, Any]]:
         if not trace_id:
             return None
 
+        # Check in-memory first (fast path for current request)
         for entry in reversed(BucketService._memory_logs):
             if entry.get("trace_id") != trace_id:
                 continue
@@ -114,21 +197,19 @@ class BucketService:
                 continue
             return dict(entry)
 
+        # Check MongoDB audit
         try:
-            if self.audit_middleware is not None and self.audit_middleware.audit_collection is not None:
+            if self._audit_collection is not None:
                 query: Dict[str, Any] = {"artifact_id": trace_id}
                 if stage is not None:
                     query["stage"] = stage
-                doc = self.audit_middleware.audit_collection.find_one(
-                    query,
-                    sort=[("timestamp", -1)],
-                )
+                doc = self._audit_collection.find_one(query, sort=[("timestamp", -1)])
                 if doc:
                     payload = doc.get("data_after")
                     if isinstance(payload, dict):
                         return dict(payload)
         except Exception as exc:
-            self.logger.error("Failed to retrieve artifact for %s: %s", trace_id, exc)
+            logger.error("Failed to retrieve artifact for %s: %s", trace_id, exc)
 
         return None
 
@@ -177,16 +258,16 @@ class BucketService:
 
     def get_trace_logs(self, trace_id: str) -> Optional[list]:
         try:
-            if self.audit_middleware is not None and self.audit_middleware.audit_collection is not None:
+            if self._audit_collection is not None:
                 logs = list(
-                    self.audit_middleware.audit_collection.find({"artifact_id": trace_id}).sort("timestamp", -1)
+                    self._audit_collection.find({"artifact_id": trace_id}).sort("timestamp", -1)
                 )
                 if logs:
                     return logs
 
             return [entry for entry in BucketService._memory_logs if entry.get("trace_id") == trace_id]
         except Exception as exc:
-            self.logger.error("Failed to retrieve trace logs for %s: %s", trace_id, exc)
+            logger.error("Failed to retrieve trace logs for %s: %s", trace_id, exc)
             return None
 
     def find_recent_stage_events(
@@ -218,8 +299,9 @@ class BucketService:
             if len(matches) >= limit:
                 return matches
 
+        # Also check MongoDB
         try:
-            if self.audit_middleware is not None and self.audit_middleware.audit_collection is not None:
+            if self._audit_collection is not None:
                 query: Dict[str, Any] = {"stage": stage}
                 if normalized_user_id is not None:
                     query["data_after.data.user_id"] = normalized_user_id
@@ -229,7 +311,7 @@ class BucketService:
                     query["artifact_id"] = {"$ne": exclude_trace_id}
 
                 docs = list(
-                    self.audit_middleware.audit_collection.find(query).sort("timestamp", -1).limit(limit)
+                    self._audit_collection.find(query).sort("timestamp", -1).limit(limit)
                 )
                 for doc in docs:
                     payload = doc.get("data_after")
@@ -238,16 +320,31 @@ class BucketService:
                         if len(matches) >= limit:
                             break
         except Exception as exc:
-            self.logger.error("Failed to query recent stage events for %s: %s", stage, exc)
+            logger.error("Failed to query recent stage events for %s: %s", stage, exc)
 
         return matches[:limit]
 
+    def get_chain_state(self) -> Dict[str, Any]:
+        """Get BHIV append-only chain state."""
+        return self._append_only.get_chain_state()
+
+    def get_storage_stats(self) -> Dict[str, Any]:
+        """Get BHIV append-only storage stats."""
+        return self._append_only.get_storage_stats()
+
+    def validate_chain_integrity(self) -> Dict[str, Any]:
+        """Validate entire BHIV artifact chain integrity."""
+        is_valid, errors = self._append_only.validate_chain_integrity()
+        return {"is_valid": is_valid, "errors": errors}
+
     def get_status(self) -> Dict[str, Any]:
+        chain_state = self._append_only.get_chain_state()
         return {
             "service": "bucket_service",
             "status": "active",
-            "mongo_connected": self.mongo_client.db is not None if self.mongo_client else False,
-            "audit_active": self.audit_middleware.audit_collection is not None if self.audit_middleware else False,
-            "fallback_mode": self.mongo_client.db is None if self.mongo_client else True,
-            "mongo_error": self.mongo_client.connection_error() if self.mongo_client else "mongo_client_unavailable",
+            "mongo_connected": self._audit_collection is not None,
+            "append_only_storage": "active",
+            "artifact_count": chain_state.get("artifact_count", 0),
+            "last_hash": chain_state.get("last_hash"),
+            "fallback_mode": self._audit_collection is None,
         }
