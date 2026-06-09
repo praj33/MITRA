@@ -2,7 +2,6 @@ import os
 
 from fastapi.testclient import TestClient
 
-
 os.environ.setdefault("API_KEY", "localtest")
 
 from app.main import app
@@ -11,10 +10,6 @@ from app.services.bucket_service import BucketService
 
 client = TestClient(app)
 client.headers.update({"X-API-Key": "localtest"})
-
-
-def setup_function():
-    BucketService.clear_memory_logs()
 
 
 def _mitra_payload(*, title: str, content: str, category: str, user_id: str, session_id: str) -> dict:
@@ -65,17 +60,14 @@ def test_mitra_control_plane_logs_correction_signal():
 
     assert second.status_code == 200
     second_body = second.json()
-    assert second_body["signal_type"] == "correction"
+    assert second_body["rl_signal"]["signal_type"] == "correction"
 
     trace_id = second_body["trace_id"]
-    signal_log = _artifact(trace_id, "rl_signal_capture")
+    signal_log = _artifact(trace_id, "mitra_rl_interpretation")
     request_log = _artifact(trace_id, "mitra_request_log")
-
-    assert signal_log is not None
     assert signal_log["data"]["signal_type"] == "correction"
-    assert request_log is not None
     assert request_log["data"]["user_id"] == "signal_user"
-    assert request_log["data"]["mitra_output"]["trace_id"] == trace_id
+    assert request_log["data"]["final_output"]["trace_id"] == trace_id
 
 
 def test_mitra_control_plane_logs_refinement_signal():
@@ -103,12 +95,7 @@ def test_mitra_control_plane_logs_refinement_signal():
     )
 
     assert second.status_code == 200
-    second_body = second.json()
-    assert second_body["signal_type"] == "intent_refinement"
-
-    signal_log = _artifact(second_body["trace_id"], "rl_signal_capture")
-    assert signal_log is not None
-    assert signal_log["data"]["signal_type"] == "intent_refinement"
+    assert second.json()["rl_signal"]["signal_type"] == "intent_refinement"
 
 
 def test_mitra_control_plane_marks_abrupt_topic_change_as_implicit_negative():
@@ -134,9 +121,8 @@ def test_mitra_control_plane_marks_abrupt_topic_change_as_implicit_negative():
             session_id="topic_session",
         ),
     )
-
     assert second.status_code == 200
-    assert second.json()["signal_type"] == "implicit_negative"
+    assert second.json()["rl_signal"]["signal_type"] == "implicit_negative"
 
 
 def test_assistant_response_exposes_trace_and_signal_for_frontend():
@@ -159,7 +145,8 @@ def test_assistant_response_exposes_trace_and_signal_for_frontend():
     assert body["trace_id"].startswith("trace_")
     assert body["signal_type"] == "implicit_positive"
     assert body["result"]["mitra"]["trace_id"] == body["trace_id"]
-    assert body["result"]["mitra"]["signal_type"] == body["signal_type"]
+    assert body["result"]["mitra"]["rl_signal"]["signal_type"] == body["signal_type"]
+    assert body["result"]["mitra"]["enforcement_output"]["trace_id"] == body["trace_id"]
 
 
 def test_telephony_voice_input_flows_through_mitra_control_plane():
@@ -174,7 +161,5 @@ def test_telephony_voice_input_flows_through_mitra_control_plane():
     assert response.status_code == 200
     trace_id = response.json()["trace_id"]
     request_log = _artifact(trace_id, "mitra_request_log")
-
-    assert request_log is not None
-    assert request_log["data"]["mitra_output"]["trace_id"] == trace_id
-    assert request_log["data"]["mitra_output"]["system_context"]["voice_input"] is True
+    assert request_log["data"]["final_output"]["trace_id"] == trace_id
+    assert request_log["data"]["final_output"]["system_context"]["voice_input"] is True

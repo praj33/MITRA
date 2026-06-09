@@ -1,5 +1,5 @@
 """
-Environment-driven runtime config for Raj's enforcement engine.
+Environment-driven runtime config for Mitra's enforcement stage.
 """
 
 from __future__ import annotations

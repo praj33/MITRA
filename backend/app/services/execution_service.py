@@ -58,7 +58,6 @@ class ExecutionService:
                 scope=scope if scope in {"response", "action", "both"} else "both",
                 trace_id=str(enforcement_input.get("trace_id") or trace_id),
                 reason_code=str(enforcement_input.get("reason_code") or "RUNTIME_VERDICT_DICT"),
-                request_trace_id=str(enforcement_input.get("request_trace_id") or "") or None,
                 rewrite_class=enforcement_input.get("rewrite_class"),
                 safe_output=enforcement_input.get("safe_output"),
             )
@@ -70,18 +69,7 @@ class ExecutionService:
             scope=scope,
             trace_id=trace_id,
             reason_code="LEGACY_RUNTIME_DECISION",
-            request_trace_id=None,
         )
-
-    @staticmethod
-    def _request_trace_id(verdict: EnforcementVerdict, enforcement_input: Any, trace_id: str) -> str | None:
-        if verdict.request_trace_id:
-            return str(verdict.request_trace_id)
-        if isinstance(enforcement_input, dict):
-            request_trace_id = enforcement_input.get("request_trace_id")
-            if request_trace_id:
-                return str(request_trace_id)
-        return None
 
     def _bucket_artifact_present(self, trace_id: str) -> bool:
         from app.services.bucket_service import BucketService
@@ -91,7 +79,7 @@ class ExecutionService:
             return True
         return bucket.validate_artifact(
             trace_id,
-            stage="safety_validation",
+            stage="mitra_policy_runtime",
             required_fields=("decision", "trace_id"),
             expected_trace_id=trace_id,
         )
@@ -188,7 +176,6 @@ class ExecutionService:
                 "scope": verdict.scope,
                 "trace_id": verdict.trace_id,
                 "reason_code": verdict.reason_code,
-                "request_trace_id": verdict.request_trace_id,
             },
             "trace_id": trace_id,
             "timestamp": datetime.utcnow().isoformat(),
@@ -227,24 +214,14 @@ class ExecutionService:
                     verdict=verdict,
                 )
 
-            request_trace_id = self._request_trace_id(verdict, enforcement_decision, trace_id)
-            if not request_trace_id:
+            if verdict.trace_id != trace_id:
                 return self._sealed_response(
                     status="blocked",
                     action_type=action_type,
-                    reason="Action blocked: missing enforcement request trace chain",
+                    reason="Action blocked: execution trace does not match Mitra trace authority",
                     trace_id=trace_id,
                     verdict=verdict,
-                )
-
-            if request_trace_id != trace_id:
-                return self._sealed_response(
-                    status="blocked",
-                    action_type=action_type,
-                    reason="Action blocked: execution trace does not match enforcement trace chain",
-                    trace_id=trace_id,
-                    verdict=verdict,
-                    extra={"expected_trace_id": request_trace_id},
+                    extra={"expected_trace_id": verdict.trace_id},
                 )
 
             if verdict.decision == "DELAY":

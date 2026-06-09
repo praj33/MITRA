@@ -1,53 +1,192 @@
 {
-  "captured_at": "2026-03-30T07:09:03.804217Z",
-  "case": "correction",
-  "input": {
-    "user_id": "review_signal_user",
-    "context": {
-      "platform": "samachar",
-      "device": "api",
-      "session_id": "review_signal_session"
+  "bucket_log_reference": {
+    "artifact_locator": "trace_dc1df4f632ee5ee0:mitra_response_contract",
+    "backend": "mongodb",
+    "stage": "mitra_response_contract",
+    "trace_id": "trace_dc1df4f632ee5ee0"
+  },
+  "enforcement_output": {
+    "decision": "ALLOW",
+    "reason_code": "CONTENT_AND_ACTION_ALLOWED",
+    "scope": "both",
+    "trace_id": "trace_dc1df4f632ee5ee0"
+  },
+  "final_output": {
+    "bucket_log_reference": {
+      "artifact_locator": "trace_dc1df4f632ee5ee0:mitra_response_contract",
+      "backend": "mongodb",
+      "stage": "mitra_response_contract",
+      "trace_id": "trace_dc1df4f632ee5ee0"
     },
-    "event": {
-      "title": "Outbound action correction",
-      "content": "Actually, send the school update by email instead.",
-      "category": "messaging",
-      "confidence": 0.92
-    }
-  },
-  "output": {
-    "status": "ALLOW",
+    "confidence": 1.0,
+    "enforcement_output": {
+      "decision": "ALLOW",
+      "reason_code": "CONTENT_AND_ACTION_ALLOWED",
+      "scope": "both",
+      "trace_id": "trace_dc1df4f632ee5ee0"
+    },
+    "policy_decision": {
+      "bhiv_context": {
+        "history_available": false,
+        "karma_points": 10,
+        "recent_trace_id": null
+      },
+      "confidence": 1.0,
+      "confidence_basis": "decision_certainty",
+      "conflict_guard": {
+        "decision_immutable": true,
+        "rl_can_adjust_confidence_only": true
+      },
+      "decision": "ALLOW",
+      "explanation": "No risky patterns detected",
+      "matched_patterns": [],
+      "original_output": "Create a two-hour study plan for June 10, 2026.",
+      "policy_flags": [],
+      "policy_version": "v1.0.0",
+      "raw_decision": "allow",
+      "reason_code": "clean_content",
+      "risk_category": "clean",
+      "rule_id": "NONE",
+      "safe_output": "Create a two-hour study plan for June 10, 2026.",
+      "selected_source": "behavior_validator",
+      "source_decisions": {
+        "behavior_validator": {
+          "category": "clean",
+          "confidence": 0.0,
+          "decision": "ALLOW",
+          "reason_code": "clean_content"
+        },
+        "policy_registry": {
+          "category": "clean",
+          "confidence": 0.0,
+          "decision": "ALLOW",
+          "rule_id": "NONE"
+        }
+      },
+      "trace_id": "trace_dc1df4f632ee5ee0"
+    },
+    "reason": "The request passed Mitra policy and enforcement checks.",
     "risk_level": "LOW",
-    "reason": "Content passed existing safety validation and enforcement checks.",
-    "confidence": 0.0,
-    "trace_id": "trace_319fed4a847f63f1",
-    "signal_type": "correction",
+    "rl_signal": {
+      "adjusted_confidence": 1.0,
+      "basis": {
+        "current_category": "planning",
+        "previous_category": null,
+        "previous_trace_id": null,
+        "similarity": 0.0,
+        "token_overlap": 0
+      },
+      "pattern_flag": "first_touch",
+      "signal_type": "implicit_positive",
+      "trace_id": "trace_dc1df4f632ee5ee0"
+    },
+    "status": "ALLOW",
     "system_context": {
-      "platform": "samachar",
-      "device": "api",
-      "session_id": "review_signal_session",
-      "user_id": "review_signal_user",
-      "voice_input": false,
+      "bhiv_context": {
+        "history_available": false,
+        "karma_points": 10,
+        "recent_trace_id": null,
+        "source": "bhiv_context_stub",
+        "status": "available",
+        "user_id": "review-packet-user-final"
+      },
+      "category": "planning",
+      "device": "desktop",
+      "platform": "web",
       "preferred_language": "auto",
-      "source": "/api/mitra/evaluate",
-      "category": "messaging",
-      "enforcement_trace_id": "enf_a43509fc7bae0ad2"
-    }
+      "session_id": "review-packet-session-final-20260609",
+      "source": "review_packet_live_verification",
+      "user_id": "review-packet-user-final",
+      "voice_input": false
+    },
+    "trace_id": "trace_dc1df4f632ee5ee0"
   },
-  "trace_id": "trace_319fed4a847f63f1",
-  "signal_type": "correction",
-  "signal_log": {
-    "signal_type": "correction",
-    "confidence": 0.93,
-    "trace_id": "trace_319fed4a847f63f1",
-    "session_id": "review_signal_session",
-    "user_id": "review_signal_user",
+  "input": {
+    "message": "Create a two-hour study plan for June 10, 2026."
+  },
+  "persistence_proof": {
+    "backend": {
+      "audit_active": true,
+      "mongo_connected": true,
+      "mongo_error": null,
+      "persistent_backend": "mongodb",
+      "service": "mitra_bucket",
+      "status": "active"
+    },
+    "persisted_stage_count": 8,
+    "persisted_stages": [
+      "request_received",
+      "mitra_policy_runtime",
+      "mitra_rl_interpretation",
+      "mitra_conflict_guard",
+      "mitra_enforcement_runtime",
+      "mitra_enforcement_telemetry",
+      "mitra_response_contract",
+      "mitra_request_log"
+    ],
+    "record_ids": [
+      "6a27ec9c2ecf4ec55feac45a",
+      "6a27ec9c2ecf4ec55feac45b",
+      "6a27ec9d2ecf4ec55feac45c",
+      "6a27ec9d2ecf4ec55feac45d",
+      "6a27ec9d2ecf4ec55feac45e",
+      "6a27ec9d2ecf4ec55feac45f",
+      "6a27ec9d2ecf4ec55feac460",
+      "6a27ec9d2ecf4ec55feac461"
+    ]
+  },
+  "policy_decision": {
+    "bhiv_context": {
+      "history_available": false,
+      "karma_points": 10,
+      "recent_trace_id": null
+    },
+    "confidence": 1.0,
+    "confidence_basis": "decision_certainty",
+    "conflict_guard": {
+      "decision_immutable": true,
+      "rl_can_adjust_confidence_only": true
+    },
+    "decision": "ALLOW",
+    "explanation": "No risky patterns detected",
+    "matched_patterns": [],
+    "original_output": "Create a two-hour study plan for June 10, 2026.",
+    "policy_flags": [],
+    "policy_version": "v1.0.0",
+    "raw_decision": "allow",
+    "reason_code": "clean_content",
+    "risk_category": "clean",
+    "rule_id": "NONE",
+    "safe_output": "Create a two-hour study plan for June 10, 2026.",
+    "selected_source": "behavior_validator",
+    "source_decisions": {
+      "behavior_validator": {
+        "category": "clean",
+        "confidence": 0.0,
+        "decision": "ALLOW",
+        "reason_code": "clean_content"
+      },
+      "policy_registry": {
+        "category": "clean",
+        "confidence": 0.0,
+        "decision": "ALLOW",
+        "rule_id": "NONE"
+      }
+    },
+    "trace_id": "trace_dc1df4f632ee5ee0"
+  },
+  "rl_signal": {
+    "adjusted_confidence": 1.0,
     "basis": {
-      "previous_trace_id": "trace_1383be6cc036757a",
-      "similarity": 0.6923,
-      "token_overlap": 6,
-      "previous_category": "messaging",
-      "current_category": "messaging"
-    }
-  }
+      "current_category": "planning",
+      "previous_category": null,
+      "previous_trace_id": null,
+      "similarity": 0.0,
+      "token_overlap": 0
+    },
+    "pattern_flag": "first_touch",
+    "signal_type": "implicit_positive",
+    "trace_id": "trace_dc1df4f632ee5ee0"
+  },
+  "trace_id": "trace_dc1df4f632ee5ee0"
 }

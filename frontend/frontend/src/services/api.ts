@@ -101,6 +101,23 @@ class ApiService {
 
       const result = json.result;
       const isWorkflow = result.type === 'workflow';
+      const mitra = result.mitra || {};
+      const enforcement = result.enforcement || mitra.enforcement_output || {};
+      const policyDecision = mitra.policy_decision || {};
+      const safety = result.safety || {
+        decision: policyDecision.decision === 'BLOCK'
+          ? 'hard_deny'
+          : policyDecision.decision === 'REWRITE'
+            ? 'soft_rewrite'
+            : 'allow',
+        level: policyDecision.decision === 'BLOCK'
+          ? 'blocked'
+          : policyDecision.decision === 'REWRITE'
+            ? 'soft_risk'
+            : 'safe',
+        confidence: typeof policyDecision.confidence === 'number' ? policyDecision.confidence : 1.0,
+        score: typeof policyDecision.confidence === 'number' ? policyDecision.confidence : 1.0,
+      };
 
       return {
         status: 'success',
@@ -110,12 +127,15 @@ class ApiService {
             confidence: 1.0,
           },
           enforcement: {
-            decision: result.enforcement?.decision || 'allow',
-            reason: result.enforcement?.reason || null,
+            decision: (enforcement.decision || 'ALLOW').toLowerCase(),
+            reason: enforcement.reason || enforcement.reason_code || null,
+            trace_id: enforcement.trace_id || mitra.trace_id || json.trace_id || undefined,
           } as any,
           safety: {
-            score: result.safety?.score || 1.0,
-            flags: result.safety?.level ? [result.safety.level] : []
+            score: safety.score || safety.confidence || 1.0,
+            confidence: safety.confidence || safety.score || 1.0,
+            level: safety.level || 'safe',
+            flags: safety.level ? [safety.level] : []
           } as any,
           task: result.task,
           decision: {

@@ -16,20 +16,16 @@ class ReplayScenario:
     payload: Dict[str, Any]
 
 
-def _safety_payload(*, trace_id: str, decision: str, safe_output: str | None = None) -> Dict[str, Any]:
-    risk_category = {
-        "allow": "clean",
-        "soft_rewrite": "boundary",
-        "hard_deny": "critical",
-    }.get(decision, "unknown")
+def _policy_payload(trace_id: str, decision: str, safe_output: str | None = None) -> Dict[str, Any]:
     payload = {
         "decision": decision,
-        "risk_category": risk_category,
+        "risk_category": "clean" if decision == "ALLOW" else "critical",
         "confidence": 1.0,
         "reason_code": "replay_validation",
         "trace_id": trace_id,
         "matched_patterns": [],
-        "timestamp": "1970-01-01T00:00:00Z",
+        "policy_flags": [] if decision == "ALLOW" else ["hard_deny" if decision == "BLOCK" else "soft_rewrite"],
+        "explanation": "Replay validation payload",
     }
     if safe_output:
         payload["safe_output"] = safe_output
@@ -42,22 +38,15 @@ def _verdict_snapshot(verdict: Dict[str, Any]) -> Dict[str, Any]:
         "scope": verdict.get("scope"),
         "reason_code": verdict.get("reason_code"),
         "trace_id": verdict.get("trace_id"),
-        "request_trace_id": verdict.get("request_trace_id"),
         "rewrite_class": verdict.get("rewrite_class"),
         "safe_output": verdict.get("safe_output"),
     }
 
 
-def _seed_mediation_artifact(trace_id: str, safety_payload: Dict[str, Any]) -> None:
-    bucket = BucketService()
-    bucket.log_event(trace_id, "safety_validation", safety_payload)
-
-
 def _run_once(scenario: ReplayScenario) -> Dict[str, Any]:
-    BucketService.clear_memory_logs()
     service = EnforcementService()
-    safety_payload = dict(scenario.payload["safety"])
-    _seed_mediation_artifact(scenario.trace_id, safety_payload)
+    policy_decision = dict(scenario.payload["policy_decision"])
+    BucketService().log_event(scenario.trace_id, "mitra_policy_runtime", policy_decision)
     with mitra_enforcement_scope(scenario.trace_id, "replay_validation"):
         verdict = service.enforce_policy(dict(scenario.payload), scenario.trace_id)
     return _verdict_snapshot(verdict)
@@ -73,7 +62,8 @@ def default_scenarios() -> List[ReplayScenario]:
                 "emotional_output": "hello there",
                 "intent": "general",
                 "trace_id": "trace_replay_allow",
-                "safety": _safety_payload(trace_id="trace_replay_allow", decision="allow", safe_output="hello there"),
+                "policy_decision": _policy_payload("trace_replay_allow", "ALLOW"),
+                "rl_signal": {"signal_type": "implicit_positive", "trace_id": "trace_replay_allow"},
                 "risk_flags": [],
                 "karma_score": 50,
             },
@@ -82,15 +72,16 @@ def default_scenarios() -> List[ReplayScenario]:
             name="rewrite_manipulation",
             trace_id="trace_replay_rewrite",
             payload={
-                "user_input": "If you really care, keep this between us and prove you care.",
-                "emotional_output": "If you really care, keep this between us and prove you care.",
+                "user_input": "If you really care, prove you care.",
+                "emotional_output": "If you really care, prove you care.",
                 "intent": "general",
                 "trace_id": "trace_replay_rewrite",
-                "safety": _safety_payload(
-                    trace_id="trace_replay_rewrite",
-                    decision="soft_rewrite",
-                    safe_output="I can support you safely without reinforcing dependency.",
+                "policy_decision": _policy_payload(
+                    "trace_replay_rewrite",
+                    "REWRITE",
+                    "I can support you without reinforcing dependency.",
                 ),
+                "rl_signal": {"signal_type": "implicit_positive", "trace_id": "trace_replay_rewrite"},
                 "risk_flags": ["soft_rewrite", "manipulation_signal"],
                 "karma_score": 50,
             },
@@ -103,12 +94,9 @@ def default_scenarios() -> List[ReplayScenario]:
                 "emotional_output": "I want to kill myself",
                 "intent": "general",
                 "trace_id": "trace_replay_block",
-                "safety": _safety_payload(
-                    trace_id="trace_replay_block",
-                    decision="hard_deny",
-                    safe_output="I can't help with self-harm. Please contact emergency support now.",
-                ),
-                "risk_flags": ["self_harm"],
+                "policy_decision": _policy_payload("trace_replay_block", "BLOCK"),
+                "rl_signal": {"signal_type": "implicit_positive", "trace_id": "trace_replay_block"},
+                "risk_flags": ["self_harm", "hard_deny"],
                 "karma_score": 5,
             },
         ),
@@ -119,24 +107,14 @@ def run_replay_validation(scenarios: List[ReplayScenario] | None = None) -> Dict
     scenarios = scenarios or default_scenarios()
     results = []
     all_identical = True
-
     for scenario in scenarios:
         first = _run_once(scenario)
         second = _run_once(scenario)
         identical = first == second
         all_identical = all_identical and identical
-        results.append(
-            {
-                "name": scenario.name,
-                "request_trace_id": scenario.trace_id,
-                "first": first,
-                "second": second,
-                "identical": identical,
-            }
-        )
-
+        results.append({"name": scenario.name, "trace_id": scenario.trace_id, "first": first, "second": second, "identical": identical})
     return {
-        "replay_validation_version": "1.0",
+        "replay_validation_version": "2.0",
         "scenario_count": len(results),
         "all_identical": all_identical,
         "scenarios": results,

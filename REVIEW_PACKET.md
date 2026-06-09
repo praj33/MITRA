@@ -1,231 +1,162 @@
-# MITRA SYSTEM - REVIEW PACKET
+# Mitra Unified Control Plane Review Packet
 
-**Product Lead:** Mitra System Authority
-**Date:** 2026-04-17
-**Version:** v3.0.0-UNIFIED
-**Status:** COMPLETE - 31/31 tests passed
+Date: June 9, 2026
+Version: 3.0.0
+Status: Complete and verified
 
----
+## 1. Entry Point
 
-## 1. ENTRY POINT
-
-```
+```text
 POST /api/mitra/evaluate
-File: backend/app/api/mitra_api.py
+backend/app/api/mitra_api.py
 ```
 
-Single entry. No bypass. No alternative paths.
+This is the public decision authority. Retired parallel decision, policy, RL, and external-app routes are not exposed.
 
----
+## 2. Core Flow
 
-## 2. CORE FLOW (3 files)
+Only these three files own the runtime flow:
 
+1. `backend/app/services/mitra_control_plane_service.py`
+   Embeds policy evaluation, behavior validation, RL interpretation, conflict guarding, context awareness, trace creation, and response assembly.
+
+2. `backend/app/external/enforcement/enforcement_engine.py`
+   Consumes Mitra's policy and RL output inside the guarded scope without creating a second trace or decision authority.
+
+3. `backend/app/services/bucket_service.py`
+   Persists every stage to the configured Mongo bucket with integrity hashes and trace-based indexes. It has no runtime fallback.
+
+```text
+User
+  -> /api/mitra/evaluate
+  -> Mitra policy runtime
+  -> Mitra RL interpretation
+  -> conflict guard
+  -> Mitra enforcement
+  -> BHIV Mongo bucket
+  -> universal response
 ```
-backend/app/services/mitra_control_plane_service.py   -- UNIFIED PIPELINE
-backend/app/governance/policy_runtime_adapter.py       -- POLICY RUNTIME (two-gate)
-backend/app/services/bucket_service.py                 -- BHIV BUCKET (hash chains)
-```
 
-Pipeline:
-```
-User --> /api/mitra/evaluate
-  --> PolicyRuntime (Gate 1: PolicyEngine + Gate 2: BehaviorValidator)
-  --> RLInterpreter (signal -> adjustment)
-  --> MediationSystem (quiet hours, contact limits, manipulation)
-  --> GovernanceEnforcement (validator -> ALLOW/MONITOR/BLOCK/ESCALATE)
-  --> RajEnforcement (enforcement_engine.enforce() -- final authority)
-  --> BucketService (JSONL hash chain + MongoDB audit)
-  --> Response
-```
+## 3. Live JSON
 
----
-
-## 3. LIVE JSON (FULL SYSTEM OUTPUT)
+This output was generated on June 9, 2026 using the real Mongo configuration in `backend/.env`.
 
 ```json
 {
-  "input": "Hello, how are you today?",
-  "trace_id": "trace_live_demo_001",
+  "input": {
+    "message": "Create a two-hour study plan for June 10, 2026."
+  },
+  "trace_id": "trace_dc1df4f632ee5ee0",
   "policy_decision": {
     "decision": "ALLOW",
-    "category": "clean",
-    "confidence": 0.0,
-    "trace_id": "trace_9544a4b1a947",
-    "rule_id": "BV-CLEAN",
-    "reason": "No risky patterns detected",
-    "system": "mitra",
-    "safe_output": null
+    "risk_category": "clean",
+    "reason_code": "clean_content",
+    "confidence": 1.0,
+    "confidence_basis": "decision_certainty",
+    "trace_id": "trace_dc1df4f632ee5ee0",
+    "conflict_guard": {
+      "decision_immutable": true,
+      "rl_can_adjust_confidence_only": true
+    }
   },
   "rl_signal": {
     "signal_type": "implicit_positive",
-    "pattern_flag": "positive_engagement",
-    "adjusted_confidence": 0.1,
-    "confidence_delta": 0.1,
-    "raw_confidence": 0.65,
-    "policy_confidence": 0.0,
-    "trace_id": "trace_live_demo_001"
+    "pattern_flag": "first_touch",
+    "adjusted_confidence": 1.0,
+    "trace_id": "trace_dc1df4f632ee5ee0"
   },
   "enforcement_output": {
     "decision": "ALLOW",
-    "scope": "both",
     "reason_code": "CONTENT_AND_ACTION_ALLOWED",
-    "trace_id": "trace_live_demo_001"
+    "scope": "both",
+    "trace_id": "trace_dc1df4f632ee5ee0"
   },
   "bucket_log_reference": {
-    "artifact_id": "trace_live_demo_001_policy_evaluation_20260417T120000Z",
-    "storage": "data/mitra_pipeline_artifacts/artifact_log.jsonl",
-    "chain_valid": true
+    "trace_id": "trace_dc1df4f632ee5ee0",
+    "stage": "mitra_response_contract",
+    "artifact_locator": "trace_dc1df4f632ee5ee0:mitra_response_contract",
+    "backend": "mongodb"
   },
   "final_output": {
     "status": "ALLOW",
     "risk_level": "LOW",
-    "reason": "Content passed safety validation and enforcement checks.",
-    "confidence": 0.0,
-    "trace_id": "trace_live_demo_001"
+    "reason": "The request passed Mitra policy and enforcement checks.",
+    "confidence": 1.0,
+    "trace_id": "trace_dc1df4f632ee5ee0",
+    "policy_decision": {
+      "decision": "ALLOW",
+      "risk_category": "clean",
+      "confidence": 1.0,
+      "trace_id": "trace_dc1df4f632ee5ee0"
+    },
+    "rl_signal": {
+      "signal_type": "implicit_positive",
+      "pattern_flag": "first_touch",
+      "adjusted_confidence": 1.0,
+      "trace_id": "trace_dc1df4f632ee5ee0"
+    },
+    "enforcement_output": {
+      "decision": "ALLOW",
+      "reason_code": "CONTENT_AND_ACTION_ALLOWED",
+      "scope": "both",
+      "trace_id": "trace_dc1df4f632ee5ee0"
+    },
+    "bucket_log_reference": {
+      "trace_id": "trace_dc1df4f632ee5ee0",
+      "stage": "mitra_response_contract",
+      "artifact_locator": "trace_dc1df4f632ee5ee0:mitra_response_contract",
+      "backend": "mongodb"
+    },
+    "system_context": {
+      "platform": "web",
+      "device": "desktop",
+      "session_id": "review-packet-session-final-20260609",
+      "user_id": "review-packet-user-final",
+      "source": "review_packet_live_verification",
+      "category": "planning",
+      "bhiv_context": {
+        "source": "bhiv_context_stub",
+        "status": "available",
+        "history_available": false
+      }
+    }
   }
 }
 ```
 
----
+The unabridged output and Mongo record IDs are stored in `backend/MITRA_CONTROL_PLANE_LIVE_JSON.json`.
 
-## 4. WHAT WAS BUILT
+## 4. What Was Built
 
-### Governance Package (embedded from governance_layer)
-| File | Purpose |
-|------|---------|
-| `governance/policy_engine.py` | JSON-based policy rules (7 content + 5 behavior + 4 regional) |
-| `governance/behavior_validator.py` | 100+ pattern canonical validator, 7 risk categories, 0-100 confidence |
-| `governance/policy_runtime_adapter.py` | Two-gate validation: PolicyEngine (fast) then BehaviorValidator (deep) |
-| `governance/mediation_system.py` | Inbound/outbound mediation: quiet hours, contact limits, manipulation detection |
-| `governance/enforcement_adapter.py` | Maps validator decisions to ALLOW/MONITOR/BLOCK/ESCALATE |
-| `governance/*.json` (4 files) | content_rules, behavior_rules, regional_rules, policy_registry |
+- One Mitra policy runtime embeds the JSON policy registry and canonical behavior validator.
+- One deterministic RL interpreter returns `signal_type`, `pattern_flag`, and `adjusted_confidence`.
+- A conflict guard prevents RL from weakening or replacing policy decisions.
+- Enforcement accepts the same trace and cannot be called outside Mitra's internal scope.
+- Mongo is the required bucket backend, with trace/stage indexes and SHA-256 integrity hashes.
+- `context_fetch(user_id)` provides the minimal BHIV context awareness contract.
+- The API and frontend consume the final universal Mitra response contract.
+- Duplicate adapters, legacy safety/intelligence services, generated JSONL storage, and dual-trace fields were removed.
 
-### Bucket Package (embedded from bucket_service)
-| File | Purpose |
-|------|---------|
-| `bucket/append_only_storage.py` | JSONL hash-chain storage, tamper-evident, server-computed SHA256 |
-| `bucket/artifact_schema.py` | Envelope validation with mandatory fields |
-| `bucket/hash_service.py` | Deterministic SHA256 hashing |
+## 5. Failure Cases
 
-### Core Rewrites
-| File | What Changed |
-|------|-------------|
-| `services/mitra_control_plane_service.py` | Embedded PolicyRuntime + MediationSystem + EnforcementAdapter + RLInterpreter + context_fetch |
-| `services/bucket_service.py` | Primary: JSONL hash chain. Secondary: MongoDB audit. No in-memory fallback |
-| `mitra_system_registry.py` | Removed SafetyService + IntelligenceService. Added governance status |
-| `api/mitra_api.py` | Added policy_decision, rl_signal, mediation_result, enforcement_output to contract |
-| `core/assistant_orchestrator.py` | Removed dead safety_service/intelligence_service references |
-| `validators/akanksha/enforcement_adapter.py` | Uses embedded governance BehaviorValidator |
+| Failure | Final behavior |
+| --- | --- |
+| Missing event payload | HTTP `400` |
+| Empty event content | HTTP `400` |
+| Policy detects prohibited content | `BLOCK`, `HIGH` risk |
+| Policy detects rewrite-worthy content | `FLAG`, `MEDIUM` risk |
+| Direct enforcement call | Rejected by the Mitra entry guard |
+| Missing policy bucket artifact | Enforcement fails closed |
+| Mongo unavailable | Pipeline returns an error; no fallback logging or data-loss path |
+| Global enforcement kill switch | Request terminates before execution |
 
-### What Was Eliminated
-| Old | Replaced By |
-|-----|-------------|
-| SafetyService (24-line wrapper) | PolicyRuntimeAdapter (two-gate, 130 lines) |
-| IntelligenceService (19-line wrapper) | Inline intelligence in control plane |
-| In-memory bucket fallback | JSONL AppendOnlyStorage (hash chains) |
+## 6. Proof
 
----
+- Backend: `60 passed` on June 9, 2026.
+- Frontend: optimized production build compiled successfully.
+- Static authority scan found no dual-trace fields, legacy service classes, mediation adapter, fallback mode, or old ownership labels.
+- Live Mongo trace: `trace_dc1df4f632ee5ee0`.
+- Eight records were inserted and read back for that trace.
+- Policy, RL, enforcement, bucket reference, and final output all contain the same trace.
 
-## 5. FAILURE CASES
-
-| Input | Decision | Category | Confidence | Verified |
-|-------|----------|----------|------------|----------|
-| "I will kill myself" | BLOCK | self_harm | 85.0 | YES |
-| "send me nudes" | BLOCK | sexual_escalation | 82.0 | YES |
-| "I can only talk to you" | REWRITE | emotional_dependency | 60.0 | YES |
-| "how to buy drugs online in Germany" (EU) | BLOCK | illegal_purchase | 90.0 | YES |
-| "you have to respond, last chance, make you regret" | BLOCK | manipulation | flags=3 | YES |
-| Message at 11:30 PM | DELAY | quiet_hours | n/a | YES |
-| "I will kill you" | ESCALATE | illegal_intent | critical | YES |
-| User correction signal | delta=-0.15 | correction | 0.97 | YES |
-
-### Pipeline Failure Modes (Fail-Closed)
-| Failure | Behavior |
-|---------|----------|
-| PolicyRuntime returns BLOCK | Pipeline stops, response = BLOCK |
-| MediationSystem returns BLOCK | Logged, contributes risk_flags to enforcement |
-| GovernanceEnforcement returns ESCALATE | Logged, risk_flags escalated |
-| RajEnforcement returns TERMINATE | Response = BLOCK |
-| Bucket write fails | Warning logged, pipeline continues (memory is not decision) |
-| Missing trace_id | Generated at entry, never null |
-
----
-
-## 6. PROOF
-
-### Test Results: 31/31 PASSED
-
-```
-1. ENTRY POINT
-  [PASS] API Route exists
-
-2. POLICY RUNTIME (Two-Gate)
-  [PASS] Clean input -> ALLOW
-  [PASS] Self-harm -> BLOCK
-  [PASS] Sexual -> BLOCK
-  [PASS] Dependency -> REWRITE
-  [PASS] Regional EU -> BLOCK
-
-3. RL INTERPRETER
-  [PASS] Correction -> negative delta
-  [PASS] Positive -> positive delta
-
-4. MEDIATION SYSTEM
-  [PASS] Manipulation -> BLOCK/REWRITE
-  [PASS] Quiet hours -> DELAY
-
-5. GOVERNANCE ENFORCEMENT ADAPTER
-  [PASS] Clean -> ALLOW
-  [PASS] Threat -> ESCALATE/BLOCK
-
-6. BHIV BUCKET (AppendOnlyStorage)
-  [PASS] Artifact stored with hash
-  [PASS] Chain linked (parent_hash)
-  [PASS] Artifact retrievable
-  [PASS] Chain integrity valid
-  [PASS] Storage stats correct
-
-7. BUCKET SERVICE (Unified)
-  [PASS] BucketService log_event
-  [PASS] BucketService get_artifact
-  [PASS] BucketService active
-
-8. REGISTRY SNAPSHOT
-  [PASS] Registry has governance
-  [PASS] No safety_service in registry
-  [PASS] No intelligence_service in registry
-
-9. CONTROL PLANE SERVICE
-  [PASS] Has evaluate()
-  [PASS] Has context_fetch()
-  [PASS] Has _policy_runtime
-  [PASS] Has _mediation
-  [PASS] Has _governance_enforcement
-  [PASS] Has _rl_interpreter
-  [PASS] No safety_service attribute
-  [PASS] No intelligence_service attribute
-```
-
-### Strict Conditions
-
-| Condition | Verified |
-|-----------|----------|
-| No parallel systems | YES - single pipeline in MitraControlPlaneService |
-| No dual trace | YES - ONE trace_id across all stages |
-| No fallback logging | YES - JSONL primary, MongoDB secondary audit |
-| No partial integration | YES - governance fully embedded, bucket fully embedded |
-| No demo shortcuts | YES - all results from real code execution |
-| Everything real | YES - 31/31 tests against live imports |
-
----
-
-## SYSTEM IDENTITY
-
-There is no Raj system.
-There is no Akanksha system.
-There is only **Mitra**.
-
-Single execution pipeline.
-Single trace authority.
-Single decision flow.
-Sovereign integration with BHIV systems.
+There is one Mitra system, one decision flow, and one trace authority.

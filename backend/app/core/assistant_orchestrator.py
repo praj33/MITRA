@@ -9,10 +9,8 @@ from app.core.intentflow import intent_flow
 from app.core.taskflow import task_flow
 from app.core.respond_service import generate_generic_response
 from app.core.logging import get_logger
-from app.core.database import get_db
 
 from app.mitra_system_registry import mitra_registry
-from app.karma_adapter import fetch_user_karma, karma_bias_from_points
 from app.services.mitra_control_plane_service import MitraAuthorityInput, MitraControlPlaneService
 from app.services.multilingual_service import MultilingualService
 from app.external.enforcement.deterministic_trace import (
@@ -31,8 +29,6 @@ CRISIS_SAFE_RESPONSE = (
 )
 
 # Initialize services via the central registry (single shared instances)
-# Note: safety and intelligence are now EMBEDDED in the control plane (governance package)
-enforcement_service = mitra_registry.enforcement_service
 bucket_service = mitra_registry.bucket_service
 execution_service = mitra_registry.execution_service
 multilingual_service = MultilingualService()
@@ -111,9 +107,9 @@ def _normalize_request(request):
     return req
 
 
-def _requires_crisis_response(safety_result: Dict[str, Any]) -> bool:
-    original_output = str(safety_result.get("original_output") or "").lower()
-    matched_patterns = " ".join(str(item) for item in (safety_result.get("matched_patterns") or [])).lower()
+def _requires_crisis_response(policy_decision: Dict[str, Any]) -> bool:
+    original_output = str(policy_decision.get("original_output") or "").lower()
+    matched_patterns = " ".join(str(item) for item in (policy_decision.get("matched_patterns") or [])).lower()
     corpus = f"{original_output} {matched_patterns}"
     crisis_tokens = (
         "kill myself",
@@ -129,13 +125,39 @@ def _requires_crisis_response(safety_result: Dict[str, Any]) -> bool:
     return any(token in corpus for token in crisis_tokens)
 
 
-def _blocked_response_text(safety_result: Dict[str, Any]) -> str:
-    safe_output = str(safety_result.get("safe_output") or "").strip()
-    if _requires_crisis_response(safety_result):
+def _blocked_response_text(policy_decision: Dict[str, Any]) -> str:
+    safe_output = str(policy_decision.get("safe_output") or "").strip()
+    if _requires_crisis_response(policy_decision):
         return CRISIS_SAFE_RESPONSE
     if safe_output:
         return safe_output
     return "I can't assist with that request."
+
+
+def _project_policy_to_safety(policy_decision: Optional[Dict[str, Any]]) -> Optional[Dict[str, Any]]:
+    if not isinstance(policy_decision, dict):
+        return None
+    decision = str(policy_decision.get("decision") or "ALLOW").upper()
+    confidence = float(policy_decision.get("confidence") or 0.0)
+    return {
+        "decision": {
+            "ALLOW": "allow",
+            "REWRITE": "soft_rewrite",
+            "BLOCK": "hard_deny",
+        }.get(decision, "allow"),
+        "level": {
+            "ALLOW": "safe",
+            "REWRITE": "soft_risk",
+            "BLOCK": "blocked",
+        }.get(decision, "safe"),
+        "confidence": confidence,
+        "score": confidence,
+        "risk_category": policy_decision.get("risk_category"),
+        "reason_code": policy_decision.get("reason_code"),
+        "matched_patterns": policy_decision.get("matched_patterns") or [],
+        "safe_output": policy_decision.get("safe_output") or "",
+        "trace_id": policy_decision.get("trace_id"),
+    }
 
 
 def _build_authenticated_user_context(context) -> Dict[str, Any]:
@@ -376,37 +398,6 @@ def log_to_bucket(trace_id: str, stage: str, data: Dict[str, Any]):
     except Exception as e:
         logger.error(f"Bucket logging failed for {trace_id}: {e}")
 
-def call_safety_service(text: str, trace_id: str, context: Optional[Dict[str, Any]] = None) -> Dict[str, Any]:
-    """Call Aakansha's safety validation service"""
-    result = safety_service.validate_content(
-        content=text,
-        trace_id=trace_id,
-        context=context,
-    )
-    log_to_bucket(trace_id, "safety_validation", result)
-    return result
-
-def call_intelligence_service(context: Dict[str, Any], trace_id: str) -> Dict[str, Any]:
-    """Call Sankalp's intelligence service"""
-    result = intelligence_service.process_interaction(
-        context=context,
-        trace_id=trace_id
-    )
-    log_to_bucket(trace_id, "intelligence_processing", result)
-    return result
-
-def call_enforcement_service(payload: Dict[str, Any], trace_id: str) -> Dict[str, Any]:
-    """Call Raj's enforcement service"""
-    result = enforcement_service.enforce_policy(
-        payload=payload,
-        trace_id=trace_id
-    )
-    log_to_bucket(trace_id, "enforcement_decision", result)
-    return result
-
-
-
-
 async def handle_assistant_request(request):
     """
     FULL SPINE WIRING - Central orchestrator for /api/assistant
@@ -529,9 +520,8 @@ async def handle_assistant_request(request):
                 region_policy=_to_plain(getattr(request.context, "region_policy", None)),
             )
         )
-        safety_result = authority_result["safety_result"]
-        intelligence_result = authority_result["intelligence_result"]
-        enforcement_result = authority_result["enforcement_result"]
+        policy_decision = authority_result["policy_decision"]
+        enforcement_result = authority_result["enforcement_output"]
         mitra_contract = authority_result["response_contract"]
         trace_id = authority_result["trace_id"]
         
@@ -544,7 +534,7 @@ async def handle_assistant_request(request):
             return terminated_response(
                 enforcement=enforcement_result,
                 trace_id=trace_id,
-                signal_type=mitra_contract.get("signal_type"),
+                signal_type=(mitra_contract.get("rl_signal") or {}).get("signal_type"),
                 system_context=mitra_contract.get("system_context"),
             )
 
@@ -555,11 +545,11 @@ async def handle_assistant_request(request):
             })
             return success_response(
                 result_type="passive",
-                response_text=_blocked_response_text(safety_result),
+                response_text=_blocked_response_text(policy_decision),
                 enforcement=enforcement_result,
-                safety=safety_result,
+                policy_decision=policy_decision,
                 trace_id=trace_id,
-                signal_type=mitra_contract.get("signal_type"),
+                signal_type=(mitra_contract.get("rl_signal") or {}).get("signal_type"),
                 system_context=mitra_contract.get("system_context"),
                 mitra=mitra_contract,
             )
@@ -605,7 +595,7 @@ async def handle_assistant_request(request):
             response_text = (
                 enforcement_result.get("safe_output")
                 or enforcement_result.get("rewritten_output")
-                or safety_result.get("safe_output")
+                or policy_decision.get("safe_output")
                 or "I understand. Let me help you with that in a different way."
             )
             result_type = "passive"
@@ -728,12 +718,12 @@ async def handle_assistant_request(request):
             response_text=final_response_text,
             task=task if 'task' in locals() else None,
             enforcement=enforcement_result,
-            safety=safety_result,
+            policy_decision=policy_decision,
             execution=execution_result,
             trace_id=trace_id,
             language_metadata=language_metadata,
             audio_response=audio_response,
-            signal_type=mitra_contract.get("signal_type"),
+            signal_type=(mitra_contract.get("rl_signal") or {}).get("signal_type"),
             system_context=mitra_contract.get("system_context"),
             mitra=mitra_contract,
         )
@@ -772,7 +762,7 @@ def success_response(
     response_text,
     task=None,
     enforcement=None,
-    safety=None,
+    policy_decision=None,
     execution=None,
     trace_id=None,
     language_metadata=None,
@@ -789,7 +779,7 @@ def success_response(
             "response": response_text,
             "task": task,
             "enforcement": enforcement,
-            "safety": safety,
+            "safety": _project_policy_to_safety(policy_decision),
             "execution": execution,
         },
         "processed_at": datetime.utcnow().isoformat() + "Z",

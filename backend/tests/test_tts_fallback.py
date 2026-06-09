@@ -21,7 +21,15 @@ def test_tts_status_reports_unavailable_without_optional_xtts_runtime():
     assert body["tts"]["model_loaded"] is False
 
 
-def test_tts_endpoint_fails_softly_when_optional_xtts_runtime_is_missing():
+def test_tts_endpoint_fails_softly_when_all_providers_are_unavailable(monkeypatch):
+    async def unavailable_tts(*args, **kwargs):
+        return b""
+
+    monkeypatch.setattr(
+        "app.api.tts.audio_service.text_to_speech_async",
+        unavailable_tts,
+    )
+
     response = client.post(
         "/api/tts",
         json={"text": "Hello from Mitra", "language": "en"},

@@ -5,7 +5,7 @@ Thin service wrapper around the gateway-enforced DeviceGatewayExecutor.
 This is the "device_bridge_service.py" requested in the task spec.
 
 All real command execution still goes through:
-Safety -> Enforcement -> ExecutionService -> DeviceGatewayExecutor
+Mitra policy -> RL -> Enforcement -> ExecutionService -> DeviceGatewayExecutor
 """
 
 import json
@@ -32,7 +32,7 @@ class DeviceBridgeService:
     ) -> Dict[str, Any]:
         """
         Public API for device command requests from Mitra.
-        Every command request is re-validated by Raj's runtime before execution.
+        Every command request is re-validated by Mitra before execution.
         """
         trace_id = f"trace_device_bridge_{device_id or 'anon'}"
         action_data: Dict[str, Any] = {

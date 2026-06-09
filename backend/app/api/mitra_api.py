@@ -47,13 +47,10 @@ class MitraEvaluateResponse(BaseModel):
     reason: str
     confidence: float
     trace_id: str
-    signal_type: Optional[
-        Literal["correction", "intent_refinement", "implicit_positive", "implicit_negative"]
-    ] = None
-    policy_decision: Optional[dict] = None
-    rl_signal: Optional[dict] = None
-    mediation_result: Optional[dict] = None
-    enforcement_output: Optional[dict] = None
+    policy_decision: dict
+    rl_signal: dict
+    enforcement_output: dict
+    bucket_log_reference: dict
     system_context: Optional[dict] = None
 
 

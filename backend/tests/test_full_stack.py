@@ -1,120 +1,76 @@
 import pytest
 from fastapi.testclient import TestClient
+
 from app.main import app
 
+
 client = TestClient(app)
-# Set API key for all requests
 client.headers.update({"X-API-Key": "localtest"})
 
-def test_root():
+
+def test_root_reports_current_backend():
     response = client.get("/")
+
     assert response.status_code == 200
-    assert "Assistant Core v3 API" in response.json()["message"]
+    assert response.json()["message"] == "AI Assistant Backend API v3.0.0"
 
-def test_summarize():
-    response = client.post("/api/summarize", json={"text": "This is a test text.", "max_length": 10})
+
+@pytest.mark.parametrize(
+    "retired_endpoint",
+    [
+        "/api/summarize",
+        "/api/intent",
+        "/api/task",
+        "/api/decision_hub",
+        "/api/rl_action",
+        "/api/embed",
+        "/api/respond",
+        "/api/voice_stt",
+        "/api/voice_tts",
+        "/api/external_llm",
+        "/api/external_app",
+    ],
+)
+def test_retired_parallel_entrypoints_are_not_exposed(retired_endpoint):
+    response = client.post(retired_endpoint, json={})
+
+    assert response.status_code == 404
+
+
+def test_mitra_is_the_single_decision_entrypoint():
+    response = client.post(
+        "/api/mitra/evaluate",
+        json={
+            "event": {
+                "type": "content",
+                "content": "Help me plan a study schedule",
+                "metadata": {},
+            },
+            "context": {
+                "user_id": "full-stack-user",
+                "session_id": "full-stack-session",
+                "platform": "web",
+                "device": "desktop",
+            },
+        },
+    )
+
     assert response.status_code == 200
-    assert "summary" in response.json()
-
-def test_intent():
-    response = client.post("/api/intent", json={"text": "Hello"})
-    assert response.status_code == 200
-    assert "intent" in response.json()
-
-def test_task():
-    response = client.post("/api/task", json={"description": "Test task"})
-    assert response.status_code == 200
-    assert "task_id" in response.json()
-
-def test_decision_hub():
-    response = client.post("/api/decision_hub", data={
-        "input_text": "Test input",
-        "platform": "web",
-        "device_context": "desktop"
-    })
-    assert response.status_code == 200
-    data = response.json()
-    assert "final_decision" in data
-    assert "confidence" in data
-    assert "selected_agent" in data
-    assert "preferred_llm" in data
-    assert "device_context" in data
-    assert "memory_reference" in data
-
-def test_decision_hub_vr():
-    response = client.post("/api/decision_hub", json={
-        "input_text": "Speak something",
-        "platform": "vr",
-        "device_context": "vr",
-        "voice_input": True
-    })
-    assert response.status_code == 200
-    data = response.json()
-    assert data["device_context"] == "vr"
-
-def test_rl_action():
-    response = client.post("/api/rl_action", json={"state": {}, "actions": ["action1", "action2"]})
-    assert response.status_code == 200
-    assert "selected_action" in response.json()
-
-def test_embed():
-    response = client.post("/api/embed", json={"texts": ["Hello world"]})
-    assert response.status_code == 200
-    assert "embeddings" in response.json()
-
-def test_respond():
-    response = client.post("/api/respond", json={"query": "Hello", "context": {}})
-    assert response.status_code == 200
-    assert "response" in response.json()
-
-def test_voice_stt():
-    # Mock file upload
-    response = client.post("/api/voice_stt", data={"request": '{"audio_url": "test"}'})
-    assert response.status_code == 200
-    assert "text" in response.json()
-
-def test_voice_tts():
-    response = client.post("/api/voice_tts", json={"text": "Hello", "voice": "default"})
-    assert response.status_code == 200
-    assert "audio_url" in response.json()
-
-def test_external_llm():
-    response = client.post("/api/external_llm", json={"prompt": "Hello", "model": "uniguru"})
-    assert response.status_code == 200
-    assert "response" in response.json()
-
-def test_external_app_crm():
-    response = client.post("/api/external_app", json={"app": "crm", "action": "update", "params": {}})
-    assert response.status_code == 200
-    assert "crm_action" in response.json()["result"]
-
-def test_external_app_erp():
-    response = client.post("/api/external_app", json={"app": "erp", "action": "process", "params": {}})
-    assert response.status_code == 200
-    assert "erp_action" in response.json()["result"]
-
-def test_external_app_calendar():
-    response = client.post("/api/external_app", json={"app": "calendar", "action": "add", "params": {}})
-    assert response.status_code == 200
-    assert "calendar_action" in response.json()["result"]
-
-def test_external_app_email():
-    response = client.post("/api/external_app", json={"app": "email", "action": "send", "params": {}})
-    assert response.status_code == 200
-    assert "email_action" in response.json()["result"]
-
-def test_voice_to_intent_flow():
-    # Test voice STT then intent
-    stt_response = client.post("/api/voice_stt", data={"request": '{"audio_url": "test"}'})
-    text = stt_response.json()["text"]
-    intent_response = client.post("/api/intent", json={"text": text})
-    assert intent_response.status_code == 200
-
-def test_multi_llm_routing():
-    models = ["uniguru", "chatgpt", "groq", "gemini", "mistral"]
-    for model in models:
-        response = client.post("/api/external_llm", json={"prompt": "Hello", "model": model})
-        assert response.status_code == 200
-
-if __name__ == "__main__":
-    pytest.main([__file__])
+    body = response.json()
+    assert body["status"] == "ALLOW"
+    assert body["confidence"] == 1.0
+    assert body["trace_id"] == body["policy_decision"]["trace_id"]
+    assert body["trace_id"] == body["enforcement_output"]["trace_id"]
+    assert body["trace_id"] == body["bucket_log_reference"]["trace_id"]
+    assert set(body) == {
+        "status",
+        "risk_level",
+        "reason",
+        "confidence",
+        "trace_id",
+        "policy_decision",
+        "rl_signal",
+        "enforcement_output",
+        "bucket_log_reference",
+        "system_context",
+    }

@@ -69,9 +69,11 @@ def governance_hooks() -> Dict[str, Any]:
     return {
         "system": "mitra_runtime",
         "hooks": {
+            "control_plane_authority": "app.services.mitra_control_plane_service.MitraControlPlaneService",
             "enforcement_authority": "app.services.enforcement_service.EnforcementService",
             "execution_gateway": "app.services.execution_service.ExecutionService",
             "bucket_logging": "app.services.bucket_service.BucketService",
+            "context_awareness": "app.services.mitra_control_plane_service.MitraControlPlaneService.context_fetch",
         },
     }
 

@@ -1,4 +1,5 @@
-from datetime import datetime
+from __future__ import annotations
+
 from types import SimpleNamespace
 from typing import Any, Dict
 
@@ -8,7 +9,6 @@ from app.external.enforcement import enforcement_engine
 
 class EnforcementService:
     def __init__(self):
-        # Deterministic runtime authority (Raj) - single source of truth
         self.enforcement_engine = enforcement_engine
 
     @staticmethod
@@ -21,37 +21,29 @@ class EnforcementService:
     @staticmethod
     def _compose_platform_policy(payload: Dict[str, Any]) -> Any:
         platform_policy = payload.get("platform_policy")
-        authenticated_user_context = (
-            payload.get("authenticated_user_context")
-            or payload.get("user_context")
-        )
-
+        authenticated_user_context = payload.get("authenticated_user_context") or payload.get("user_context")
         if platform_policy and authenticated_user_context:
-            if isinstance(platform_policy, dict):
-                merged_policy = dict(platform_policy)
-            else:
-                merged_policy = {"platform_policy": platform_policy}
+            merged_policy = dict(platform_policy) if isinstance(platform_policy, dict) else {"platform_policy": platform_policy}
             merged_policy["authenticated_user_context"] = authenticated_user_context
             return merged_policy
-
         return platform_policy or authenticated_user_context
 
     @staticmethod
-    def _extract_risk_flags(payload: Dict[str, Any], intelligence: Dict[str, Any]) -> list[Any]:
+    def _extract_risk_flags(payload: Dict[str, Any]) -> list[Any]:
         risk_flags = payload.get("risk_flags")
         if risk_flags is None:
-            risk_flags = intelligence.get("risk_flags") or []
+            risk_flags = (payload.get("policy_decision") or {}).get("policy_flags") or []
         if isinstance(risk_flags, str):
             return [risk_flags]
         if isinstance(risk_flags, list):
             return risk_flags
-        return [risk_flags]
+        return [risk_flags] if risk_flags else []
 
     @staticmethod
-    def _normalize_karma_score(payload: Dict[str, Any], intelligence: Dict[str, Any]) -> int:
+    def _normalize_karma_score(payload: Dict[str, Any]) -> int:
         raw_value = payload.get("karma_score")
         if raw_value is None:
-            raw_value = intelligence.get("karma_score")
+            raw_value = (payload.get("bhiv_context") or {}).get("karma_points")
         if isinstance(raw_value, bool):
             return int(raw_value)
         if isinstance(raw_value, (int, float)):
@@ -62,136 +54,109 @@ class EnforcementService:
         from app.services.bucket_service import BucketService
 
         bucket = BucketService()
-        bucket_active = bucket.enforcement_artifact_required()
-        artifact_present = bool(trace_id) and bucket.validate_artifact(
-            trace_id,
-            stage="safety_validation",
-            required_fields=("decision", "trace_id"),
-            expected_trace_id=trace_id,
-        )
         return {
-            "bucket_active": bucket_active,
-            "mediation_artifact_present": artifact_present,
+            "bucket_active": bucket.enforcement_artifact_required(),
+            "policy_artifact_present": bool(trace_id)
+            and bucket.validate_artifact(
+                trace_id,
+                stage="mitra_policy_runtime",
+                required_fields=("decision", "trace_id"),
+                expected_trace_id=trace_id,
+            ),
         }
 
     @staticmethod
     def _emit_enforcement_telemetry(
         *,
-        request_trace_id: str | None,
+        trace_id: str,
         result: Dict[str, Any],
-        safety: Dict[str, Any],
+        policy_decision: Dict[str, Any],
+        rl_signal: Dict[str, Any],
         input_payload: SimpleNamespace,
         bucket_preconditions: Dict[str, Any],
     ) -> None:
         from app.services.bucket_service import BucketService
 
-        telemetry_payload = {
-            "event_type": "enforcement_decision",
-            "telemetry_version": "1.0",
-            "decision": result["decision"],
-            "scope": result["scope"],
-            "reason_code": result["reason_code"],
-            "trace_id": result["trace_id"],
-            "request_trace_id": result["request_trace_id"],
-            "intent": input_payload.intent,
-            "risk_flags": list(input_payload.risk_flags),
-            "risk_flag_count": len(input_payload.risk_flags),
-            "karma_score": input_payload.karma_score,
-            "mediation_decision": input_payload.mediation_decision,
-            "mediation_trace_id": input_payload.mediation_trace_id,
-            "safety_risk_category": safety.get("risk_category") if isinstance(safety, dict) else None,
-            "bucket_active": bucket_preconditions["bucket_active"],
-            "mediation_artifact_valid": bucket_preconditions["mediation_artifact_present"],
-        }
-
         BucketService().log_event(
-            request_trace_id or result["trace_id"],
-            "enforcement_telemetry",
-            telemetry_payload,
+            trace_id,
+            "mitra_enforcement_telemetry",
+            {
+                "event_type": "mitra_enforcement_decision",
+                "telemetry_version": "2.0",
+                "trace_id": result["trace_id"],
+                "decision": result["decision"],
+                "scope": result["scope"],
+                "reason_code": result["reason_code"],
+                "intent": input_payload.intent,
+                "risk_flags": list(input_payload.risk_flags),
+                "risk_flag_count": len(input_payload.risk_flags),
+                "karma_score": input_payload.karma_score,
+                "policy_decision": policy_decision,
+                "rl_signal": rl_signal,
+                "bucket_active": bucket_preconditions["bucket_active"],
+                "policy_artifact_valid": bucket_preconditions["policy_artifact_present"],
+            },
         )
 
     def enforce_policy(self, payload: Dict[str, Any], trace_id: str) -> Dict[str, Any]:
-        """
-        Runtime enforcement entrypoint.
-        Converts the runtime payload dict into the deterministic engine's expected input shape,
-        calls Raj's `enforcement_engine.enforce()`, then adapts the verdict to the dict
-        surface consumed by the orchestrator.
-        """
-        request_trace_id = self._normalize_trace_id(trace_id)
+        runtime_trace_id = self._normalize_trace_id(trace_id)
         scope = get_mitra_entry_scope()
-        if not scope or str(scope.get("trace_id") or "") != str(request_trace_id or ""):
+        if not scope or str(scope.get("trace_id") or "") != str(runtime_trace_id or ""):
             from app.services.bucket_service import BucketService
 
-            if request_trace_id:
+            if runtime_trace_id:
                 BucketService().log_event(
-                    request_trace_id,
+                    runtime_trace_id,
                     "enforcement_bypass_blocked",
                     {
-                        "trace_id": request_trace_id,
+                        "trace_id": runtime_trace_id,
                         "reason": "Direct enforcement access blocked. Use Mitra control plane.",
                         "source": scope.get("source") if scope else None,
                     },
                 )
             raise PermissionError("Direct enforcement access blocked. Use Mitra control plane.")
 
-        safety = payload.get("safety") or {}
-        intelligence = payload.get("intelligence") or {}
-        mediation_trace_id = self._normalize_trace_id(
-            safety.get("trace_id") if isinstance(safety, dict) else None
-        )
-        bucket_preconditions = self._bucket_preconditions(request_trace_id)
-
+        policy_decision = payload.get("policy_decision") or {}
+        rl_signal = payload.get("rl_signal") or {}
+        bucket_preconditions = self._bucket_preconditions(runtime_trace_id)
         input_payload = SimpleNamespace(
-            intent=payload.get("intent") or intelligence.get("intent") or "general",
-            emotional_output=(
-                payload.get("emotional_output")
-                or payload.get("user_input")
-                or payload.get("text")
-                or ""
-            ),
+            intent=payload.get("intent") or "general",
+            emotional_output=payload.get("emotional_output") or payload.get("user_input") or payload.get("text") or "",
             age_gate_status=bool(payload.get("age_gate_status", False)),
             region_policy=payload.get("region_policy"),
             platform_policy=self._compose_platform_policy(payload),
-            karma_score=self._normalize_karma_score(payload, intelligence),
-            risk_flags=self._extract_risk_flags(payload, intelligence),
-            trace_id=request_trace_id,
-            akanksha_validation=safety if isinstance(safety, dict) else None,
-            mediation_decision=safety.get("decision") if isinstance(safety, dict) else None,
-            mediation_trace_id=mediation_trace_id,
+            karma_score=self._normalize_karma_score(payload),
+            risk_flags=self._extract_risk_flags(payload),
+            trace_id=runtime_trace_id,
             authenticated_user_context=payload.get("authenticated_user_context") or payload.get("user_context"),
+            policy_decision=policy_decision,
+            rl_signal=rl_signal,
             bucket_active=bucket_preconditions["bucket_active"],
-            mediation_artifact_present=bucket_preconditions["mediation_artifact_present"],
+            policy_artifact_present=bucket_preconditions["policy_artifact_present"],
         )
 
         verdict = self.enforcement_engine.enforce(input_payload)
-
         result: Dict[str, Any] = {
             "decision": getattr(verdict, "decision", "BLOCK"),
             "scope": getattr(verdict, "scope", "both"),
-            "trace_id": getattr(verdict, "trace_id", request_trace_id or trace_id),
+            "trace_id": getattr(verdict, "trace_id", runtime_trace_id or trace_id),
             "reason_code": getattr(verdict, "reason_code", "UNKNOWN"),
-            "request_trace_id": getattr(verdict, "request_trace_id", request_trace_id),
-            "timestamp": datetime.utcnow().isoformat(),
         }
-
-        rewrite_class = getattr(verdict, "rewrite_class", None)
-        if rewrite_class:
-            result["rewrite_class"] = rewrite_class
-
-        safe_output = getattr(verdict, "safe_output", None)
-        if safe_output:
-            result["safe_output"] = safe_output
-            result["rewritten_output"] = safe_output
+        if getattr(verdict, "rewrite_class", None):
+            result["rewrite_class"] = verdict.rewrite_class
+        if getattr(verdict, "safe_output", None):
+            result["safe_output"] = verdict.safe_output
+            result["rewritten_output"] = verdict.safe_output
 
         self._emit_enforcement_telemetry(
-            request_trace_id=request_trace_id,
+            trace_id=runtime_trace_id or result["trace_id"],
             result=result,
-            safety=safety,
+            policy_decision=policy_decision,
+            rl_signal=rl_signal,
             input_payload=input_payload,
             bucket_preconditions=bucket_preconditions,
         )
-
         return result
 
     def get_status(self) -> Dict[str, Any]:
-        return {"service": "enforcement_service", "status": "active"}
+        return {"service": "mitra_enforcement_runtime", "status": "active"}

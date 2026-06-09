@@ -40,11 +40,10 @@ class EnforcementVerdict:
     decision: DecisionType
     scope: ScopeType
 
-    trace_id: str                # enforcement-owned, deterministic
+    trace_id: str                # single Mitra trace authority
     reason_code: str             # machine-readable justification
 
     # Optional fields (only when relevant)
-    request_trace_id: Optional[str] = None
     rewrite_class: Optional[str] = None
     safe_output: Optional[str] = None
 

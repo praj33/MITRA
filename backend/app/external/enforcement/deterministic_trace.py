@@ -1,5 +1,5 @@
 """
-Deterministic trace id generation for Raj's enforcement engine.
+Deterministic trace id generation for Mitra's enforcement stage.
 """
 
 from __future__ import annotations
