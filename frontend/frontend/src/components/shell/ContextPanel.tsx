@@ -2,7 +2,6 @@
 import React from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { X } from 'lucide-react';
-import { cn } from '../../lib/utils';
 import { useCompanionStore } from '../../store/companion.store';
 import ContextCard from '../cards/ContextCard';
 import StatusCard from '../cards/StatusCard';

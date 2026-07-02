@@ -10,13 +10,7 @@ interface Props {
   onActionConfirm?: (action: string, messageId: string) => void;
 }
 
-const ThinkingDots = () => (
-  <span className="inline-flex items-center gap-0.5 ml-1">
-    <span className="thinking-dot" />
-    <span className="thinking-dot" />
-    <span className="thinking-dot" />
-  </span>
-);
+
 
 const ConversationCard: React.FC<Props> = ({ message, onActionConfirm }) => {
   const isAssistant = message.role === 'assistant';

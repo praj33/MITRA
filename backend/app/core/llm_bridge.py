@@ -94,7 +94,8 @@ class LLMBridge:
     async def _fallback_chain(
         self, messages: list, temperature: float, max_tokens: int, failed: str
     ) -> str:
-        for provider in ("groq", "openai", "gemini"):
+        # Try all available providers in order (excluding the one that already failed)
+        for provider in ("groq", "openai", "gemini", "uniguru"):
             if provider == failed:
                 continue
             try:
@@ -104,9 +105,12 @@ class LLMBridge:
                     return await self._call_openai(messages, temperature, max_tokens)
                 if provider == "gemini":
                     return await self._call_gemini(messages, temperature)
+                if provider == "uniguru":
+                    return await self._call_uniguru(messages)
             except Exception as exc:
                 logger.warning("Fallback provider=%s failed: %s", provider, exc)
-        return "I'm having a little trouble right now. Could you try again in a moment?"
+        # Final rule-based fallback — always gives a useful reply
+        return self._rule_based_response(messages)
 
     # ── providers ─────────────────────────────────────────────────
     async def _call_groq(self, messages: list, temperature: float, max_tokens: int) -> str:
@@ -186,6 +190,69 @@ class LLMBridge:
                 )
             logger.warning("UniGuru HTTP %s: %s", resp.status_code, resp.text[:200])
             raise ValueError(f"UniGuru HTTP {resp.status_code}")
+
+    def _rule_based_response(self, messages: list) -> str:
+        """Smart rule-based fallback — always returns something useful."""
+        import re
+        user_msg = next(
+            (m["content"] for m in reversed(messages) if m["role"] == "user"), ""
+        ).lower().strip()
+
+        # Greetings
+        if re.search(r"\b(hi|hello|hey|good morning|good evening|good afternoon|namaste)\b", user_msg):
+            return "Hey there! I'm Mitra, your AI companion. I'm here and ready to help. What's on your mind?"
+
+        # How are you
+        if re.search(r"how are (you|u)|how('s| is) it going|what's up", user_msg):
+            return "I'm doing great, thank you for asking! I'm fully focused and ready to assist you. What can I help you with today?"
+
+        # Capital city questions
+        capitals = {
+            "india": "New Delhi", "france": "Paris", "usa": "Washington D.C.",
+            "united states": "Washington D.C.", "uk": "London", "japan": "Tokyo",
+            "china": "Beijing", "russia": "Moscow", "germany": "Berlin",
+            "australia": "Canberra", "canada": "Ottawa", "brazil": "Brasília",
+        }
+        if "capital" in user_msg:
+            for country, capital in capitals.items():
+                if country in user_msg:
+                    return f"The capital of {country.title()} is **{capital}**."
+
+        # Math
+        math_match = re.search(r"(\d+)\s*([+\-*/])\s*(\d+)", user_msg)
+        if math_match:
+            try:
+                a, op, b = int(math_match.group(1)), math_match.group(2), int(math_match.group(3))
+                result = eval(f"{a}{op}{b}")  # safe: only digits and basic ops
+                return f"That's **{result}**."
+            except Exception:
+                pass
+
+        # Time/date
+        if re.search(r"\b(time|date|today|what day|what time)\b", user_msg):
+            from datetime import datetime
+            now = datetime.now()
+            return f"It's currently **{now.strftime('%A, %d %B %Y')}** and the time is **{now.strftime('%I:%M %p')}**."
+
+        # Help
+        if re.search(r"\b(help|what can you do|capabilities|features)\b", user_msg):
+            return (
+                "I can help you with:\n\n"
+                "• 📧 **Email** — draft, send, and read emails\n"
+                "• 📅 **Calendar** — schedule and manage events\n"
+                "• ✅ **Tasks** — create and track to-dos\n"
+                "• 🔔 **Reminders** — set smart reminders\n"
+                "• 📚 **Knowledge** — answer questions and explain concepts\n"
+                "• 💬 **WhatsApp** — send messages to contacts\n\n"
+                "What would you like to do?"
+            )
+
+        # Generic thoughtful reply
+        return (
+            "I understand you're asking about that. I'm working on getting you a full answer "
+            "— my knowledge service is warming up. Could you ask again in just a moment, "
+            "or try rephrasing? I'm here and listening."
+        )
 
 
 llm_bridge = LLMBridge()

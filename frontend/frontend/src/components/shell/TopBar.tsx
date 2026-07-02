@@ -5,7 +5,6 @@ import { Search, Bell, PanelRight, Zap } from 'lucide-react';
 import { cn } from '../../lib/utils';
 import { useCompanionStore } from '../../store/companion.store';
 import CompanionDot from '../primitives/CompanionDot';
-import Badge from '../primitives/Badge';
 
 interface Props { onSearch?: () => void; }
 

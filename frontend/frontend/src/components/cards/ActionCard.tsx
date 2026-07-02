@@ -1,7 +1,7 @@
 // components/cards/ActionCard.tsx — Capability result + action buttons
 import React from 'react';
 import { motion } from 'framer-motion';
-import { CheckCircle, AlertCircle, Clock, ExternalLink } from 'lucide-react';
+import { CheckCircle, AlertCircle, Clock } from 'lucide-react';
 import { cn } from '../../lib/utils';
 import Badge from '../primitives/Badge';
 
