@@ -44,9 +44,53 @@ from app.api.auth import router as auth_router
 from app.api.mitra_api import router as mitra_router
 from app.api.webhooks import router as webhook_router
 from app.api.tts import router as tts_router
+from app.api.companion_api import router as companion_router
+from app.api.workflow_api import router as workflow_router
 from app.executors.telegram_executor import TelegramExecutor
 from app.services.reminder_scheduler import ReminderScheduler, SchedulerConfig
 from app.mitra_system_health import get_system_health_snapshot
+
+# -------------------------------------------------
+# Logging
+# -------------------------------------------------
+setup_logging()
+logger = get_logger(__name__)
+
+
+def _telegram_webhook_url() -> str | None:
+    explicit = (os.getenv("TELEGRAM_WEBHOOK_URL") or "").strip()
+    if explicit:
+        return explicit
+
+    public_base = (
+        os.getenv("RENDER_EXTERNAL_URL")
+        or os.getenv("BASE_URL")
+        or os.getenv("PUBLIC_BASE_URL")
+        or ""
+    ).strip()
+    if not public_base or "localhost" in public_base or "127.0.0.1" in public_base:
+        return None
+    return f"{public_base.rstrip('/')}/webhook/telegram"
+
+
+def _register_telegram_webhook() -> None:
+    webhook_url = _telegram_webhook_url()
+    if not webhook_url:
+        logger.info("Telegram webhook registration skipped: no public webhook URL configured")
+        return
+
+    executor = TelegramExecutor()
+    if not executor.bot_token:
+        logger.info("Telegram webhook registration skipped: TELEGRAM_BOT_TOKEN not configured")
+        return
+
+    result = executor.set_webhook(webhook_url)
+    if result.get("status") == "success":
+        logger.info("Telegram webhook registered: %s", webhook_url)
+    else:
+        logger.warning("Telegram webhook registration failed: %s", result)
+
+# -------------------------------------------------
 
 # -------------------------------------------------
 # Logging
@@ -105,6 +149,14 @@ async def lifespan(app: FastAPI):
         # but database features won't work
         logger.warning("Continuing startup without database initialization")
 
+    # Register all companion capabilities
+    try:
+        from app.capabilities import register_all_capabilities
+        register_all_capabilities()
+        logger.info("Companion capabilities registered")
+    except Exception as e:
+        logger.warning(f"Capability registration failed (non-fatal): {e}")
+
     # Optional: start reminder scheduler worker
     if os.getenv("REMINDER_SCHEDULER_ENABLED", "0").lower() in {"1", "true", "yes"}:
         try:
@@ -141,9 +193,9 @@ async def lifespan(app: FastAPI):
 api_key_header = APIKeyHeader(name="X-API-Key", auto_error=False)
 
 app = FastAPI(
-    title="AI Assistant Backend",
-    description="Production-locked Assistant Backend",
-    version="3.0.0",
+    title="Mitra — Universal AI Companion",
+    description="Mitra v4 Companion Backend — Persistent AI companion with capability hub, UniGuru knowledge integration, and multi-step workflow orchestration.",
+    version="4.0.0",
     lifespan=lifespan,
 )
 
@@ -221,13 +273,16 @@ async def security_middleware(request: Request, call_next):
     return response
 
 # -------------------------------------------------
-# ONLY PUBLIC ROUTER (LOCKED)
+# Routers
 # -------------------------------------------------
 app.include_router(auth_router)
 app.include_router(assistant_router)
 app.include_router(mitra_router)
 app.include_router(webhook_router)
 app.include_router(tts_router)
+# Companion v4
+app.include_router(companion_router)
+app.include_router(workflow_router)
 
 # -------------------------------------------------
 # System Endpoints
@@ -235,17 +290,21 @@ app.include_router(tts_router)
 @app.get("/")
 async def root():
     return {
-        "message": "AI Assistant Backend API v3.0.0",
+        "message": "Mitra — Universal AI Companion v4.0.0",
         "status": "running",
         "endpoints": {
-            "health": "/health",
-            "auth_signup": "/api/auth/signup",
-            "auth_login": "/api/auth/login",
-            "auth_me": "/api/auth/me",
-            "assistant": "/api/assistant",
-            "mitra_evaluate": "/api/mitra/evaluate",
-            "tts": "/api/tts",
-            "tts_status": "/api/tts/status"
+            "health":             "/health",
+            "auth_signup":        "/api/auth/signup",
+            "auth_login":         "/api/auth/login",
+            "companion_chat":     "/api/companion/chat",
+            "companion_greeting": "/api/companion/greeting/{user_id}",
+            "companion_memory":   "/api/companion/memory/{user_id}",
+            "companion_session":  "/api/companion/session/{user_id}",
+            "companion_caps":     "/api/companion/capabilities",
+            "workflow_list":      "/api/workflow/list",
+            "workflow_run":       "/api/workflow/run",
+            "mitra_evaluate":     "/api/mitra/evaluate",
+            "tts":                "/api/tts",
         },
         "timestamp": datetime.utcnow().isoformat() + "Z",
     }
@@ -254,15 +313,14 @@ async def root():
 async def health_check():
     return {
         "status": "ok",
-        "version": "3.0.0",
+        "version": "4.0.0",
         "timestamp": datetime.utcnow().isoformat() + "Z",
     }
-
 
 @app.get("/health/system")
 async def system_health():
     """
     Deep system health endpoint.
-    Reports module status, bucket status, and runtime version for BHIV Core.
+    Reports module status, bucket status, and runtime version.
     """
     return get_system_health_snapshot()
