@@ -1,4 +1,4 @@
-// components/shell/ConversationCenter.tsx — Main chat thread panel
+// components/shell/ConversationCenter.tsx — Main chat thread panel (responsive)
 import React, { useEffect, useRef } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { useCompanionStore } from '../../store/companion.store';
@@ -30,25 +30,26 @@ const EmptyState = () => (
     initial={{ opacity: 0, y: 12 }}
     animate={{ opacity: 1, y: 0 }}
     transition={{ delay: 0.1 }}
-    className="flex flex-col items-center justify-center h-full gap-5 text-center px-8 select-none"
+    className="flex flex-col items-center justify-center h-full gap-4 sm:gap-5 text-center px-5 sm:px-8 select-none"
   >
-    <div className="w-16 h-16 rounded-2xl bg-brand-muted border border-brand/30 flex items-center justify-center">
-      <Zap size={28} className="text-brand-light" />
+    <div className="w-14 h-14 sm:w-16 sm:h-16 rounded-2xl bg-brand-muted border border-brand/30 flex items-center justify-center">
+      <Zap size={24} className="text-brand-light sm:hidden" />
+      <Zap size={28} className="text-brand-light hidden sm:block" />
     </div>
     <div>
-      <h2 className="text-xl font-semibold text-text-primary mb-1.5">Good to see you</h2>
-      <p className="text-sm text-text-muted max-w-xs leading-relaxed">
+      <h2 className="text-lg sm:text-xl font-semibold text-text-primary mb-1 sm:mb-1.5">Good to see you</h2>
+      <p className="text-xs sm:text-sm text-text-muted max-w-xs leading-relaxed">
         I'm Mitra — your AI companion. Ask me anything, run a workflow, or let me help you get things done.
       </p>
     </div>
-    <div className="flex flex-wrap justify-center gap-2">
+    <div className="flex flex-wrap justify-center gap-1.5 sm:gap-2">
       {[
         'What\'s on my calendar today?',
         'Summarize my emails',
         'Create a reminder',
         'Run morning briefing',
       ].map(s => (
-        <span key={s} className="text-2xs px-3 py-1.5 rounded-full border border-border-subtle text-text-muted bg-surface-overlay">
+        <span key={s} className="text-2xs px-2.5 sm:px-3 py-1 sm:py-1.5 rounded-full border border-border-subtle text-text-muted bg-surface-overlay">
           {s}
         </span>
       ))}
@@ -67,7 +68,7 @@ const ConversationCenter: React.FC = () => {
 
   return (
     <main className="zone-center flex flex-col overflow-hidden bg-surface-base">
-      <div className="flex-1 overflow-y-auto px-6 py-6 space-y-4">
+      <div className="flex-1 overflow-y-auto px-3 py-4 sm:px-6 sm:py-6 space-y-3 sm:space-y-4 overscroll-contain">
         {messages.length === 0 ? (
           <EmptyState />
         ) : (

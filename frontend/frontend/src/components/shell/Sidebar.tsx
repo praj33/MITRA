@@ -1,9 +1,9 @@
-// components/shell/Sidebar.tsx — Navigation + conversation history
+// components/shell/Sidebar.tsx — Navigation + conversation history (responsive)
 import React from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import {
   MessageCircle, Calendar, CheckSquare, Bell, BookOpen,
-  Settings, ChevronLeft, ChevronRight, Play,
+  Settings, ChevronLeft, ChevronRight, Play, X,
 } from 'lucide-react';
 import { cn } from '../../lib/utils';
 import { useCompanionStore } from '../../store/companion.store';
@@ -29,7 +29,8 @@ interface Props {
   onSectionChange?: (id: string) => void;
 }
 
-const Sidebar: React.FC<Props> = ({
+/* ── Desktop / Tablet Sidebar (grid-embedded) ─────────── */
+const DesktopSidebar: React.FC<Props> = ({
   activeSection = 'chat', onSectionChange,
 }) => {
   const { sidebar, toggleSidebar } = useCompanionStore();
@@ -125,6 +126,121 @@ const Sidebar: React.FC<Props> = ({
         </button>
       </div>
     </aside>
+  );
+};
+
+/* ── Mobile Sidebar Drawer (overlay) ──────────────────── */
+const MobileSidebarDrawer: React.FC<Props> = ({
+  activeSection = 'chat', onSectionChange,
+}) => {
+  const { mobileMenuOpen, setMobileMenuOpen, userName } = useCompanionStore();
+
+  const handleNav = (id: string) => {
+    onSectionChange?.(id);
+    setMobileMenuOpen(false);
+  };
+
+  return (
+    <AnimatePresence>
+      {mobileMenuOpen && (
+        <>
+          {/* Backdrop */}
+          <motion.div
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            transition={{ duration: 0.2 }}
+            className="mobile-overlay-backdrop"
+            onClick={() => setMobileMenuOpen(false)}
+            aria-hidden="true"
+          />
+
+          {/* Drawer */}
+          <motion.aside
+            initial={{ x: '-100%' }}
+            animate={{ x: 0 }}
+            exit={{ x: '-100%' }}
+            transition={{ type: 'spring', damping: 28, stiffness: 300 }}
+            className="mobile-sidebar-drawer"
+            role="dialog"
+            aria-label="Navigation menu"
+          >
+            {/* Header */}
+            <div className="flex items-center justify-between px-4 py-4 border-b border-border-subtle">
+              <div className="flex items-center gap-2.5">
+                <div className="w-8 h-8 rounded-lg bg-brand-muted border border-brand/30 flex items-center justify-center">
+                  <span className="text-brand-light text-sm font-bold">M</span>
+                </div>
+                <div>
+                  <p className="text-sm font-semibold text-text-primary">Mitra</p>
+                  <p className="text-2xs text-text-muted">Hey, {userName} 👋</p>
+                </div>
+              </div>
+              <button
+                onClick={() => setMobileMenuOpen(false)}
+                className="w-8 h-8 flex items-center justify-center rounded-lg hover:bg-surface-overlay transition-colors"
+                aria-label="Close menu"
+              >
+                <X size={16} className="text-text-muted" />
+              </button>
+            </div>
+
+            {/* Nav items */}
+            <nav className="flex-1 py-4 px-3 space-y-1" role="navigation" aria-label="Main navigation">
+              {navItems.map(item => {
+                const active = activeSection === item.id;
+                return (
+                  <button
+                    key={item.id}
+                    id={`mobile-nav-${item.id}`}
+                    onClick={() => handleNav(item.id)}
+                    aria-current={active ? 'page' : undefined}
+                    className={cn(
+                      'w-full flex items-center gap-3 px-3 py-3 rounded-xl transition-all duration-150 text-left',
+                      active
+                        ? 'bg-brand-muted text-brand-light'
+                        : 'text-text-secondary hover:bg-surface-overlay active:bg-surface-overlay',
+                    )}
+                  >
+                    <span className={cn('flex-shrink-0', active ? 'text-brand-light' : '')}>
+                      {item.icon}
+                    </span>
+                    <span className="text-sm font-medium">{item.label}</span>
+                    {item.badge && item.badge > 0 && (
+                      <span className="ml-auto w-5 h-5 bg-brand rounded-full text-xs text-white flex items-center justify-center flex-shrink-0">
+                        {item.badge}
+                      </span>
+                    )}
+                  </button>
+                );
+              })}
+            </nav>
+
+            {/* Footer */}
+            <div className="px-3 pb-4 border-t border-border-subtle pt-3">
+              <button className="w-full flex items-center gap-3 px-3 py-3 rounded-xl text-text-muted hover:text-text-secondary hover:bg-surface-overlay transition-all">
+                <Settings size={15} />
+                <span className="text-sm font-medium">Settings</span>
+              </button>
+            </div>
+          </motion.aside>
+        </>
+      )}
+    </AnimatePresence>
+  );
+};
+
+/* ── Exported Sidebar — renders desktop OR mobile version ── */
+const Sidebar: React.FC<Props> = (props) => {
+  const isMobile = useCompanionStore(s => s.isMobile);
+
+  return (
+    <>
+      {/* Desktop/Tablet sidebar always rendered (hidden on mobile via CSS) */}
+      <DesktopSidebar {...props} />
+      {/* Mobile sidebar drawer rendered only on mobile */}
+      {isMobile && <MobileSidebarDrawer {...props} />}
+    </>
   );
 };
 

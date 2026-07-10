@@ -1,7 +1,12 @@
-// App.tsx — Mitra v4 Companion Shell
+// App.tsx — Mitra v4 Companion Shell (fully responsive)
 import React, { useEffect, useState, useCallback } from 'react';
-import { useCompanionStore } from './store/companion.store';
+import { useCompanionStore, useIsMobile } from './store/companion.store';
 import { CompanionService } from './services/companion.service';
+import {
+  MessageCircle, Calendar, CheckSquare, Bell,
+  LayoutGrid, PanelRight,
+} from 'lucide-react';
+import { cn } from './lib/utils';
 
 // Shell components
 import TopBar            from './components/shell/TopBar';
@@ -12,14 +17,76 @@ import InputBar          from './components/shell/InputBar';
 
 const USER_ID = process.env.REACT_APP_USER_ID || 'user_default';
 
+/* ── Bottom Navigation (Mobile Only) ──────────────────── */
+interface BottomNavProps {
+  activeSection: string;
+  onSectionChange: (id: string) => void;
+}
+
+const bottomNavItems = [
+  { id: 'chat',      icon: MessageCircle, label: 'Chat' },
+  { id: 'calendar',  icon: Calendar,      label: 'Calendar' },
+  { id: 'tasks',     icon: CheckSquare,   label: 'Tasks' },
+  { id: 'reminders', icon: Bell,          label: 'Reminders' },
+  { id: 'more',      icon: LayoutGrid,    label: 'More' },
+];
+
+const BottomNav: React.FC<BottomNavProps> = ({ activeSection, onSectionChange }) => {
+  const { toggleMobileMenu, toggleMobileContext } = useCompanionStore();
+
+  const handleTap = (id: string) => {
+    if (id === 'more') {
+      toggleMobileMenu();
+    } else {
+      onSectionChange(id);
+    }
+  };
+
+  return (
+    <nav className="bottom-nav zone-bottomnav" role="navigation" aria-label="Bottom navigation">
+      {bottomNavItems.map(item => {
+        const active = activeSection === item.id;
+        const Icon = item.icon;
+        return (
+          <button
+            key={item.id}
+            id={`bottomnav-${item.id}`}
+            onClick={() => handleTap(item.id)}
+            className={cn('bottom-nav-item', active && 'active')}
+            aria-current={active ? 'page' : undefined}
+            aria-label={item.label}
+          >
+            <Icon size={20} className="bottom-nav-icon" />
+            <span>{item.label}</span>
+          </button>
+        );
+      })}
+      {/* Context panel trigger on mobile */}
+      <button
+        id="bottomnav-context"
+        onClick={toggleMobileContext}
+        className="bottom-nav-item"
+        aria-label="Context panel"
+      >
+        <PanelRight size={20} className="bottom-nav-icon" />
+        <span>Context</span>
+      </button>
+    </nav>
+  );
+};
+
+/* ── Main App ─────────────────────────────────────────── */
 const App: React.FC = () => {
   const {
-    sidebar, contextPanel,
+    sidebar, contextPanel, isMobile,
     setStatus, setSessionId, setUserName, setMemory,
     addMessage, addNotification, addContextItem,
   } = useCompanionStore();
 
   const [activeSection, setActiveSection] = useState('chat');
+
+  // Sync isMobile with window size
+  useIsMobile();
 
   // ── Startup: load greeting + memory ────────────────────
   useEffect(() => {
@@ -116,6 +183,10 @@ const App: React.FC = () => {
       <ConversationCenter />
       <InputBar onSend={handleSend} />
       <ContextPanel />
+      {/* Mobile bottom navigation */}
+      {isMobile && (
+        <BottomNav activeSection={activeSection} onSectionChange={setActiveSection} />
+      )}
     </div>
   );
 };

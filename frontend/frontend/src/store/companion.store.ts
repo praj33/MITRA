@@ -1,6 +1,7 @@
 // store/companion.store.ts — Mitra Zustand global state
 import { create } from 'zustand';
 import { devtools } from 'zustand/middleware';
+import { useEffect } from 'react';
 
 // ── Types ────────────────────────────────────────────────
 export type CompanionStatus = 'active' | 'thinking' | 'away' | 'error';
@@ -71,6 +72,11 @@ interface CompanionStore {
   sidebar:      SidebarState;
   contextPanel: PanelState;
 
+  // Mobile state
+  isMobile:         boolean;
+  mobileMenuOpen:   boolean;
+  mobileContextOpen: boolean;
+
   // Context items (right panel)
   contextItems: ContextItem[];
 
@@ -87,6 +93,13 @@ interface CompanionStore {
   setContextPanel: (s: PanelState) => void;
   toggleSidebar: () => void;
   toggleContextPanel: () => void;
+
+  // Mobile actions
+  setIsMobile:          (v: boolean) => void;
+  setMobileMenuOpen:    (v: boolean) => void;
+  setMobileContextOpen: (v: boolean) => void;
+  toggleMobileMenu:     () => void;
+  toggleMobileContext:  () => void;
 
   addMessage:    (msg: Omit<Message, 'id' | 'timestamp'>) => void;
   clearMessages: () => void;
@@ -121,6 +134,11 @@ export const useCompanionStore = create<CompanionStore>()(
       sidebar:      'expanded',
       contextPanel: 'open',
 
+      // Mobile defaults
+      isMobile:         false,
+      mobileMenuOpen:   false,
+      mobileContextOpen: false,
+
       contextItems: [],
       notifications: [],
       memory: {},
@@ -135,9 +153,21 @@ export const useCompanionStore = create<CompanionStore>()(
       toggleSidebar:   () => set(s => ({
         sidebar: s.sidebar === 'expanded' ? 'collapsed' : 'expanded'
       })),
-      toggleContextPanel: () => set(s => ({
-        contextPanel: s.contextPanel === 'open' ? 'closed' : 'open'
-      })),
+      toggleContextPanel: () => {
+        const { isMobile } = get();
+        if (isMobile) {
+          set(s => ({ mobileContextOpen: !s.mobileContextOpen }));
+        } else {
+          set(s => ({ contextPanel: s.contextPanel === 'open' ? 'closed' : 'open' }));
+        }
+      },
+
+      // ── Mobile ─────────────────────────────────────
+      setIsMobile:          (isMobile)         => set({ isMobile }),
+      setMobileMenuOpen:    (mobileMenuOpen)   => set({ mobileMenuOpen }),
+      setMobileContextOpen: (mobileContextOpen) => set({ mobileContextOpen }),
+      toggleMobileMenu:     () => set(s => ({ mobileMenuOpen: !s.mobileMenuOpen })),
+      toggleMobileContext:  () => set(s => ({ mobileContextOpen: !s.mobileContextOpen })),
 
       // ── Messages ────────────────────────────────────
       addMessage: (msg) => set(s => ({
@@ -179,3 +209,45 @@ export const useCompanionStore = create<CompanionStore>()(
     { name: 'MitraCompanion' }
   )
 );
+
+// ── Custom hook: sync isMobile/tablet with window resize ──
+export function useIsMobile() {
+  const setIsMobile = useCompanionStore(s => s.setIsMobile);
+  const setSidebar = useCompanionStore(s => s.setSidebar);
+  const setContextPanel = useCompanionStore(s => s.setContextPanel);
+  const isMobile = useCompanionStore(s => s.isMobile);
+
+  useEffect(() => {
+    const mobileMql = window.matchMedia('(max-width: 767px)');
+    const tabletMql = window.matchMedia('(min-width: 768px) and (max-width: 1023px)');
+
+    const handleResize = () => {
+      const mobile = mobileMql.matches;
+      const tablet = tabletMql.matches;
+      setIsMobile(mobile);
+
+      if (mobile) {
+        // Mobile: sidebar hidden via CSS, context hidden via CSS
+        setSidebar('collapsed');
+        setContextPanel('closed');
+      } else if (tablet) {
+        // Tablet: collapsed icon sidebar, context panel closed by default (opens as overlay)
+        setSidebar('collapsed');
+        setContextPanel('closed');
+      }
+      // Desktop: keep user's preference (don't auto-change)
+    };
+
+    // Set initial value
+    handleResize();
+
+    mobileMql.addEventListener('change', handleResize);
+    tabletMql.addEventListener('change', handleResize);
+    return () => {
+      mobileMql.removeEventListener('change', handleResize);
+      tabletMql.removeEventListener('change', handleResize);
+    };
+  }, [setIsMobile, setSidebar, setContextPanel]);
+
+  return isMobile;
+}

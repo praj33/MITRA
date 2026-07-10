@@ -1,7 +1,7 @@
-// components/shell/TopBar.tsx — Mitra top navigation bar
+// components/shell/TopBar.tsx — Mitra top navigation bar (responsive)
 import React from 'react';
 import { motion } from 'framer-motion';
-import { Search, Bell, PanelRight, Zap } from 'lucide-react';
+import { Search, Bell, PanelRight, Zap, Menu } from 'lucide-react';
 import { cn } from '../../lib/utils';
 import { useCompanionStore } from '../../store/companion.store';
 import CompanionDot from '../primitives/CompanionDot';
@@ -11,13 +11,29 @@ interface Props { onSearch?: () => void; }
 const statusLabel = { active: 'Active', thinking: 'Thinking…', away: 'Away', error: 'Error' };
 
 const TopBar: React.FC<Props> = ({ onSearch }) => {
-  const { status, userName, notifications, toggleContextPanel, contextPanel } = useCompanionStore();
+  const {
+    status, userName, notifications,
+    toggleContextPanel, contextPanel,
+    isMobile, toggleMobileMenu,
+  } = useCompanionStore();
   const unread = notifications.filter(n => !n.read).length;
 
   return (
-    <header className="zone-topbar glass flex items-center px-4 gap-3 select-none">
+    <header className="zone-topbar glass flex items-center px-3 sm:px-4 gap-2 sm:gap-3 select-none">
+      {/* Mobile hamburger */}
+      {isMobile && (
+        <button
+          id="topbar-mobile-menu"
+          onClick={toggleMobileMenu}
+          className="flex-shrink-0 w-8 h-8 flex items-center justify-center rounded-lg hover:bg-surface-overlay transition-colors"
+          aria-label="Open menu"
+        >
+          <Menu size={18} className="text-text-secondary" />
+        </button>
+      )}
+
       {/* Brand */}
-      <div className="flex items-center gap-2.5 flex-shrink-0">
+      <div className="flex items-center gap-2 sm:gap-2.5 flex-shrink-0">
         <div className="w-7 h-7 rounded-lg bg-brand-muted border border-brand/30 flex items-center justify-center">
           <Zap size={14} className="text-brand-light" />
         </div>
@@ -27,11 +43,11 @@ const TopBar: React.FC<Props> = ({ onSearch }) => {
       {/* Companion status pill */}
       <motion.div
         animate={{ opacity: 1 }}
-        className="flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-surface-overlay border border-border-subtle"
+        className="flex items-center gap-1.5 px-2 sm:px-2.5 py-1 rounded-full bg-surface-overlay border border-border-subtle"
       >
         <CompanionDot status={status} size="sm" />
         <span className={cn(
-          'text-2xs font-medium',
+          'text-2xs font-medium hidden xs:inline sm:inline',
           status === 'active'   ? 'text-state-success' :
           status === 'thinking' ? 'text-brand-light' :
           status === 'error'    ? 'text-state-error' :
@@ -44,16 +60,16 @@ const TopBar: React.FC<Props> = ({ onSearch }) => {
       {/* Spacer */}
       <div className="flex-1" />
 
-      {/* User greeting */}
-      <span className="text-xs text-text-muted hidden md:block">
+      {/* User greeting — hidden on mobile & small tablets */}
+      <span className="text-xs text-text-muted hidden lg:block">
         Hey, {userName} 👋
       </span>
 
-      {/* Search */}
+      {/* Search — compact on mobile */}
       <button
         id="topbar-search"
         onClick={onSearch}
-        className="flex items-center gap-2 px-3 py-1.5 rounded-lg bg-surface-overlay border border-border-subtle text-text-muted hover:border-border-default hover:text-text-secondary transition-all duration-150 text-xs"
+        className="flex items-center gap-2 px-2 sm:px-3 py-1.5 rounded-lg bg-surface-overlay border border-border-subtle text-text-muted hover:border-border-default hover:text-text-secondary transition-all duration-150 text-xs"
       >
         <Search size={12} />
         <span className="hidden lg:inline">Search…</span>
@@ -74,20 +90,22 @@ const TopBar: React.FC<Props> = ({ onSearch }) => {
         )}
       </button>
 
-      {/* Context panel toggle */}
-      <button
-        id="topbar-context-toggle"
-        onClick={toggleContextPanel}
-        className={cn(
-          'w-8 h-8 flex items-center justify-center rounded-lg transition-colors',
-          contextPanel === 'open'
-            ? 'bg-brand-muted text-brand-light'
-            : 'hover:bg-surface-overlay text-text-muted',
-        )}
-        aria-label="Toggle context panel"
-      >
-        <PanelRight size={15} />
-      </button>
+      {/* Context panel toggle — hidden on mobile (uses bottom nav or swipe) */}
+      {!isMobile && (
+        <button
+          id="topbar-context-toggle"
+          onClick={toggleContextPanel}
+          className={cn(
+            'w-8 h-8 flex items-center justify-center rounded-lg transition-colors',
+            contextPanel === 'open'
+              ? 'bg-brand-muted text-brand-light'
+              : 'hover:bg-surface-overlay text-text-muted',
+          )}
+          aria-label="Toggle context panel"
+        >
+          <PanelRight size={15} />
+        </button>
+      )}
     </header>
   );
 };

@@ -46,6 +46,13 @@
   --context-panel-width: 280px;
   --topbar-height:       52px;
   --inputbar-height:     72px;
+  --bottomnav-height:    56px;
+
+  /* Safe area insets for notched phones */
+  --safe-top:    env(safe-area-inset-top, 0px);
+  --safe-bottom: env(safe-area-inset-bottom, 0px);
+  --safe-left:   env(safe-area-inset-left, 0px);
+  --safe-right:  env(safe-area-inset-right, 0px);
 }
 
 /* ── Base Reset & Global ──────────────────────────────── */
@@ -53,6 +60,7 @@
   box-sizing: border-box;
   margin: 0;
   padding: 0;
+  -webkit-tap-highlight-color: transparent;
 }
 
 html {
@@ -69,10 +77,12 @@ body {
   font-size: 14px;
   line-height: 1.5;
   overflow: hidden; /* Shell manages scroll zones internally */
+  overscroll-behavior: none;
 }
 
 #root {
   height: 100vh;
+  height: 100dvh; /* Dynamic viewport height — accounts for mobile browser chrome */
   width: 100vw;
   overflow: hidden;
 }
@@ -83,7 +93,7 @@ body {
 ::-webkit-scrollbar-thumb   { background: rgba(255,255,255,0.10); border-radius: 2px; }
 ::-webkit-scrollbar-thumb:hover { background: rgba(255,255,255,0.18); }
 
-/* ── Shell Grid Layout ────────────────────────────────── */
+/* ── Shell Grid Layout — Desktop (≥1024px) ───────────── */
 .mitra-shell {
   display: grid;
   grid-template-areas:
@@ -93,6 +103,7 @@ body {
   grid-template-rows:    var(--topbar-height) 1fr var(--inputbar-height);
   grid-template-columns: var(--sidebar-width) 1fr var(--context-panel-width);
   height: 100vh;
+  height: 100dvh;
   width:  100vw;
   overflow: hidden;
 }
@@ -109,28 +120,74 @@ body {
   grid-template-columns: var(--sidebar-width) 1fr;
 }
 
-/* ── Tablet (768–1279px) ─────────────────────────────── */
-@media (max-width: 1279px) {
+.mitra-shell.sidebar-collapsed.context-hidden {
+  grid-template-columns: var(--sidebar-collapsed) 1fr;
+}
+
+/* ── Tablet (768–1023px) ─────────────────────────────── */
+@media (min-width: 768px) and (max-width: 1023px) {
   .mitra-shell {
     grid-template-areas:
       "topbar  topbar"
       "sidebar center"
       "sidebar input";
     grid-template-columns: var(--sidebar-collapsed) 1fr;
-    --context-panel-width: 0px;
+  }
+
+  .mitra-shell.context-hidden {
+    grid-template-columns: var(--sidebar-collapsed) 1fr;
+  }
+
+  /* Context panel is an overlay on tablet */
+  .zone-context {
+    position: fixed;
+    top: 0;
+    right: 0;
+    bottom: 0;
+    width: min(320px, 85vw);
+    z-index: 60;
+    box-shadow: var(--shadow-panel);
   }
 }
 
 /* ── Mobile (<768px) ─────────────────────────────────── */
 @media (max-width: 767px) {
+  :root {
+    --topbar-height:  48px;
+    --inputbar-height: auto;
+  }
+
   .mitra-shell {
     grid-template-areas:
       "topbar"
       "center"
-      "input";
+      "input"
+      "bottomnav";
     grid-template-columns: 1fr;
-    grid-template-rows: var(--topbar-height) 1fr var(--inputbar-height);
-    --sidebar-width: 0px;
+    grid-template-rows: var(--topbar-height) 1fr auto auto;
+  }
+
+  /* Both sidebar-collapsed and context-hidden should keep the same mobile layout */
+  .mitra-shell.sidebar-collapsed,
+  .mitra-shell.context-hidden,
+  .mitra-shell.sidebar-collapsed.context-hidden {
+    grid-template-areas:
+      "topbar"
+      "center"
+      "input"
+      "bottomnav";
+    grid-template-columns: 1fr;
+    grid-template-rows: var(--topbar-height) 1fr auto auto;
+  }
+
+  /* Sidebar becomes a hidden offscreen element (controlled by React overlay) */
+  .zone-sidebar {
+    display: none !important;
+  }
+
+  /* Context panel also hidden from grid (rendered as overlay by React) */
+  .zone-context {
+    display: none !important;
   }
 }
 
@@ -140,6 +197,108 @@ body {
 .zone-center   { grid-area: center; }
 .zone-context  { grid-area: context; }
 .zone-input    { grid-area: input; }
+.zone-bottomnav { grid-area: bottomnav; }
+
+/* ── Mobile Overlay Backdrop ─────────────────────────── */
+.mobile-overlay-backdrop {
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.6);
+  backdrop-filter: blur(4px);
+  -webkit-backdrop-filter: blur(4px);
+  z-index: 70;
+  touch-action: none;
+}
+
+/* ── Mobile Sidebar Drawer ───────────────────────────── */
+.mobile-sidebar-drawer {
+  position: fixed;
+  top: 0;
+  left: 0;
+  bottom: 0;
+  width: min(280px, 85vw);
+  background: var(--surface-raised);
+  border-right: 1px solid var(--border-subtle);
+  z-index: 80;
+  display: flex;
+  flex-direction: column;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  padding-top: var(--safe-top);
+  padding-bottom: var(--safe-bottom);
+  padding-left: var(--safe-left);
+}
+
+/* ── Mobile Context Sheet ────────────────────────────── */
+.mobile-context-sheet {
+  position: fixed;
+  top: 0;
+  right: 0;
+  bottom: 0;
+  width: min(320px, 90vw);
+  background: var(--surface-raised);
+  border-left: 1px solid var(--border-subtle);
+  z-index: 80;
+  display: flex;
+  flex-direction: column;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  padding-top: var(--safe-top);
+  padding-bottom: var(--safe-bottom);
+  padding-right: var(--safe-right);
+  box-shadow: -4px 0 24px rgba(0, 0, 0, 0.5);
+}
+
+/* ── Bottom Navigation (Mobile Only) ─────────────────── */
+.bottom-nav {
+  display: none;
+}
+
+@media (max-width: 767px) {
+  .bottom-nav {
+    display: flex;
+    align-items: center;
+    justify-content: space-around;
+    background: var(--surface-raised);
+    border-top: 1px solid var(--border-subtle);
+    padding: 6px 0;
+    padding-bottom: calc(6px + var(--safe-bottom));
+    min-height: var(--bottomnav-height);
+    user-select: none;
+    -webkit-user-select: none;
+  }
+
+  .bottom-nav-item {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 2px;
+    padding: 4px 12px;
+    border-radius: var(--radius-md);
+    color: var(--text-muted);
+    font-size: 10px;
+    font-weight: 500;
+    transition: color 150ms ease, background 150ms ease;
+    -webkit-tap-highlight-color: transparent;
+    cursor: pointer;
+    border: none;
+    background: none;
+    outline: none;
+  }
+
+  .bottom-nav-item:active {
+    background: var(--surface-overlay);
+  }
+
+  .bottom-nav-item.active {
+    color: var(--brand-light);
+  }
+
+  .bottom-nav-item.active .bottom-nav-icon {
+    color: var(--brand-light);
+  }
+}
 
 /* ── Card Base ───────────────────────────────────────── */
 .card {
@@ -148,6 +307,13 @@ body {
   border-radius: var(--radius-lg);
   padding:       16px;
   transition:    border-color 150ms ease, box-shadow 150ms ease;
+}
+
+@media (max-width: 767px) {
+  .card {
+    padding: 12px;
+    border-radius: var(--radius-md);
+  }
 }
 
 .card:hover {
@@ -213,4 +379,38 @@ body {
 @keyframes pulse {
   0%, 100% { opacity: 1; }
   50%       { opacity: 0.4; }
+}
+
+/* ── Responsive Typography ───────────────────────────── */
+@media (max-width: 767px) {
+  html { font-size: 15px; }  /* Slightly larger base for mobile readability */
+}
+
+@media (min-width: 768px) and (max-width: 1023px) {
+  html { font-size: 14px; }
+}
+
+/* ── Touch Enhancements ──────────────────────────────── */
+@media (hover: none) and (pointer: coarse) {
+  /* Touch device: larger tap targets */
+  button, [role="button"], a {
+    min-height: 36px;
+  }
+
+  /* Remove hover styles on touch devices */
+  .card:hover {
+    border-color: var(--border-subtle);
+  }
+}
+
+/* ── Landscape phone adjustments ─────────────────────── */
+@media (max-height: 500px) and (max-width: 900px) {
+  :root {
+    --topbar-height: 40px;
+  }
+
+  .bottom-nav {
+    min-height: 44px;
+    padding-bottom: calc(4px + var(--safe-bottom));
+  }
 }
