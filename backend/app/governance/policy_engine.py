@@ -1,5 +1,5 @@
 """
-policy_engine.py — Safety Policy Runtime (Embedded in Mitra)
+policy_engine.py — Safety Policy Runtime
 
 Loads policy rules from JSON files, evaluates user input,
 and produces structured safety decisions.
@@ -34,7 +34,6 @@ class PolicyResult:
     reason: str
     timestamp: str
     system: str  # mitra | creator_core | bhiv
-    policy_version: str = "unknown"
 
     def to_dict(self) -> Dict[str, Any]:
         return {
@@ -47,7 +46,6 @@ class PolicyResult:
             "reason":          self.reason,
             "timestamp":       self.timestamp,
             "system":          self.system,
-            "policy_version":  self.policy_version,
         }
 
 
@@ -64,7 +62,6 @@ class PolicyEngine:
         "content":   "content_rules.json",
         "behavior":  "behavior_rules.json",
         "regional":  "regional_rules.json",
-        "registry":  "policy_registry.json",
     }
 
     def __init__(self, policy_dir: Optional[str] = None):
@@ -72,15 +69,16 @@ class PolicyEngine:
         self._content_rules:  List[Dict] = []
         self._behavior_rules: List[Dict] = []
         self._regional_rules: Dict       = {}
-        self._policy_version: str        = "unknown"
         self._load_policies()
+
+    # ------------------------------------------------------------------
+    # Loading
+    # ------------------------------------------------------------------
 
     def _load_policies(self) -> None:
         self._content_rules  = self._load_file("content_rules.json").get("rules", [])
         self._behavior_rules = self._load_file("behavior_rules.json").get("rules", [])
         self._regional_rules = self._load_file("regional_rules.json").get("regions", {})
-        registry = self._load_file("policy_registry.json")
-        self._policy_version = registry.get("current_version", "unknown")
 
     def _load_file(self, filename: str) -> Dict:
         path = os.path.join(self.policy_dir, filename)
@@ -89,12 +87,27 @@ class PolicyEngine:
         with open(path, "r", encoding="utf-8") as f:
             return json.load(f)
 
+    # ------------------------------------------------------------------
+    # Evaluation
+    # ------------------------------------------------------------------
+
     def evaluate(
         self,
         text: str,
         system: str = "mitra",
         region: Optional[str] = None,
     ) -> PolicyResult:
+        """
+        Evaluate text against all loaded policies.
+
+        Args:
+            text:   User input or AI output to evaluate
+            system: Calling system identifier (mitra | creator_core | bhiv)
+            region: Optional ISO region code (EU | UK | AU | DEFAULT)
+
+        Returns:
+            PolicyResult with decision, matched rule, trace_id
+        """
         trace_id  = self._make_trace_id(text, system)
         timestamp = datetime.now().isoformat() + "Z"
         text_lower = text.lower()
@@ -121,7 +134,6 @@ class PolicyEngine:
                     reason=f"Content rule {rule['id']} matched: {rule['category']}",
                     timestamp=timestamp,
                     system=system,
-                    policy_version=self._policy_version,
                 )
 
         # 3. Content rules (REWRITE)
@@ -140,7 +152,6 @@ class PolicyEngine:
                     reason=f"Content rule {rule['id']} matched: {rule['category']}",
                     timestamp=timestamp,
                     system=system,
-                    policy_version=self._policy_version,
                 )
 
         # 4. Behavior rules (BLOCK priority)
@@ -159,7 +170,6 @@ class PolicyEngine:
                     reason=f"Behavior rule {rule['id']} matched: {rule['category']}",
                     timestamp=timestamp,
                     system=system,
-                    policy_version=self._policy_version,
                 )
 
         # 5. Behavior rules (REWRITE)
@@ -178,7 +188,6 @@ class PolicyEngine:
                     reason=f"Behavior rule {rule['id']} matched: {rule['category']}",
                     timestamp=timestamp,
                     system=system,
-                    policy_version=self._policy_version,
                 )
 
         # 6. Clean — no rules matched
@@ -192,10 +201,20 @@ class PolicyEngine:
             reason="No policy rules matched",
             timestamp=timestamp,
             system=system,
-            policy_version=self._policy_version,
         )
 
-    def _check_regional(self, text_lower, region, trace_id, timestamp, system):
+    # ------------------------------------------------------------------
+    # Helpers
+    # ------------------------------------------------------------------
+
+    def _check_regional(
+        self,
+        text_lower: str,
+        region: str,
+        trace_id: str,
+        timestamp: str,
+        system: str,
+    ) -> Optional[PolicyResult]:
         region_config = self._regional_rules.get(region, self._regional_rules.get("DEFAULT", {}))
         for rule in region_config.get("additional_rules", []):
             match = self._match_patterns(text_lower, rule["patterns"])
@@ -210,7 +229,6 @@ class PolicyEngine:
                     reason=f"Regional rule {rule['id']} ({region}) matched: {rule['category']}",
                     timestamp=timestamp,
                     system=system,
-                    policy_version=self._policy_version,
                 )
         return None
 

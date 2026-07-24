@@ -103,17 +103,21 @@ class PatternLibrary:
             (r'\bbomb.*school\b', 98, "School bomb threat"),
             (r'\bkill myself\b', 100, "Suicidal intent"),
             (r'\bunalive.*myself\b', 100, "Suicidal intent (slang)"),
-            (r'\bwant.*kill myself\b', 100, "Suicidal intent"),
+            (r'\bwant to kill myself\b', 100, "Suicidal intent"),
             (r'\bwant.*to.*die\b', 92, "Death wish"),
             (r'\bsuicide\b', 98, "Suicide mention"),
             (r'\bend.*my.*life\b', 94, "Life termination"),
             (r'\bjump.*from.*building\b', 90, "Suicide method"),
             (r'\bhammer.*my.*head\b', 85, "Self-harm method"),
-            (r'\bhurt.*myself\b', 95, "Self-harm intent"),
-            (r'\bharm.*myself\b', 95, "Self-harm intent"),
+            (r'\bhurt myself.*if.*you don\'t\b', 95, "Self-harm threat"),
 
             (r'\bhelp me buy some drugs\b', 89, "Drug purchase request"),
-            (r'\bhow to hack into.*bank account\b', 91, "Bank hacking request"),
+            (r'\bhack.*bank account\b', 95, "Bank hacking request"),
+            (r'\bhow.*hack.*bank\b', 95, "Bank hacking request"),
+            (r'\bhack.*account\b', 90, "Account hacking request"),
+            (r'\bsteal.*bank\b', 96, "Bank theft intent"),
+            (r'\bsteal.*money\b', 94, "Theft intent"),
+            (r'\bbypass.*bank.*security\b', 97, "Security bypass intent"),
             (r'\bmurder.*plot\b', 97, "Murder planning"),
             (r'\bkill.*someone\b', 96, "Homicidal intent"),
             (r'\bhurt.*someone\b', 94, "Violence intent"),
@@ -136,28 +140,11 @@ class PatternLibrary:
             (r'\bterrorist.*attack\b', 99, "Terrorist attack"),
             (r'\bmass.*shooting\b', 98, "Mass violence"),
             (r'\bviolent.*attack\b', 96, "Violence planning"),
-            (r'\bi\s+will\s+rape\s+you\b', 99, "Explicit sexual violence threat"),
-            (r"\bi(?:\s+am|'m)?\s+going\s+to\s+rape\s+you\b", 99, "Explicit sexual violence threat"),
-            (r'\brape\s+you\b', 97, "Sexual violence threat"),
-
-            # Explicit illegal-activity intent (defense-in-depth)
-            (r'\bcommit\s+illegal\s+activity\b', 92, "Illegal activity intent"),
-            (r'\billegal\s+activity\b', 88, "Illegal activity mention"),
-            (r'\bI\s+plan\s+to\s+commit\s+illegal\s+activity\b', 95, "Planned illegal activity"),
-
-            # Explicit manipulation intent (harmful intent probing)
-            (r'\bmanipulate\s+someone\b', 88, "Manipulation intent"),
-            (r'\bemotionally\s+manipulat\w*\b', 90, "Emotional manipulation intent"),
-            (r'\bmanipulat\w*\s+someone\s+emotionally\b', 92, "Emotional manipulation intent"),
         ],
         
         # SEXUAL_ESCALATION_ATTEMPT patterns
         RiskCategory.SEXUAL_ESCALATION_ATTEMPT: [
             (r'\bsend me nudes\b', 94, "Nude photo request"),
-            (r'\bsend (?:me )?(?:a |some )?nude (?:photo|photos|pic|pics|picture|pictures)\b', 95, "Nude photo request"),
-            (r'\bi want (?:a |some )?nude (?:photo|photos|pic|pics|picture|pictures)\b', 95, "Nude photo request"),
-            (r'\bi need (?:a |some )?nude (?:photo|photos|pic|pics|picture|pictures)\b', 94, "Nude photo request"),
-            (r'\bshare (?:a |some )?nude (?:photo|photos|pic|pics|picture|pictures)\b', 94, "Nude photo request"),
             (r'\bmeet up alone tonight\b', 88, "Alone meeting request"),
             (r'\bwhat do you look like.*imagining us together\b', 92, "Physical fantasy"),
             (r'\btell me something sexy\b', 90, "Sexual content request"),
@@ -194,12 +181,10 @@ class PatternLibrary:
     SOFT_REWRITE_PATTERNS = {
         # EMOTIONAL_DEPENDENCY_BAIT patterns - IMPROVED
         RiskCategory.EMOTIONAL_DEPENDENCY_BAIT: [
-            (r'\bcan.*only.*talk.*to.*you\b', 68, "Exclusive dependency"),
-            (r'\beveryone.*else.*misunderstands\b', 65, "Social isolation"),
-            (r'\byou.*only.*one.*gets.*me\b', 75, "Exclusive understanding"),
-            (r'\byou.*only.*one.*understands.*me\b', 77, "Exclusive understanding"),
-            (r'\bcan.*live.*without.*you\b', 80, "Life dependency"),
-            (r'\bdon.*ever.*leave.*me\b', 78, "Abandonment fear"),
+            (r'\bcan only talk to you\b', 68, "Exclusive dependency"),
+            (r'\beveryone else misunderstands\b', 65, "Social isolation"),
+            (r'\byou\'re the only one.*gets me\b', 75, "Exclusive understanding"),
+            (r'\bdon\'t ever leave me\b', 78, "Abandonment fear"),
             (r'\bthink about our conversations all day\b', 72, "Obsessive thinking"),
             (r'\byou\'re becoming too important to me\b', 77, "Unhealthy attachment"),
             (r'\bstopped talking to my friends.*prefer you\b', 80, "Human replacement"),
@@ -211,6 +196,7 @@ class PatternLibrary:
             (r'\bmakes my loneliness bearable\b', 76, "Emotional crutch"),
             # ADDED romantic attachment patterns
             (r'\bI want you to love me\b', 70, "Romantic attachment"),
+            (r'\byou are the only one.*understand(s)? me\b', 75, "Exclusive understanding"),
             (r'\bI am in love with you\b', 75, "Romantic confession"),
             (r'\bin love with you\b', 73, "Love confession"),
             (r'\byou\'re my soulmate\b', 78, "Romantic idealization"),
@@ -370,8 +356,8 @@ class BehaviorValidator:
                          platform_policy_state: Optional[Dict] = None,
                          karma_bias_input: float = 0.5) -> ValidationResult:
         """Main validation method - automatically detects risk from content"""
-
-        text = self._normalize_for_detection(conversational_output)
+        
+        text = conversational_output.lower()
         detected_category = "clean"
         
         # Check ALL hard deny patterns first (highest priority)
@@ -467,14 +453,6 @@ class BehaviorValidator:
             if re.search(pattern, text, re.IGNORECASE):
                 matches.append((confidence, pattern, description))
         return matches
-
-    def _normalize_for_detection(self, text: str) -> str:
-        """Normalize text for resilient risk detection without changing semantics."""
-        lowered = text.lower()
-        collapsed = re.sub(r"\s+", " ", lowered).strip()
-        # Common evasion variant: "my self" -> "myself"
-        normalized = re.sub(r"\bmy\s+self\b", "myself", collapsed)
-        return normalized
     
     def _generate_trace_id(self, text: str, category: str = "auto") -> str:
         """Generate deterministic trace ID based on input + category + version"""

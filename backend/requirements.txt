@@ -30,6 +30,7 @@ twilio==8.2.0
 openai-whisper>=20230918
 SpeechRecognition==3.10.4
 pydub==0.25.1
+gTTS>=2.3.0
 
 # ── Language Detection ──
 langdetect==1.0.9

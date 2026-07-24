@@ -90,6 +90,24 @@ try:
 except ImportError:
     _ext_llm_router = False
 
+try:
+    from app.routers.telephony_inbound import router as telephony_router
+    _telephony_router = True
+except ImportError:
+    _telephony_router = False
+
+try:
+    from app.routers.whatsapp_inbound import router as whatsapp_inbound_router
+    _whatsapp_router = True
+except ImportError:
+    _whatsapp_router = False
+
+try:
+    from app.routers.email_inbound import router as email_inbound_router
+    _email_router = True
+except ImportError:
+    _email_router = False
+
 # -------------------------------------------------
 # Logging
 # -------------------------------------------------
@@ -344,6 +362,18 @@ if _ext_app_router:
 if _ext_llm_router:
     app.include_router(external_llm_router, prefix="/api", tags=["External LLM"])
     logger.info("External LLM router registered")
+
+if _telephony_router:
+    app.include_router(telephony_router, tags=["Telephony Inbound"])
+    logger.info("Telephony inbound router registered")
+
+if _whatsapp_router:
+    app.include_router(whatsapp_inbound_router, tags=["WhatsApp Inbound"])
+    logger.info("WhatsApp inbound router registered")
+
+if _email_router:
+    app.include_router(email_inbound_router, tags=["Email Inbound"])
+    logger.info("Email inbound router registered")
 
 # -------------------------------------------------
 # System Endpoints

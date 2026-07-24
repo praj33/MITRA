@@ -12,7 +12,7 @@ from dataclasses import dataclass
 from enum import Enum
 
 # Import base validator components
-from behavior_validator import BehaviorValidator, RiskCategory, ReasonCode
+from app.governance.behavior_validator import BehaviorValidator, RiskCategory, ReasonCode
 
 # ============================================================================
 # INBOUND-SPECIFIC ENUMS AND DATA STRUCTURES

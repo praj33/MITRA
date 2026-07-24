@@ -14,7 +14,6 @@ from typing import Optional, Literal
 DecisionType = Literal[
     "ALLOW",
     "REWRITE",
-    "DELAY",
     "BLOCK",
     "TERMINATE",
 ]
@@ -40,7 +39,7 @@ class EnforcementVerdict:
     decision: DecisionType
     scope: ScopeType
 
-    trace_id: str                # single Mitra trace authority
+    trace_id: str                # enforcement-owned, deterministic
     reason_code: str             # machine-readable justification
 
     # Optional fields (only when relevant)
@@ -51,7 +50,7 @@ class EnforcementVerdict:
         return self.decision == "ALLOW"
 
     def is_block(self) -> bool:
-        return self.decision in ("BLOCK", "DELAY", "TERMINATE")
+        return self.decision in ("BLOCK", "TERMINATE")
 
     def allows_response(self) -> bool:
         return self.decision in ("ALLOW", "REWRITE") and self.scope in ("response", "both")

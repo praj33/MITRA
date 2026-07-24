@@ -5,7 +5,7 @@ Day 1.5 deliverable with safety-first resolution
 """
 
 from enum import Enum
-from behavior_validator import BehaviorValidator, Decision, RiskCategory
+from app.governance.behavior_validator import BehaviorValidator, Decision, RiskCategory
 import hashlib
 
 class EnforcementState(Enum):
