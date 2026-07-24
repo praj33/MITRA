@@ -3,12 +3,18 @@ import base64
 import hashlib
 from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel, validator
-from openai import OpenAI
 
 router = APIRouter()
 
-# Initialize OpenAI client once
-client = OpenAI(api_key=os.getenv("OPENAI_API_KEY"))
+# Lazy-initialized OpenAI client
+_client = None
+
+def _get_client():
+    global _client
+    if _client is None:
+        from openai import OpenAI
+        _client = OpenAI(api_key=os.getenv("OPENAI_API_KEY"))
+    return _client
 
 # Valid voice list for OpenAI TTS
 VALID_VOICES = ["alloy", "echo", "fable", "onyx", "nova", "shimmer"]
@@ -60,7 +66,7 @@ async def text_to_speech(request: TTSRequest):
     # 2. Generate TTS via OpenAI
     # --------------------------
     try:
-        response = client.audio.speech.create(
+        response = _get_client().audio.speech.create(
             model=request.model,
             voice=request.voice,
             input=request.text,
