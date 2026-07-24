@@ -9,9 +9,8 @@ import sys
 import os
 
 # Add embed_core to path
-sys.path.append(os.path.join(os.path.dirname(__file__), '..', 'embed_core'))
-
-from assistant_pipeline import process_message
+#sys.path.append(os.path.join(os.path.dirname(__file__), '..', 'embed_core'))
+#from assistant_pipeline import process_message
 
 router = APIRouter()
 

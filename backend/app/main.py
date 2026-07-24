@@ -51,46 +51,44 @@ from app.services.reminder_scheduler import ReminderScheduler, SchedulerConfig
 from app.mitra_system_health import get_system_health_snapshot
 
 # -------------------------------------------------
-# Logging
+# Ecosystem routers (from integrated repos)
 # -------------------------------------------------
-setup_logging()
-logger = get_logger(__name__)
+try:
+    from app.routers.voice_stt import router as voice_stt_router
+    from app.routers.voice_tts import router as voice_tts_router
+    _voice_routers = True
+except ImportError:
+    _voice_routers = False
 
+try:
+    from app.routers.bhiv import router as bhiv_router
+    _bhiv_router = True
+except ImportError:
+    _bhiv_router = False
 
-def _telegram_webhook_url() -> str | None:
-    explicit = (os.getenv("TELEGRAM_WEBHOOK_URL") or "").strip()
-    if explicit:
-        return explicit
+try:
+    from app.routers.embed import router as embed_router
+    _embed_router = True
+except ImportError:
+    _embed_router = False
 
-    public_base = (
-        os.getenv("RENDER_EXTERNAL_URL")
-        or os.getenv("BASE_URL")
-        or os.getenv("PUBLIC_BASE_URL")
-        or ""
-    ).strip()
-    if not public_base or "localhost" in public_base or "127.0.0.1" in public_base:
-        return None
-    return f"{public_base.rstrip('/')}/webhook/telegram"
+try:
+    from app.routers.rl_action import router as rl_router
+    _rl_router = True
+except ImportError:
+    _rl_router = False
 
+try:
+    from app.routers.external_app import router as external_app_router
+    _ext_app_router = True
+except ImportError:
+    _ext_app_router = False
 
-def _register_telegram_webhook() -> None:
-    webhook_url = _telegram_webhook_url()
-    if not webhook_url:
-        logger.info("Telegram webhook registration skipped: no public webhook URL configured")
-        return
-
-    executor = TelegramExecutor()
-    if not executor.bot_token:
-        logger.info("Telegram webhook registration skipped: TELEGRAM_BOT_TOKEN not configured")
-        return
-
-    result = executor.set_webhook(webhook_url)
-    if result.get("status") == "success":
-        logger.info("Telegram webhook registered: %s", webhook_url)
-    else:
-        logger.warning("Telegram webhook registration failed: %s", result)
-
-# -------------------------------------------------
+try:
+    from app.routers.external_llm import router as external_llm_router
+    _ext_llm_router = True
+except ImportError:
+    _ext_llm_router = False
 
 # -------------------------------------------------
 # Logging
@@ -131,6 +129,7 @@ def _register_telegram_webhook() -> None:
         logger.info("Telegram webhook registered: %s", webhook_url)
     else:
         logger.warning("Telegram webhook registration failed: %s", result)
+
 
 # -------------------------------------------------
 # App lifespan
@@ -157,6 +156,24 @@ async def lifespan(app: FastAPI):
     except Exception as e:
         logger.warning(f"Capability registration failed (non-fatal): {e}")
 
+    # Initialize voice session manager (if available)
+    try:
+        from app.voice.voice_session_manager import get_voice_session_manager
+        vsm = get_voice_session_manager()
+        await vsm.start()
+        logger.info("Voice session manager started")
+    except Exception as e:
+        logger.debug(f"Voice session manager not started (optional): {e}")
+
+    # Initialize voice trace logger (if available)
+    try:
+        from app.voice.voice_trace import get_voice_trace_logger
+        vtl = get_voice_trace_logger()
+        await vtl.connect()
+        logger.info("Voice trace logger connected")
+    except Exception as e:
+        logger.debug(f"Voice trace logger not connected (optional): {e}")
+
     # Optional: start reminder scheduler worker
     if os.getenv("REMINDER_SCHEDULER_ENABLED", "0").lower() in {"1", "true", "yes"}:
         try:
@@ -178,6 +195,14 @@ async def lifespan(app: FastAPI):
 
     yield
 
+    # Shutdown voice session manager
+    try:
+        from app.voice.voice_session_manager import get_voice_session_manager
+        vsm = get_voice_session_manager()
+        await vsm.stop()
+    except Exception:
+        pass
+
     # Shutdown reminder scheduler
     if scheduler:
         try:
@@ -194,8 +219,12 @@ api_key_header = APIKeyHeader(name="X-API-Key", auto_error=False)
 
 app = FastAPI(
     title="Mitra — Universal AI Companion",
-    description="Mitra v4 Companion Backend — Persistent AI companion with capability hub, UniGuru knowledge integration, and multi-step workflow orchestration.",
-    version="4.0.0",
+    description=(
+        "Mitra v4 Companion Backend — Persistent AI companion with capability hub, "
+        "UniGuru knowledge engine (embedded), voice/telephony duplex audio, "
+        "agent system, multi-step workflow orchestration, and full governance layer."
+    ),
+    version="5.0.0",
     lifespan=lifespan,
 )
 
@@ -217,7 +246,7 @@ app.add_middleware(
 @app.middleware("http")
 async def security_middleware(request: Request, call_next):
     # Allow health check and root without auth
-    if request.url.path in ["/health", "/"]:
+    if request.url.path in ["/health", "/", "/health/system"]:
         response = await call_next(request)
         return response
 
@@ -226,8 +255,12 @@ async def security_middleware(request: Request, call_next):
         response = await call_next(request)
         return response
 
+    # Allow webhook routes without API key
+    if request.url.path.startswith("/api/webhooks") or request.url.path.startswith("/webhook"):
+        response = await call_next(request)
+        return response
+
     # Allow OPTIONS requests (CORS preflight) without auth
-    # CORS middleware handles OPTIONS, but we need to ensure it passes through
     if request.method == "OPTIONS":
         response = await call_next(request)
         return response
@@ -242,10 +275,10 @@ async def security_middleware(request: Request, call_next):
             logger.warning(f"Rate limit check failed: {e}. Allowing request.")
         except Exception as e:
             logger.warning(f"Rate limit check failed: {e}. Allowing request.")
-        
+
         api_key = request.headers.get("X-API-Key")
         expected_api_key = os.getenv("API_KEY")
-        
+
         # Check API key (handle None cases gracefully)
         if not expected_api_key:
             logger.error("API_KEY environment variable is not set! Authentication will fail.")
@@ -253,7 +286,7 @@ async def security_middleware(request: Request, call_next):
             # Get origin from request for CORS headers
             origin = request.headers.get("origin", "")
             cors_origin = origin if origin else "*"
-            
+
             return JSONResponse(
                 status_code=401,
                 content={"detail": "Authentication failed"},
@@ -273,7 +306,7 @@ async def security_middleware(request: Request, call_next):
     return response
 
 # -------------------------------------------------
-# Routers
+# Core Routers
 # -------------------------------------------------
 app.include_router(auth_router)
 app.include_router(assistant_router)
@@ -285,13 +318,49 @@ app.include_router(companion_router)
 app.include_router(workflow_router)
 
 # -------------------------------------------------
+# Ecosystem Routers (integrated from team repos)
+# -------------------------------------------------
+if _voice_routers:
+    app.include_router(voice_stt_router, prefix="/api", tags=["Voice STT"])
+    app.include_router(voice_tts_router, prefix="/api", tags=["Voice TTS"])
+    logger.info("Voice STT/TTS routers registered")
+
+if _bhiv_router:
+    app.include_router(bhiv_router, prefix="/api", tags=["BHIV Core"])
+    logger.info("BHIV router registered")
+
+if _embed_router:
+    app.include_router(embed_router, prefix="/api", tags=["Embeddings"])
+    logger.info("Embed router registered")
+
+if _rl_router:
+    app.include_router(rl_router, prefix="/api", tags=["RL Actions"])
+    logger.info("RL Action router registered")
+
+if _ext_app_router:
+    app.include_router(external_app_router, prefix="/api", tags=["External Apps"])
+    logger.info("External App router registered")
+
+if _ext_llm_router:
+    app.include_router(external_llm_router, prefix="/api", tags=["External LLM"])
+    logger.info("External LLM router registered")
+
+# -------------------------------------------------
 # System Endpoints
 # -------------------------------------------------
 @app.get("/")
 async def root():
     return {
-        "message": "Mitra — Universal AI Companion v4.0.0",
+        "message": "Mitra — Universal AI Companion v5.0.0",
         "status": "running",
+        "modules": {
+            "companion": True,
+            "voice_duplex": _voice_routers,
+            "bhiv_governance": _bhiv_router,
+            "uniguru_embedded": True,
+            "agents": True,
+            "tools": True,
+        },
         "endpoints": {
             "health":             "/health",
             "auth_signup":        "/api/auth/signup",
@@ -305,6 +374,8 @@ async def root():
             "workflow_run":       "/api/workflow/run",
             "mitra_evaluate":     "/api/mitra/evaluate",
             "tts":                "/api/tts",
+            "voice_stt":          "/api/voice/stt",
+            "voice_tts":          "/api/voice/tts",
         },
         "timestamp": datetime.utcnow().isoformat() + "Z",
     }
@@ -313,7 +384,7 @@ async def root():
 async def health_check():
     return {
         "status": "ok",
-        "version": "4.0.0",
+        "version": "5.0.0",
         "timestamp": datetime.utcnow().isoformat() + "Z",
     }
 

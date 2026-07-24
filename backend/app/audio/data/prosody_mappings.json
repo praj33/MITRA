@@ -1,0 +1,62 @@
+{
+  "neutral": {
+    "pitch": "medium",
+    "speed": "normal",
+    "volume": "medium",
+    "emphasis": "balanced"
+  },
+  "happy": {
+    "pitch": "high",
+    "speed": "fast",
+    "volume": "medium",
+    "emphasis": "light"
+  },
+  "sad": {
+    "pitch": "low",
+    "speed": "slow",
+    "volume": "low",
+    "emphasis": "heavy"
+  },
+  "angry": {
+    "pitch": "high",
+    "speed": "fast",
+    "volume": "high",
+    "emphasis": "strong"
+  },
+  "excited": {
+    "pitch": "high",
+    "speed": "fast",
+    "volume": "high",
+    "emphasis": "dynamic"
+  },
+  "calm": {
+    "pitch": "medium",
+    "speed": "slow",
+    "volume": "low",
+    "emphasis": "gentle"
+  },
+  "urgent": {
+    "pitch": "high",
+    "speed": "fast",
+    "volume": "high",
+    "emphasis": "intense"
+  },
+  "professional": {
+    "pitch": "medium",
+    "speed": "normal",
+    "volume": "medium",
+    "emphasis": "balanced"
+  },
+  "friendly": {
+    "pitch": "medium",
+    "speed": "normal",
+    "volume": "medium",
+    "emphasis": "light"
+  },
+  "authoritative": {
+    "pitch": "medium",
+    "speed": "normal",
+    "volume": "high",
+    "emphasis": "strong"
+  }
+}

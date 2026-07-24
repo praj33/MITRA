@@ -4,8 +4,6 @@ from typing import Dict, Any, Optional
 from datetime import datetime
 import logging
 
-from app.core.gateway_auth import GatewayAuthError, require_gateway_invocation
-
 logger = logging.getLogger(__name__)
 
 class InstagramExecutor:
@@ -14,25 +12,9 @@ class InstagramExecutor:
         self.page_id = os.getenv("INSTAGRAM_PAGE_ID")
         self.base_url = "https://graph.facebook.com/v18.0"
         
-    def send_dm(self, recipient_id: str, message: str, trace_id: str, gateway_auth: str = None) -> Dict[str, Any]:
+    def send_dm(self, recipient_id: str, message: str, trace_id: str) -> Dict[str, Any]:
         """Send Instagram DM via Meta Graph API"""
         try:
-            try:
-                require_gateway_invocation(
-                    gateway_auth=gateway_auth,
-                    trace_id=trace_id,
-                    platform="instagram",
-                    action="send_message",
-                )
-            except GatewayAuthError as e:
-                return {
-                    "status": "error",
-                    "error": f"unauthorized: {str(e)}",
-                    "trace_id": trace_id,
-                    "timestamp": datetime.utcnow().isoformat(),
-                    "platform": "instagram",
-                }
-
             if not self.access_token or not self.page_id:
                 return {
                     "status": "error",
@@ -42,18 +24,14 @@ class InstagramExecutor:
                 }
             
             url = f"{self.base_url}/{self.page_id}/messages"
-
-            headers = {
-                "Authorization": f"Bearer {self.access_token}",
-                "Content-Type": "application/json"
-            }
-
+            
             data = {
                 "recipient": {"id": recipient_id},
-                "message": {"text": message}
+                "message": {"text": message},
+                "access_token": self.access_token
             }
-
-            response = requests.post(url, json=data, headers=headers, timeout=30)
+            
+            response = requests.post(url, json=data)
             
             if response.status_code == 200:
                 result = response.json()
@@ -105,6 +83,6 @@ class InstagramExecutor:
                 "timestamp": datetime.utcnow().isoformat()
             }
     
-    def send_message(self, recipient_id: str, message: str, trace_id: str, gateway_auth: str = None) -> Dict[str, Any]:
+    def send_message(self, recipient_id: str, message: str, trace_id: str) -> Dict[str, Any]:
         """Alias for send_dm for consistency"""
-        return self.send_dm(recipient_id, message, trace_id, gateway_auth=gateway_auth)
+        return self.send_dm(recipient_id, message, trace_id)
