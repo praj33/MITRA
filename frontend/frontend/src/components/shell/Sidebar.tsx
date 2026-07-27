@@ -85,7 +85,10 @@ const DesktopSidebar: React.FC<Props> = ({
 
       {/* Footer */}
       <div className="px-2 pb-3 space-y-0.5 border-t border-border-subtle pt-2">
-        <button className={cn(
+        <button onClick={() => {
+          const fn = (window as any).__MITRA_SETTINGS__;
+          if (fn) fn();
+        }} className={cn(
           'w-full flex items-center gap-3 px-2.5 py-2 rounded-lg transition-all duration-150 text-text-muted hover:text-text-secondary hover:bg-surface-overlay',
         )}>
           <Settings size={15} />

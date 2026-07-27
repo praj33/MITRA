@@ -1,10 +1,11 @@
 // components/shell/TopBar.tsx — Mitra top navigation bar (responsive)
-import React from 'react';
+import React, { useState } from 'react';
 import { motion } from 'framer-motion';
 import { Search, Bell, PanelRight, Zap, Menu } from 'lucide-react';
 import { cn } from '../../lib/utils';
 import { useCompanionStore } from '../../store/companion.store';
 import CompanionDot from '../primitives/CompanionDot';
+import NotificationDropdown from './NotificationDropdown';
 
 interface Props { onSearch?: () => void; }
 
@@ -17,6 +18,7 @@ const TopBar: React.FC<Props> = ({ onSearch }) => {
     isMobile, toggleMobileMenu,
   } = useCompanionStore();
   const unread = notifications.filter(n => !n.read).length;
+  const [notifOpen, setNotifOpen] = useState(false);
 
   return (
     <header className="zone-topbar glass flex items-center px-3 sm:px-4 gap-2 sm:gap-3 select-none">
@@ -77,18 +79,22 @@ const TopBar: React.FC<Props> = ({ onSearch }) => {
       </button>
 
       {/* Notifications */}
-      <button
-        id="topbar-notifications"
-        className="relative w-8 h-8 flex items-center justify-center rounded-lg hover:bg-surface-overlay transition-colors"
-        aria-label={`${unread} unread notifications`}
-      >
-        <Bell size={15} className="text-text-secondary" />
-        {unread > 0 && (
-          <span className="absolute -top-0.5 -right-0.5 w-4 h-4 bg-brand rounded-full flex items-center justify-center text-2xs text-white font-semibold">
-            {unread > 9 ? '9+' : unread}
-          </span>
-        )}
-      </button>
+      <div className="relative">
+        <button
+          id="topbar-notifications"
+          onClick={() => setNotifOpen(!notifOpen)}
+          className="relative w-8 h-8 flex items-center justify-center rounded-lg hover:bg-surface-overlay transition-colors"
+          aria-label={`${unread} unread notifications`}
+        >
+          <Bell size={15} className="text-text-secondary" />
+          {unread > 0 && (
+            <span className="absolute -top-0.5 -right-0.5 w-4 h-4 bg-brand rounded-full flex items-center justify-center text-2xs text-white font-semibold">
+              {unread > 9 ? '9+' : unread}
+            </span>
+          )}
+        </button>
+        <NotificationDropdown open={notifOpen} onClose={() => setNotifOpen(false)} />
+      </div>
 
       {/* Context panel toggle — hidden on mobile (uses bottom nav or swipe) */}
       {!isMobile && (

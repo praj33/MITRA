@@ -14,6 +14,7 @@ import Sidebar           from './components/shell/Sidebar';
 import ConversationCenter from './components/shell/ConversationCenter';
 import ContextPanel      from './components/shell/ContextPanel';
 import InputBar          from './components/shell/InputBar';
+import SettingsModal     from './components/shell/SettingsModal';
 
 // Page components
 import CalendarPage   from './components/pages/CalendarPage';
@@ -91,6 +92,7 @@ const App: React.FC = () => {
   } = useCompanionStore();
 
   const [activeSection, setActiveSection] = useState('chat');
+  const [settingsOpen, setSettingsOpen] = useState(false);
 
   // Sync isMobile with window size
   useIsMobile();
@@ -181,6 +183,8 @@ const App: React.FC = () => {
 
   // Expose handleSend for suggestion chips
   useEffect(() => { (window as any).__MITRA_SEND__ = handleSend; }, [handleSend]);
+  // Expose settings toggle for Sidebar
+  useEffect(() => { (window as any).__MITRA_SETTINGS__ = () => setSettingsOpen(true); }, []);
 
   // Navigate to chat with a pre-filled message from other pages
   const handleChatNavigate = useCallback((msg: string) => {
@@ -215,6 +219,7 @@ const App: React.FC = () => {
   ].filter(Boolean).join(' ');
 
   return (
+    <>
     <div className={shellClass}>
       <TopBar />
       <Sidebar activeSection={activeSection} onSectionChange={setActiveSection} />
@@ -239,6 +244,8 @@ const App: React.FC = () => {
         <BottomNav activeSection={activeSection} onSectionChange={setActiveSection} />
       )}
     </div>
+    <SettingsModal open={settingsOpen} onClose={() => setSettingsOpen(false)} />
+    </>
   );
 };
 
