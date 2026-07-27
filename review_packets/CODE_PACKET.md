@@ -1,7 +1,7 @@
 # CODE PACKET — Ecosystem Convergence
 
 **Prepared by:** Raj Prajapati (praj33)  
-**Date:** July 16, 2026
+**Date:** July 27, 2026
 
 ---
 
@@ -10,10 +10,14 @@
 ### Canonical MITRA Repo (`praj33/MITRA`)
 
 **Branch:** `main`  
-**Last Commit:** `503ab1a` — deliverables  
-**Total Commits:** 10  
+**Latest Commits (most recent first):**
 
 ```
+aa61274 feat: toast notifications + page transition animations
+bcbdb20 feat: notification dropdown, settings modal with dark/light theme toggle
+bc15a24 feat: wire all sidebar buttons with dedicated pages + voice input + suggestion chips
+3099b56 fix: Lazy OpenAI client + eager import removal — backend starts clean
+ff7cbbd feat: Akanksha test suites + policy setup + e2e flow system
 503ab1a deliverables
 c21ab57 feat: full responsive overhaul — mobile, tablet, desktop compatibility
 1a6e623 Fix: LLM fallback chain + rule-based responses, UniGuru as primary provider
@@ -36,18 +40,26 @@ MITRA-INTEGRATED/
 ├── INTEGRATION_DISCLOSURE_REPORT.md
 ├── TEST_RESULTS.md
 │
+├── _ecosystem_repos/                    # Cloned team repos
+│   ├── ai-being/                        # Ashmit (blackholeinfiverse37)
+│   ├── companion-runtime/               # Chandresh (great1239)
+│   ├── duplex-audio/                    # Nilesh (Nilesh057)
+│   ├── ecosystem-hardening/             # Chandresh (great1239)
+│   ├── governance-layer/                # Akanksha (aa2kansha90)
+│   └── uniguru-v2/                      # Sankalp/Eisha (eishasingh929-sudo)
+│
 ├── backend/
 │   ├── app/
 │   │   ├── api/                         # REST API endpoints
 │   │   │   ├── assistant.py             # Main assistant endpoint
 │   │   │   └── companion_routes.py      # Companion conversation routes
 │   │   ├── companion/                   # Companion brain layer
-│   │   │   ├── companion_orchestrator.py  # 288 lines — central brain
-│   │   │   ├── companion_session.py       # 250 lines — session continuity
-│   │   │   ├── companion_memory.py        # 220 lines — persistent memory
-│   │   │   ├── personality_engine.py      # 159 lines — configurable personality
-│   │   │   ├── capability_registry.py     # 100 lines — dynamic capability attach
-│   │   │   ├── workflow_engine.py         # 298 lines — multi-step workflows
+│   │   │   ├── companion_orchestrator.py  # Central brain
+│   │   │   ├── companion_session.py       # Session continuity
+│   │   │   ├── companion_memory.py        # Persistent memory
+│   │   │   ├── personality_engine.py      # Configurable personality
+│   │   │   ├── capability_registry.py     # Dynamic capability attach
+│   │   │   ├── workflow_engine.py         # Multi-step workflows
 │   │   │   └── companion_config.py        # Central configuration
 │   │   ├── capabilities/                # 11 pluggable capabilities
 │   │   │   ├── base_capability.py         # Abstract interface + CapabilityResult
@@ -63,7 +75,7 @@ MITRA-INTEGRATED/
 │   │   │   ├── document_capability.py
 │   │   │   └── uniguru_capability.py
 │   │   ├── core/                        # Core services
-│   │   │   ├── llm_bridge.py              # 259 lines — 4-provider LLM abstraction
+│   │   │   ├── llm_bridge.py              # 4-provider LLM abstraction
 │   │   │   ├── assistant_orchestrator.py  # Pipeline orchestrator
 │   │   │   ├── decision_hub.py
 │   │   │   ├── intentflow.py
@@ -76,29 +88,40 @@ MITRA-INTEGRATED/
 │   │   │   ├── bucket_service.py          # Ashmit — audit logging
 │   │   │   ├── audio_service.py           # Soham — STT/TTS
 │   │   │   └── multilingual_service.py    # Soham — language support
+│   │   ├── routers/                     # REST routers
+│   │   │   └── pages.py                   # Dashboard page data endpoints
 │   │   └── inbound/                     # Multi-channel ingestion
 │   │       ├── telegram_handler.py
 │   │       ├── whatsapp_handler.py
 │   │       └── email_handler.py
 │   ├── client_adapters/                 # Platform adapter specs
-│   │   ├── web_adapter.md
-│   │   ├── android_adapter.md
-│   │   ├── ios_adapter.md
-│   │   ├── macos_adapter.md
-│   │   └── windows_adapter.md
 │   ├── deploy/                          # Deployment configs
-│   ├── tests/                           # Test suite (60 passed)
-│   └── *.md                             # System documentation
+│   └── tests/                           # Test suite
 │
 ├── frontend/
 │   ├── Signup/                          # Auth/signup module
 │   └── frontend/                        # Main React app
 │       ├── src/
-│       │   ├── components/shell/        # TopBar, Sidebar, ConversationCenter, InputBar, ContextPanel
-│       │   ├── components/cards/        # ConversationCard, ActionCard, StatusCard, etc.
+│       │   ├── components/
+│       │   │   ├── shell/               # 9 shell components
+│       │   │   │   ├── TopBar.tsx
+│       │   │   │   ├── Sidebar.tsx
+│       │   │   │   ├── ConversationCenter.tsx
+│       │   │   │   ├── InputBar.tsx
+│       │   │   │   ├── ContextPanel.tsx
+│       │   │   │   ├── NotificationDropdown.tsx
+│       │   │   │   ├── SettingsModal.tsx
+│       │   │   │   └── Toast.tsx
+│       │   │   └── pages/               # 5 dashboard pages
+│       │   │       ├── CalendarPage.tsx
+│       │   │       ├── TasksPage.tsx
+│       │   │       ├── RemindersPage.tsx
+│       │   │       ├── KnowledgePage.tsx
+│       │   │       └── WorkflowsPage.tsx
 │       │   ├── store/companion.store.ts # Zustand state management
-│       │   ├── services/               # API service layer
-│       │   └── App.tsx                  # Root component
+│       │   ├── services/companion.service.ts # API service layer
+│       │   ├── App.tsx                  # Root shell + routing
+│       │   └── index.css                # 1200+ lines design system
 │       └── public/index.html           # PWA-ready HTML
 │
 ├── docs/
@@ -109,7 +132,7 @@ MITRA-INTEGRATED/
 │   ├── KANISHK_INTERFACE_CONTRACT.md
 │   └── design-system/
 │
-└── review_packets/                      # This convergence audit
+└── review_packets/                      # Convergence audit
     ├── MASTER_REPOSITORY_INDEX.md
     ├── CONTRIBUTOR_MATRIX.md
     ├── FEATURE_MATRIX.md
@@ -119,7 +142,7 @@ MITRA-INTEGRATED/
     └── REVIEW_PACKET.md
 ```
 
-### Key Integration Points (for convergence)
+### Key Integration Points
 
 ```python
 # How capabilities are registered (startup)
@@ -162,4 +185,14 @@ BREVO_API_KEY=...
 
 # Auth
 API_KEY=...
+```
+
+### Frontend Stack
+
+```
+React 18 + TypeScript
+Zustand (state management)
+Framer Motion (animations)
+Lucide React (icons)
+Vanilla CSS (1200+ lines, CSS variables for theming)
 ```
