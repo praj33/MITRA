@@ -1,4 +1,4 @@
-// App.tsx — Mitra v4 Companion Shell (fully responsive)
+// App.tsx — Mitra v5 Companion Shell (fully responsive + page routing)
 import React, { useEffect, useState, useCallback } from 'react';
 import { useCompanionStore, useIsMobile } from './store/companion.store';
 import { CompanionService } from './services/companion.service';
@@ -14,6 +14,13 @@ import Sidebar           from './components/shell/Sidebar';
 import ConversationCenter from './components/shell/ConversationCenter';
 import ContextPanel      from './components/shell/ContextPanel';
 import InputBar          from './components/shell/InputBar';
+
+// Page components
+import CalendarPage   from './components/pages/CalendarPage';
+import TasksPage      from './components/pages/TasksPage';
+import RemindersPage  from './components/pages/RemindersPage';
+import KnowledgePage  from './components/pages/KnowledgePage';
+import WorkflowsPage  from './components/pages/WorkflowsPage';
 
 const USER_ID = process.env.REACT_APP_USER_ID || 'user_default';
 
@@ -131,6 +138,9 @@ const App: React.FC = () => {
 
   // ── Send message handler ────────────────────────────────
   const handleSend = useCallback(async (message: string) => {
+    // If on another page, switch to chat first
+    setActiveSection('chat');
+
     addMessage({ role: 'user', content: message });
     setStatus('thinking');
 
@@ -167,7 +177,35 @@ const App: React.FC = () => {
       });
       setTimeout(() => setStatus('active'), 3000);
     }
-  }, [addMessage, addContextItem, setStatus, setSessionId]);
+  }, [addMessage, addContextItem, setStatus, setSessionId, setActiveSection]);
+
+  // Expose handleSend for suggestion chips
+  useEffect(() => { (window as any).__MITRA_SEND__ = handleSend; }, [handleSend]);
+
+  // Navigate to chat with a pre-filled message from other pages
+  const handleChatNavigate = useCallback((msg: string) => {
+    setActiveSection('chat');
+    handleSend(msg);
+  }, [handleSend]);
+
+  // ── Render active section ──────────────────────────────
+  const renderActiveSection = () => {
+    switch (activeSection) {
+      case 'calendar':
+        return <CalendarPage onChatNavigate={handleChatNavigate} />;
+      case 'tasks':
+        return <TasksPage onChatNavigate={handleChatNavigate} />;
+      case 'reminders':
+        return <RemindersPage onChatNavigate={handleChatNavigate} />;
+      case 'knowledge':
+        return <KnowledgePage onChatNavigate={handleChatNavigate} />;
+      case 'workflows':
+        return <WorkflowsPage onChatNavigate={handleChatNavigate} />;
+      case 'chat':
+      default:
+        return <ConversationCenter />;
+    }
+  };
 
   // ── Shell class names ───────────────────────────────────
   const shellClass = [
@@ -180,8 +218,21 @@ const App: React.FC = () => {
     <div className={shellClass}>
       <TopBar />
       <Sidebar activeSection={activeSection} onSectionChange={setActiveSection} />
-      <ConversationCenter />
-      <InputBar onSend={handleSend} />
+
+      {/* Main content area — switches between chat and pages */}
+      {activeSection === 'chat' ? (
+        <ConversationCenter />
+      ) : (
+        <main className="zone-center flex flex-col overflow-hidden bg-surface-base">
+          <div className="flex-1 overflow-y-auto">
+            {renderActiveSection()}
+          </div>
+        </main>
+      )}
+
+      {/* Input bar only on chat */}
+      {activeSection === 'chat' && <InputBar onSend={handleSend} />}
+
       <ContextPanel />
       {/* Mobile bottom navigation */}
       {isMobile && (

@@ -63,7 +63,10 @@ const PanelContent: React.FC<{ onClose: () => void }> = ({ onClose }) => {
           description="Get a daily summary of your calendar, emails, and tasks."
           action={{
             label: 'Run workflow',
-            onClick: () => {},
+            onClick: () => {
+              const send = (window as any).__MITRA_SEND__;
+              if (send) send('Run my morning briefing');
+            },
           }}
         />
 

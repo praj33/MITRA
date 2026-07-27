@@ -120,11 +120,26 @@ const InputBar: React.FC<Props> = ({ onSend, disabled }) => {
           <Paperclip size={14} />
         </button>
 
-        {/* Voice */}
+        {/* Voice — Web Speech API */}
         <button
           id="inputbar-voice"
-          className="flex-shrink-0 w-8 h-8 flex items-center justify-center rounded-lg text-text-muted hover:text-text-secondary hover:bg-surface-overlay transition-colors mb-0.5"
+          onClick={() => {
+            const SR = (window as any).SpeechRecognition || (window as any).webkitSpeechRecognition;
+            if (!SR) { alert('Voice input not supported in this browser.'); return; }
+            const recognition = new SR();
+            recognition.continuous = false;
+            recognition.interimResults = false;
+            recognition.lang = 'en-US';
+            recognition.onresult = (event: any) => {
+              const transcript = event.results[0][0].transcript;
+              if (transcript.trim()) onSend(transcript.trim());
+            };
+            recognition.onerror = () => {};
+            recognition.start();
+          }}
+          className="flex-shrink-0 w-8 h-8 flex items-center justify-center rounded-lg text-text-muted hover:text-brand-light hover:bg-brand-muted transition-colors mb-0.5"
           aria-label="Voice input"
+          title="Click to speak"
         >
           <Mic size={14} />
         </button>

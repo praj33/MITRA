@@ -108,6 +108,12 @@ try:
 except ImportError:
     _email_router = False
 
+try:
+    from app.routers.pages import router as pages_router
+    _pages_router = True
+except ImportError:
+    _pages_router = False
+
 # -------------------------------------------------
 # Logging
 # -------------------------------------------------
@@ -264,7 +270,7 @@ app.add_middleware(
 @app.middleware("http")
 async def security_middleware(request: Request, call_next):
     # Allow health check and root without auth
-    if request.url.path in ["/health", "/", "/health/system"]:
+    if request.url.path in ["/health", "/", "/health/system", "/docs", "/openapi.json", "/redoc"]:
         response = await call_next(request)
         return response
 
@@ -273,8 +279,8 @@ async def security_middleware(request: Request, call_next):
         response = await call_next(request)
         return response
 
-    # Allow webhook routes without API key
-    if request.url.path.startswith("/api/webhooks") or request.url.path.startswith("/webhook"):
+    # Allow webhook routes and page data routes without API key
+    if request.url.path.startswith("/api/webhooks") or request.url.path.startswith("/webhook") or request.url.path.startswith("/api/pages"):
         response = await call_next(request)
         return response
 
@@ -374,6 +380,11 @@ if _whatsapp_router:
 if _email_router:
     app.include_router(email_inbound_router, tags=["Email Inbound"])
     logger.info("Email inbound router registered")
+
+# -------------------------------------------------
+if _pages_router:
+    app.include_router(pages_router, tags=["Page Data"])
+    logger.info("Pages data router registered")
 
 # -------------------------------------------------
 # System Endpoints

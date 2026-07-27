@@ -49,9 +49,12 @@ const EmptyState = () => (
         'Create a reminder',
         'Run morning briefing',
       ].map(s => (
-        <span key={s} className="text-2xs px-2.5 sm:px-3 py-1 sm:py-1.5 rounded-full border border-border-subtle text-text-muted bg-surface-overlay">
+        <button key={s} onClick={() => {
+          const store = (window as any).__MITRA_SEND__;
+          if (store) store(s);
+        }} className="text-2xs px-2.5 sm:px-3 py-1 sm:py-1.5 rounded-full border border-border-subtle text-text-muted bg-surface-overlay hover:border-brand/40 hover:text-brand-light transition-all cursor-pointer active:scale-95">
           {s}
-        </span>
+        </button>
       ))}
     </div>
   </motion.div>

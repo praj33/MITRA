@@ -1,4 +1,4 @@
-// services/companion.service.ts — Mitra API client
+// services/companion.service.ts — Mitra API client (expanded)
 
 const getBase = () =>
   process.env.REACT_APP_API_URL || 'http://localhost:8000';
@@ -19,6 +19,7 @@ export interface ChatResponse {
 }
 
 export const CompanionService = {
+  // ── Core Chat ──────────────────────────────────────
   async chat(
     userId: string,
     message: string,
@@ -67,6 +68,54 @@ export const CompanionService = {
       headers: headers(),
       body:    JSON.stringify({ workflow_name: workflowName, user_id: userId, message }),
     });
+    if (!resp.ok) throw new Error(`HTTP ${resp.status}`);
+    return resp.json();
+  },
+
+  // ── Page Data Endpoints ────────────────────────────
+  async getCalendarEvents(userId = 'user_default'): Promise<{ events: any[] }> {
+    const resp = await fetch(`${getBase()}/api/pages/calendar/events?user_id=${userId}`, {
+      headers: headers(),
+    });
+    if (!resp.ok) throw new Error(`HTTP ${resp.status}`);
+    return resp.json();
+  },
+
+  async getTasks(userId = 'user_default'): Promise<{ tasks: any[] }> {
+    const resp = await fetch(`${getBase()}/api/pages/tasks/list?user_id=${userId}`, {
+      headers: headers(),
+    });
+    if (!resp.ok) throw new Error(`HTTP ${resp.status}`);
+    return resp.json();
+  },
+
+  async updateTask(taskId: string, status: string, userId = 'user_default'): Promise<any> {
+    const resp = await fetch(`${getBase()}/api/pages/tasks/update?task_id=${taskId}&status=${status}&user_id=${userId}`, {
+      method: 'POST',
+      headers: headers(),
+    });
+    if (!resp.ok) throw new Error(`HTTP ${resp.status}`);
+    return resp.json();
+  },
+
+  async getReminders(userId = 'user_default'): Promise<{ reminders: any[] }> {
+    const resp = await fetch(`${getBase()}/api/pages/reminders/list?user_id=${userId}`, {
+      headers: headers(),
+    });
+    if (!resp.ok) throw new Error(`HTTP ${resp.status}`);
+    return resp.json();
+  },
+
+  async getWorkflows(userId = 'user_default'): Promise<{ workflows: any[] }> {
+    const resp = await fetch(`${getBase()}/api/pages/workflows/list?user_id=${userId}`, {
+      headers: headers(),
+    });
+    if (!resp.ok) throw new Error(`HTTP ${resp.status}`);
+    return resp.json();
+  },
+
+  async getHealth(): Promise<{ status: string; version: string }> {
+    const resp = await fetch(`${getBase()}/health`);
     if (!resp.ok) throw new Error(`HTTP ${resp.status}`);
     return resp.json();
   },
