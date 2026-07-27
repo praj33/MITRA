@@ -1,5 +1,6 @@
 // App.tsx — Mitra v5 Companion Shell (fully responsive + page routing)
 import React, { useEffect, useState, useCallback } from 'react';
+import { motion } from 'framer-motion';
 import { useCompanionStore, useIsMobile } from './store/companion.store';
 import { CompanionService } from './services/companion.service';
 import {
@@ -15,6 +16,7 @@ import ConversationCenter from './components/shell/ConversationCenter';
 import ContextPanel      from './components/shell/ContextPanel';
 import InputBar          from './components/shell/InputBar';
 import SettingsModal     from './components/shell/SettingsModal';
+import ToastContainer, { showToast } from './components/shell/Toast';
 
 // Page components
 import CalendarPage   from './components/pages/CalendarPage';
@@ -126,6 +128,7 @@ const App: React.FC = () => {
           type: 'success', title: 'Mitra is ready',
           body: 'Your AI companion is active and connected.', read: false,
         });
+        showToast('success', 'Mitra Connected', 'All systems operational');
       } catch {
         // API not yet available — still show the shell with a fallback greeting
         addMessage({
@@ -170,6 +173,11 @@ const App: React.FC = () => {
           subtitle: resp.capability_result.capability,
           timestamp: new Date().toISOString(),
         });
+        showToast(
+          resp.capability_result.status === 'success' ? 'success' : 'info',
+          resp.capability_result.summary,
+          resp.capability_result.capability
+        );
       }
     } catch (err) {
       setStatus('error');
@@ -229,9 +237,15 @@ const App: React.FC = () => {
         <ConversationCenter />
       ) : (
         <main className="zone-center flex flex-col overflow-hidden bg-surface-base">
-          <div className="flex-1 overflow-y-auto">
+          <motion.div
+            key={activeSection}
+            initial={{ opacity: 0, y: 12 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ duration: 0.2, ease: 'easeOut' }}
+            className="flex-1 overflow-y-auto"
+          >
             {renderActiveSection()}
-          </div>
+          </motion.div>
         </main>
       )}
 
@@ -245,6 +259,7 @@ const App: React.FC = () => {
       )}
     </div>
     <SettingsModal open={settingsOpen} onClose={() => setSettingsOpen(false)} />
+    <ToastContainer />
     </>
   );
 };
