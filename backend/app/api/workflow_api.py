@@ -32,7 +32,7 @@ class WorkflowCreateRequest(BaseModel):
 
 @router.get("/api/workflow/list")
 async def list_workflows(
-    x_api_key: str = Header(..., alias="X-API-Key"),
+    x_api_key: Optional[str] = Header(None, alias="X-API-Key"),
 ):
     """List all available workflows (built-in + custom)."""
     _ = x_api_key
@@ -42,7 +42,7 @@ async def list_workflows(
 @router.post("/api/workflow/run")
 async def run_workflow(
     request: WorkflowRunRequest,
-    x_api_key: str = Header(..., alias="X-API-Key"),
+    x_api_key: Optional[str] = Header(None, alias="X-API-Key"),
 ):
     """Run a workflow by name."""
     _ = x_api_key
@@ -64,7 +64,7 @@ async def run_workflow(
 @router.post("/api/workflow/create")
 async def create_workflow(
     request: WorkflowCreateRequest,
-    x_api_key: str = Header(..., alias="X-API-Key"),
+    x_api_key: Optional[str] = Header(None, alias="X-API-Key"),
 ):
     """Create a custom workflow."""
     _ = x_api_key

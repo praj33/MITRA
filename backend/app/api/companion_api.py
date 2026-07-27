@@ -41,7 +41,7 @@ class CompanionMemoryUpdateRequest(BaseModel):
 @router.post("/api/companion/chat")
 async def companion_chat(
     request: CompanionChatRequest,
-    x_api_key: str = Header(..., alias="X-API-Key"),
+    x_api_key: Optional[str] = Header(None, alias="X-API-Key"),
     x_user_id: Optional[str] = Header(None, alias="X-User-Id"),
 ):
     """
@@ -70,7 +70,7 @@ async def companion_chat(
 @router.get("/api/companion/greeting/{user_id}")
 async def companion_greeting(
     user_id: str,
-    x_api_key: str = Header(..., alias="X-API-Key"),
+    x_api_key: Optional[str] = Header(None, alias="X-API-Key"),
 ):
     """Return a personalized greeting for the user."""
     _ = x_api_key
@@ -85,7 +85,7 @@ async def companion_greeting(
 @router.get("/api/companion/session/{user_id}")
 async def get_session(
     user_id: str,
-    x_api_key: str = Header(..., alias="X-API-Key"),
+    x_api_key: Optional[str] = Header(None, alias="X-API-Key"),
 ):
     """Get current session info for the user."""
     _ = x_api_key
@@ -97,7 +97,7 @@ async def get_session(
 async def get_history(
     user_id: str,
     limit: int = 20,
-    x_api_key: str = Header(..., alias="X-API-Key"),
+    x_api_key: Optional[str] = Header(None, alias="X-API-Key"),
 ):
     """Get conversation history for the user."""
     _ = x_api_key
@@ -108,7 +108,7 @@ async def get_history(
 @router.get("/api/companion/memory/{user_id}")
 async def get_memory(
     user_id: str,
-    x_api_key: str = Header(..., alias="X-API-Key"),
+    x_api_key: Optional[str] = Header(None, alias="X-API-Key"),
 ):
     """Get stored user facts and memory."""
     _ = x_api_key
@@ -121,7 +121,7 @@ async def get_memory(
 async def update_memory(
     user_id: str,
     request: CompanionMemoryUpdateRequest,
-    x_api_key: str = Header(..., alias="X-API-Key"),
+    x_api_key: Optional[str] = Header(None, alias="X-API-Key"),
 ):
     """Update a single user memory fact."""
     _ = x_api_key
@@ -132,7 +132,7 @@ async def update_memory(
 @router.delete("/api/companion/session/{user_id}")
 async def clear_session(
     user_id: str,
-    x_api_key: str = Header(..., alias="X-API-Key"),
+    x_api_key: Optional[str] = Header(None, alias="X-API-Key"),
 ):
     """Clear the session for the user (start fresh)."""
     _ = x_api_key
@@ -142,7 +142,7 @@ async def clear_session(
 
 @router.get("/api/companion/capabilities")
 async def list_capabilities(
-    x_api_key: str = Header(..., alias="X-API-Key"),
+    x_api_key: Optional[str] = Header(None, alias="X-API-Key"),
 ):
     """List all registered capabilities."""
     _ = x_api_key

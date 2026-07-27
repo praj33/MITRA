@@ -26,7 +26,7 @@ class NotificationCapability(BaseCapability):
                 "channel": "telegram",
                 "trace_id": trace_id,
             }
-            result = await execution_svc.execute_action("telegram", action_params)
+            result = execution_svc.execute_action("telegram", action_params)
             summary = result.get("summary") or result.get("message") or "Notification sent."
             return CapabilityResult(
                 capability=self.name, intent=intent, status="success",

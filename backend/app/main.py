@@ -303,23 +303,28 @@ async def security_middleware(request: Request, call_next):
         api_key = request.headers.get("X-API-Key")
         expected_api_key = os.getenv("API_KEY")
 
-        # Check API key (handle None cases gracefully)
-        if not expected_api_key:
-            logger.error("API_KEY environment variable is not set! Authentication will fail.")
-        if not api_key or api_key != expected_api_key:
-            # Get origin from request for CORS headers
-            origin = request.headers.get("origin", "")
-            cors_origin = origin if origin else "*"
+        # Whitelist frontend-facing routes (no API key required)
+        whitelisted_prefixes = ("/api/companion", "/api/pages", "/api/workflow", "/health")
+        is_whitelisted = any(request.url.path.startswith(p) for p in whitelisted_prefixes)
 
-            return JSONResponse(
-                status_code=401,
-                content={"detail": "Authentication failed"},
-                headers={
-                    "Access-Control-Allow-Origin": cors_origin,
-                    "Access-Control-Allow-Methods": "GET, POST, PUT, DELETE, OPTIONS",
-                    "Access-Control-Allow-Headers": "*",
-                }
-            )
+        # Check API key (handle None cases gracefully)
+        if not is_whitelisted:
+            if not expected_api_key:
+                logger.error("API_KEY environment variable is not set! Authentication will fail.")
+            if not api_key or api_key != expected_api_key:
+                # Get origin from request for CORS headers
+                origin = request.headers.get("origin", "")
+                cors_origin = origin if origin else "*"
+
+                return JSONResponse(
+                    status_code=401,
+                    content={"detail": "Authentication failed"},
+                    headers={
+                        "Access-Control-Allow-Origin": cors_origin,
+                        "Access-Control-Allow-Methods": "GET, POST, PUT, DELETE, OPTIONS",
+                        "Access-Control-Allow-Headers": "*",
+                    }
+                )
 
         try:
             audit_log(request, "api_key_user")

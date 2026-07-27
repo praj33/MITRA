@@ -30,7 +30,7 @@ class WhatsAppCapability(BaseCapability):
                 "contact": params.get("entities", {}).get("contact", ""),
                 "trace_id": trace_id,
             }
-            result = await execution_svc.execute_action("whatsapp", action_params)
+            result = execution_svc.execute_action("whatsapp", action_params)
             summary = result.get("summary") or result.get("message") or "Message action completed."
             return CapabilityResult(
                 capability=self.name, intent=intent, status="success",

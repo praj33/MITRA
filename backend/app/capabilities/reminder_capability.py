@@ -31,7 +31,7 @@ class ReminderCapability(BaseCapability):
                 "remind_at": dates.get("resolved_date") or dates.get("time", ""),
                 "trace_id": trace_id,
             }
-            result = await execution_svc.execute_action("reminder", action_params)
+            result = execution_svc.execute_action("reminder", action_params)
             summary = result.get("summary") or result.get("message") or "Reminder set."
             return CapabilityResult(
                 capability=self.name, intent=intent, status="success",

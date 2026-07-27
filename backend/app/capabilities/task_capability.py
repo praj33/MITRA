@@ -30,7 +30,7 @@ class TaskCapability(BaseCapability):
                 "priority": params.get("context", {}).get("priority", "medium"),
                 "trace_id": trace_id,
             }
-            result = await execution_svc.execute_action("ems", action_params)
+            result = execution_svc.execute_action("ems", action_params)
             summary = result.get("summary") or result.get("message") or "Task created."
             return CapabilityResult(
                 capability=self.name, intent=intent, status="success",

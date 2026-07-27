@@ -32,7 +32,7 @@ class CalendarCapability(BaseCapability):
                 "time": dates.get("time", ""),
                 "trace_id": trace_id,
             }
-            result = await execution_svc.execute_action("calendar", action_params)
+            result = execution_svc.execute_action("calendar", action_params)
             summary = result.get("summary") or result.get("message") or "Calendar action completed."
             return CapabilityResult(
                 capability=self.name, intent=intent, status="success",
