@@ -58,11 +58,11 @@
 | Repository | Owner | Status |
 |-----------|-------|--------|
 | **MITRA** (canonical) | Raj | ✅ `backend/app/companion/` — full orchestrator, session, memory, workflow |
-| `Companion-Runtime-Foundations` | Chandresh | ⚠️ Separate companion runtime — may overlap |
-| `Mitra-Live-Runtime-Sprint` | Chandresh | ⚠️ Runtime sprint — may contain companion patches |
-| `mitra-final-phase` | Chandresh | ⚠️ Final phase convergence |
+| `Companion-Runtime-Foundations` | Pratham | ⚠️ Separate companion runtime — may overlap |
+| `Mitra-Live-Runtime-Sprint` | Pratham | ⚠️ Runtime sprint — may contain companion patches |
+| `mitra-final-phase` | Pratham | ⚠️ Final phase convergence |
 
-**Resolution needed:** Review Chandresh's repos for unique runtime logic not in canonical MITRA. Merge or archive.
+**Resolution needed:** Review Pratham's repos for unique runtime logic not in canonical MITRA. Merge or archive.
 
 ---
 
@@ -108,11 +108,11 @@
 | Repository | Owner | Purpose |
 |-----------|-------|---------|
 | `BHIV-Core-TANTRA-Sutradhar` | Raj | ✅ Active TANTRA chain |
-| `SHAKTI-TANTRA-Operationalization-Sprint` | Chandresh | Sprint deliverable |
-| `tantra-evidence-integration` | Chandresh | Evidence integration |
+| `SHAKTI-TANTRA-Operationalization-Sprint` | Pratham | Sprint deliverable |
+| `tantra-evidence-integration` | Pratham | Evidence integration |
 | `setu-tantra-convergence` | Sankalp/Eisha | Setu convergence |
 
-**Resolution needed:** Consolidate TANTRA work from Chandresh and Sankalp into Raj's canonical repo.
+**Resolution needed:** Consolidate TANTRA work from Pratham and Sankalp into Raj's canonical repo.
 
 ---
 
@@ -123,10 +123,10 @@
 | BHIV Core | 7+ | 🔴 HIGH | Ashmit, Raj |
 | UniGuru | 5+ | 🔴 HIGH | Sankalp/Eisha, Ashmit |
 | Safety/Enforcement | 3 | 🟢 RESOLVED | Raj |
-| Companion Runtime | 4 | 🟡 MEDIUM | Raj, Chandresh |
+| Companion Runtime | 4 | 🟡 MEDIUM | Raj, Pratham |
 | Workflow | 4 | 🟡 MEDIUM | Raj, Ashmit |
 | Governance | 2 | 🟡 MEDIUM | Raj, Akanksha |
-| TANTRA/SHAKTI | 4 | 🟡 MEDIUM | Raj, Chandresh, Sankalp |
+| TANTRA/SHAKTI | 4 | 🟡 MEDIUM | Raj, Pratham, Sankalp |
 
 > [!IMPORTANT]
 > **Total: 29+ duplicate/overlapping repositories** across the ecosystem. Only 3 duplications (Safety/Enforcement) have been resolved via merge into canonical MITRA.

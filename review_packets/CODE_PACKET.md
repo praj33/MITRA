@@ -42,9 +42,9 @@ MITRA-INTEGRATED/
 │
 ├── _ecosystem_repos/                    # Cloned team repos
 │   ├── ai-being/                        # Ashmit (blackholeinfiverse37)
-│   ├── companion-runtime/               # Chandresh (great1239)
+│   ├── companion-runtime/               # Pratham (great1239)
 │   ├── duplex-audio/                    # Nilesh (Nilesh057)
-│   ├── ecosystem-hardening/             # Chandresh (great1239)
+│   ├── ecosystem-hardening/             # Pratham (great1239)
 │   ├── governance-layer/                # Akanksha (aa2kansha90)
 │   └── uniguru-v2/                      # Sankalp/Eisha (eishasingh929-sudo)
 │

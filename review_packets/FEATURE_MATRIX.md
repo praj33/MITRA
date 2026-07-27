@@ -8,7 +8,7 @@
 
 ## Feature Implementation Map
 
-| Feature | MITRA (praj33) | ai-being (Ashmit) | Companion-Runtime (Chandresh) | Duplex-Audio (Nilesh) | Governance (Akanksha) | UniGuru-v2 (Sankalp) | BHIV-Core (Ashmit) |
+| Feature | MITRA (praj33) | ai-being (Ashmit) | Companion-Runtime (Pratham) | Duplex-Audio (Nilesh) | Governance (Akanksha) | UniGuru-v2 (Sankalp) | BHIV-Core (Ashmit) |
 |---------|:-:|:-:|:-:|:-:|:-:|:-:|:-:|
 | **Safety Pipeline** | ✅ | — | — | — | ✅ | — | — |
 | **Intelligence Layer** | ✅ | — | — | — | — | ✅ | — |

@@ -64,7 +64,6 @@ This packet documents the **complete ecosystem discovery audit** across all MITR
 - Scanned `Nilesh057` GitHub — 1 repo (duplex-audio)
 - Scanned `aa2kansha90` GitHub — 1 repo (governance-layer)
 - Scanned `eishasingh929-sudo` GitHub — 7 repos (4 UniGuru/TANTRA)
-- Scanned `yashikart` GitHub — 30 repos (2 gurukul)
 - Inspected 6 local clones in `_ecosystem_repos/`
 - Extracted 6 deployed service URLs from codebase
 
@@ -93,7 +92,7 @@ ASHMIT (blackholeinfiverse37 / sharmavijay45):
 - Complete-Uniguru, Enhanced-Uni-Guru, uniguru, BHL-Chatbot
 - 26 total repos on sharmavijay45
 
-CHANDRESH (great1239):
+Pratham (great1239):
 - Mitra-Live-Runtime-Sprint, mitra-final-phase, bhiv-bucket
 - Companion-Runtime-Foundations, Ecosystem-Runtime-Hardening
 - SHAKTI-TANTRA-Operationalization, tantra-evidence-integration
@@ -146,7 +145,7 @@ All files in `/review_packets/` — complete and ready for submission.
 |------|:----:|:--------------:|------------|
 | BHIV Core | 🔴 HIGH | 7+ repos (Ashmit + Raj) | Designate canonical version |
 | UniGuru | 🔴 HIGH | 5+ repos (Sankalp + Ashmit) | `uniguru_v2-main` is active deployment |
-| Companion Runtime | 🟡 MED | 4 repos (Chandresh + Raj) | Review for unique logic |
+| Companion Runtime | 🟡 MED | 4 repos (Pratham + Raj) | Review for unique logic |
 | Workflow | 🟡 MED | 4 repos (Ashmit + Raj) | MITRA canonical — archive others |
 | Governance | 🟡 MED | 2 repos (Akanksha + Raj) | Merge unique governance logic |
 | TANTRA/SHAKTI | 🟡 MED | 4 repos (3 contributors) | Consolidate sprint work |
@@ -167,6 +166,6 @@ All files in `/review_packets/` — complete and ready for submission.
 
 > [!WARNING]
 > ### Contributors with NO discoverable repos:
+> - **Chandresh** — Execution layer, WhatsApp/email/Telegram executors (code in MITRA, no standalone repo found)
 > - **Kanishk** — Capability runtime (contract exists, no repo found)
-> - **Pratham** — Product/Design (no repo found)
 > - **Soham** — Audio layer (code in MITRA, no standalone repo found)

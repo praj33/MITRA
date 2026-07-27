@@ -77,7 +77,7 @@
 
 ---
 
-## D. great1239 (Chandresh) — 16 Repos
+## D. great1239 (Pratham) — 16 Repos
 
 ### MITRA/BHIV-Related
 
@@ -140,14 +140,21 @@
 
 ---
 
-## H. yashikart (Yashika) — 2 MITRA-Related
+## H. Chandresh — Execution Layer (GitHub Handle Unknown)
 
-| # | Repository | Git URL | Purpose |
-|---|-----------|---------|---------|
-| 1 | **gurukul-backend-** | `https://github.com/yashikart/gurukul-backend-.git` | Gurukul backend |
-| 2 | **gurukul** | `https://github.com/yashikart/gurukul.git` | Gurukul base |
+> [!WARNING]
+> Chandresh's standalone executor/WhatsApp/email repository has **not been discovered**. His execution layer code is embedded in `MITRA/backend/app/executors/` and `MITRA/backend/app/services/execution_service.py`. Chandresh must share his standalone repo if one exists.
 
-> Plus 28 non-MITRA repos (ML projects, assignments, etc.)
+Known code in MITRA:
+- `executors/email_executor.py`
+- `executors/whatsapp_executor.py`
+- `executors/telegram_executor.py`
+- `executors/calendar_executor.py`
+- `executors/reminder_executor.py`
+- `executors/ems_executor.py`
+- `executors/instagram_executor.py`
+- `executors/device_gateway_executor.py`
+- `services/execution_service.py`
 
 ---
 
@@ -156,9 +163,9 @@
 | Directory | Remote | Owner | Last Commit |
 |-----------|--------|-------|-------------|
 | `ai-being/` | `blackholeinfiverse37/ai-being` | Ashmit | `a3457df Task Submitted` |
-| `companion-runtime/` | `great1239/Companion-Runtime-Foundations` | Chandresh | `ec98b6f Revert "Improve proof video..."` |
+| `companion-runtime/` | `great1239/Companion-Runtime-Foundations` | Pratham | `ec98b6f Revert "Improve proof video..."` |
 | `duplex-audio/` | `Nilesh057/Final_AI_ASSISTANT_with_Duplex_Audio` | Nilesh | `13eed49 Final AI Assistant...` |
-| `ecosystem-hardening/` | `great1239/Ecosystem-Runtime-Hardening-Assignment` | Chandresh | `2bd93d7 Complete ecosystem...` |
+| `ecosystem-hardening/` | `great1239/Ecosystem-Runtime-Hardening-Assignment` | Pratham | `2bd93d7 Complete ecosystem...` |
 | `governance-layer/` | `aa2kansha90/AI-Being-Governance-Layer` | Akanksha | `053be1c Task Updated` |
 | `uniguru-v2/` | `eishasingh929-sudo/uniguru_v2-main` | Sankalp/Eisha | `4bfabd4 commit` |
 
@@ -183,9 +190,9 @@
 |-------------|--------------|:-----------:|:----------------:|
 | Raj | `praj33` | 25 | 8 |
 | Ashmit | `blackholeinfiverse37` + `sharmavijay45` | 27 | 15+ |
-| Chandresh | `great1239` | 16 | 14 |
+| Pratham | `great1239` | 16 | 14 |
 | Nilesh | `Nilesh057` | 1 | 1 |
 | Akanksha | `aa2kansha90` | 1 | 1 |
 | Sankalp/Eisha | `eishasingh929-sudo` | 7 | 4 |
-| Yashika | `yashikart` | 30 | 2 |
-| **TOTAL** | | **107** | **45+** |
+| Chandresh | ❓ Unknown | — | Code embedded in MITRA executors |
+| **TOTAL** | | **77+** | **45+** |
