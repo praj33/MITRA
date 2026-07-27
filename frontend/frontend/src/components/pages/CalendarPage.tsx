@@ -1,5 +1,5 @@
-// components/pages/CalendarPage.tsx — Weekly calendar view
-import React, { useEffect, useState } from 'react';
+// components/pages/CalendarPage.tsx — Weekly calendar view with navigation
+import React, { useEffect, useState, useCallback } from 'react';
 import { motion } from 'framer-motion';
 import { Calendar, Clock, MapPin, Plus, ChevronLeft, ChevronRight } from 'lucide-react';
 import { CompanionService } from '../../services/companion.service';
@@ -16,15 +16,16 @@ const CalendarPage: React.FC<{ onChatNavigate: (msg: string) => void }> = ({ onC
   const [loading, setLoading] = useState(true);
   const [viewDate, setViewDate] = useState(new Date());
 
-  useEffect(() => {
-    (async () => {
-      try {
-        const data = await CompanionService.getCalendarEvents();
-        setEvents(data.events || []);
-      } catch { setEvents([]); }
-      setLoading(false);
-    })();
+  const fetchEvents = useCallback(async () => {
+    setLoading(true);
+    try {
+      const data = await CompanionService.getCalendarEvents();
+      setEvents(data.events || []);
+    } catch { setEvents([]); }
+    setLoading(false);
   }, []);
+
+  useEffect(() => { fetchEvents(); }, [fetchEvents]);
 
   const todayStr = new Date().toDateString();
   const weekStart = new Date(viewDate);
@@ -35,11 +36,35 @@ const CalendarPage: React.FC<{ onChatNavigate: (msg: string) => void }> = ({ onC
     return d;
   });
 
+  const goToPrevWeek = () => {
+    setViewDate(prev => {
+      const d = new Date(prev);
+      d.setDate(d.getDate() - 7);
+      return d;
+    });
+  };
+
+  const goToNextWeek = () => {
+    setViewDate(prev => {
+      const d = new Date(prev);
+      d.setDate(d.getDate() + 7);
+      return d;
+    });
+  };
+
+  const goToToday = () => setViewDate(new Date());
+
   const getEventsForDay = (day: Date) =>
     events.filter(e => new Date(e.start).toDateString() === day.toDateString());
 
   const formatTime = (iso: string) =>
     new Date(iso).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+
+  // Get upcoming events from today onwards
+  const now = new Date();
+  const upcomingEvents = events
+    .filter(e => new Date(e.start) >= new Date(now.toDateString()))
+    .sort((a, b) => new Date(a.start).getTime() - new Date(b.start).getTime());
 
   return (
     <motion.div
@@ -56,9 +81,9 @@ const CalendarPage: React.FC<{ onChatNavigate: (msg: string) => void }> = ({ onC
           </div>
         </div>
         <div className="flex items-center gap-2">
-          <button onClick={() => { const d = new Date(viewDate); d.setDate(d.getDate() - 7); setViewDate(d); }} className="page-btn-icon"><ChevronLeft size={16} /></button>
-          <button onClick={() => setViewDate(new Date())} className="page-btn-sm">Today</button>
-          <button onClick={() => { const d = new Date(viewDate); d.setDate(d.getDate() + 7); setViewDate(d); }} className="page-btn-icon"><ChevronRight size={16} /></button>
+          <button onClick={goToPrevWeek} className="page-btn-icon" aria-label="Previous week"><ChevronLeft size={16} /></button>
+          <button onClick={goToToday} className="page-btn-sm">Today</button>
+          <button onClick={goToNextWeek} className="page-btn-icon" aria-label="Next week"><ChevronRight size={16} /></button>
           <button onClick={() => onChatNavigate('Create a calendar event')} className="page-btn-primary"><Plus size={14} /> Add Event</button>
         </div>
       </div>
@@ -69,7 +94,12 @@ const CalendarPage: React.FC<{ onChatNavigate: (msg: string) => void }> = ({ onC
           const isToday = day.toDateString() === todayStr;
           const dayEvents = getEventsForDay(day);
           return (
-            <div key={i} className={`calendar-day-col ${isToday ? 'calendar-day-today' : ''}`}>
+            <div
+              key={`${day.toISOString()}-${i}`}
+              className={`calendar-day-col ${isToday ? 'calendar-day-today' : ''}`}
+              onClick={() => setViewDate(new Date(day))}
+              style={{ cursor: 'pointer' }}
+            >
               <span className="calendar-day-label">{DAYS[day.getDay()]}</span>
               <span className={`calendar-day-num ${isToday ? 'active' : ''}`}>{day.getDate()}</span>
               <div className="calendar-day-events">
@@ -92,7 +122,7 @@ const CalendarPage: React.FC<{ onChatNavigate: (msg: string) => void }> = ({ onC
         <h3 className="page-section-title">Upcoming Events</h3>
         {loading ? (
           <div className="page-loading">Loading events...</div>
-        ) : events.length === 0 ? (
+        ) : upcomingEvents.length === 0 ? (
           <div className="page-empty">
             <Calendar size={32} className="text-text-muted" />
             <p>No upcoming events</p>
@@ -100,7 +130,7 @@ const CalendarPage: React.FC<{ onChatNavigate: (msg: string) => void }> = ({ onC
           </div>
         ) : (
           <div className="page-card-list">
-            {events.map(ev => (
+            {upcomingEvents.map(ev => (
               <motion.div key={ev.id} className="page-card" whileHover={{ scale: 1.01 }} style={{ borderLeftColor: ev.color, borderLeftWidth: 3 }}>
                 <div className="page-card-header">
                   <h4 className="page-card-title">{ev.title}</h4>

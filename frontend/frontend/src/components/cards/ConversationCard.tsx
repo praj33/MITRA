@@ -56,7 +56,9 @@ const ConversationCard: React.FC<Props> = ({ message, onActionConfirm }) => {
             status={message.capabilityResult.status}
             summary={message.capabilityResult.summary}
             data={message.capabilityResult.data}
-            actions={message.suggestedActions?.map(a => ({ label: a, action: a })) || []}
+            actions={(message.capabilityResult.data?.actions || message.suggestedActions || []).map((a: any) =>
+              typeof a === 'string' ? { label: a, action: a } : { label: a.label, action: a.action }
+            )}
             onAction={(action) => onActionConfirm?.(action, message.id)}
             compact
           />

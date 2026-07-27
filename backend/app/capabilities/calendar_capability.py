@@ -37,7 +37,7 @@ class CalendarCapability(BaseCapability):
             return CapabilityResult(
                 capability=self.name, intent=intent, status="success",
                 summary=summary, data=result, trace_id=trace_id,
-                actions=[{"label": "View Event", "action": "view_event"}, {"label": "Set Reminder", "action": "create_reminder"}],
+                actions=[{"label": "Add to calendar", "action": "Add to calendar"}, {"label": "Set a reminder", "action": "Set a reminder"}],
             )
         except Exception as exc:
             logger.warning("CalendarCapability failed: %s", exc)

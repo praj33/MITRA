@@ -36,7 +36,7 @@ class ReminderCapability(BaseCapability):
             return CapabilityResult(
                 capability=self.name, intent=intent, status="success",
                 summary=summary, data=result, trace_id=trace_id,
-                actions=[{"label": "View Reminders", "action": "list_reminders"}],
+                actions=[{"label": "View reminders", "action": "View reminders"}],
             )
         except Exception as exc:
             logger.warning("ReminderCapability failed: %s", exc)

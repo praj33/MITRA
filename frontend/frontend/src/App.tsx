@@ -193,6 +193,8 @@ const App: React.FC = () => {
   useEffect(() => { (window as any).__MITRA_SEND__ = handleSend; }, [handleSend]);
   // Expose settings toggle for Sidebar
   useEffect(() => { (window as any).__MITRA_SETTINGS__ = () => setSettingsOpen(true); }, []);
+  // Expose page navigation for action buttons
+  useEffect(() => { (window as any).__MITRA_NAV__ = setActiveSection; }, [setActiveSection]);
 
   // Navigate to chat with a pre-filled message from other pages
   const handleChatNavigate = useCallback((msg: string) => {

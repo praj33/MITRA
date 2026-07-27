@@ -1,5 +1,5 @@
 // components/shell/ConversationCenter.tsx — Main chat thread panel (responsive)
-import React, { useEffect, useRef } from 'react';
+import React, { useEffect, useRef, useCallback } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { useCompanionStore } from '../../store/companion.store';
 import ConversationCard from '../cards/ConversationCard';
@@ -69,6 +69,26 @@ const ConversationCenter: React.FC = () => {
     bottomRef.current?.scrollIntoView({ behavior: 'smooth' });
   }, [messages, isThinking]);
 
+  // Handle action button clicks from capability result cards
+  const handleActionConfirm = useCallback((action: string, _messageId: string) => {
+    const nav = (window as any).__MITRA_NAV__;
+    const send = (window as any).__MITRA_SEND__;
+    const actionLower = action.toLowerCase();
+
+    if (actionLower.includes('calendar') || actionLower.includes('view_event') || actionLower.includes('view event')) {
+      if (nav) nav('calendar');
+    } else if (actionLower.includes('task') || actionLower.includes('view_task') || actionLower.includes('board')) {
+      if (nav) nav('tasks');
+    } else if (actionLower.includes('reminder') || actionLower.includes('create_reminder')) {
+      if (nav) nav('reminders');
+    } else if (actionLower.includes('workflow')) {
+      if (nav) nav('workflows');
+    } else if (send) {
+      // For any other action, send it as a chat message
+      send(action);
+    }
+  }, []);
+
   return (
     <main className="zone-center flex flex-col overflow-hidden bg-surface-base">
       <div className="flex-1 overflow-y-auto px-3 py-4 sm:px-6 sm:py-6 space-y-3 sm:space-y-4 overscroll-contain">
@@ -77,7 +97,7 @@ const ConversationCenter: React.FC = () => {
         ) : (
           <AnimatePresence initial={false}>
             {messages.map(msg => (
-              <ConversationCard key={msg.id} message={msg} />
+              <ConversationCard key={msg.id} message={msg} onActionConfirm={handleActionConfirm} />
             ))}
             {isThinking && (
               <ThinkingIndicator key="thinking" />
@@ -91,3 +111,4 @@ const ConversationCenter: React.FC = () => {
 };
 
 export default ConversationCenter;
+

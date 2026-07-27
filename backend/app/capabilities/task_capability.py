@@ -35,7 +35,7 @@ class TaskCapability(BaseCapability):
             return CapabilityResult(
                 capability=self.name, intent=intent, status="success",
                 summary=summary, data=result, trace_id=trace_id,
-                actions=[{"label": "View Tasks", "action": "list_tasks"}],
+                actions=[{"label": "View task board", "action": "View task board"}],
             )
         except Exception as exc:
             logger.warning("TaskCapability failed: %s", exc)
