@@ -13,14 +13,14 @@ class IntentFlow:
         # Intent patterns and keywords
         self.intent_patterns = {
             'summarize': ['summarize', 'summary', 'summarise', 'tl;dr', 'key points', 'brief'],
-            'task': ['task', 'todo', 'remind', 'schedule', 'create task', 'add to list'],
+            'reminder': ['remind', 'reminder', 'alert me', 'notify me', 'set a reminder', 'set reminder'],
+            'calendar': ['calendar', 'meeting', 'appointment', 'event', 'schedule a', 'schedule meeting'],
+            'task': ['task', 'todo', 'to-do', 'create task', 'add to list', 'assign task'],
             'search': ['search', 'find', 'lookup', 'query', 'research'],
             'email': ['email', 'send mail', 'compose', 'message'],
-            'calendar': ['calendar', 'schedule', 'meeting', 'appointment', 'event'],
-            'reminder': ['remind', 'reminder', 'alert', 'notify'],
             'telegram': ['telegram', 'send telegram'],
             'instagram': ['instagram', 'insta', 'send dm'],
-            'ems': ['ems', 'ems task', 'create task', 'assign task'],
+            'ems': ['ems', 'ems task'],
             'device': ['device', 'desktop', 'mobile', 'tablet', 'xr'],
             'general': []  # fallback
         }
