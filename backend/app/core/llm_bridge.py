@@ -94,19 +94,20 @@ class LLMBridge:
     async def _fallback_chain(
         self, messages: list, temperature: float, max_tokens: int, failed: str
     ) -> str:
-        # Try all available providers in order (excluding the one that already failed)
-        for provider in ("groq", "openai", "gemini", "uniguru"):
+        # UniGuru is the canonical intelligence backend — try it FIRST.
+        # Other providers are fallbacks only.
+        for provider in ("uniguru", "groq", "openai", "gemini"):
             if provider == failed:
                 continue
             try:
+                if provider == "uniguru":
+                    return await self._call_uniguru(messages)
                 if provider == "groq":
                     return await self._call_groq(messages, temperature, max_tokens)
                 if provider == "openai":
                     return await self._call_openai(messages, temperature, max_tokens)
                 if provider == "gemini":
                     return await self._call_gemini(messages, temperature)
-                if provider == "uniguru":
-                    return await self._call_uniguru(messages)
             except Exception as exc:
                 logger.warning("Fallback provider=%s failed: %s", provider, exc)
         # Final rule-based fallback — always gives a useful reply

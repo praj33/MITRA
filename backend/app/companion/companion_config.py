@@ -45,7 +45,7 @@ class CompanionPersonality:
 @dataclass
 class CompanionConfig:
     personality: CompanionPersonality = field(default_factory=CompanionPersonality)
-    llm_provider: LLMProvider = "groq"
+    llm_provider: LLMProvider = "uniguru"
     fallback_providers: List[LLMProvider] = field(default_factory=lambda: ["openai", "gemini"])
     memory_mode: MemoryMode = "full"
     max_history_turns: int = 20       # turns injected into LLM context
@@ -63,7 +63,7 @@ class CompanionConfig:
         enabled = os.getenv("COMPANION_CAPABILITIES", "")
         return cls(
             personality=CompanionPersonality.from_env(),
-            llm_provider=os.getenv("COMPANION_LLM_PROVIDER", "groq"),  # type: ignore[arg-type]
+            llm_provider=os.getenv("COMPANION_LLM_PROVIDER", "uniguru"),  # type: ignore[arg-type]
             memory_mode=os.getenv("COMPANION_MEMORY_MODE", "full"),  # type: ignore[arg-type]
             max_history_turns=int(os.getenv("COMPANION_MAX_HISTORY", "20")),
             enabled_capabilities=enabled.split(",") if enabled else [

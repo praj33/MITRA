@@ -46,6 +46,8 @@ from app.api.webhooks import router as webhook_router
 from app.api.tts import router as tts_router
 from app.api.companion_api import router as companion_router
 from app.api.workflow_api import router as workflow_router
+from app.api.presence_api import router as presence_router
+from app.api.notifications_api import router as notifications_router
 from app.executors.telegram_executor import TelegramExecutor
 from app.services.reminder_scheduler import ReminderScheduler, SchedulerConfig
 from app.mitra_system_health import get_system_health_snapshot
@@ -180,6 +182,19 @@ async def lifespan(app: FastAPI):
     except Exception as e:
         logger.warning(f"Capability registration failed (non-fatal): {e}")
 
+    # Initialize Companion Runtime (Universal Runtime layer)
+    try:
+        from app.runtime.config import RuntimeSettings
+        from app.runtime.companion_runtime import CompanionRuntime
+        settings = RuntimeSettings.from_environment()
+        runtime = CompanionRuntime(settings)
+        runtime.start()
+        app.state.companion_runtime = runtime
+        logger.info("Companion Runtime started (Phase V Universal Layer)")
+    except Exception as e:
+        logger.warning(f"Companion Runtime init failed (non-fatal): {e}")
+        app.state.companion_runtime = None
+
     # Initialize voice session manager (if available)
     try:
         from app.voice.voice_session_manager import get_voice_session_manager
@@ -304,7 +319,7 @@ async def security_middleware(request: Request, call_next):
         expected_api_key = os.getenv("API_KEY")
 
         # Whitelist frontend-facing routes (no API key required)
-        whitelisted_prefixes = ("/api/companion", "/api/pages", "/api/workflow", "/health")
+        whitelisted_prefixes = ("/api/companion", "/api/pages", "/api/workflow", "/api/v1", "/health")
         is_whitelisted = any(request.url.path.startswith(p) for p in whitelisted_prefixes)
 
         # Check API key (handle None cases gracefully)
@@ -345,6 +360,10 @@ app.include_router(tts_router)
 # Companion v4
 app.include_router(companion_router)
 app.include_router(workflow_router)
+# Canonical MITRA APIs (Phase 1)
+app.include_router(presence_router)
+app.include_router(notifications_router)
+logger.info("Canonical APIs registered: presence, notifications")
 
 # -------------------------------------------------
 # Ecosystem Routers (integrated from team repos)
@@ -399,29 +418,43 @@ async def root():
     return {
         "message": "Mitra — Universal AI Companion v5.0.0",
         "status": "running",
+        "role": "Canonical Companion Layer — BHIV Ecosystem",
         "modules": {
             "companion": True,
+            "companion_runtime": getattr(app.state, 'companion_runtime', None) is not None,
             "voice_duplex": _voice_routers,
             "bhiv_governance": _bhiv_router,
-            "uniguru_embedded": True,
+            "uniguru_backend": True,
             "agents": True,
             "tools": True,
         },
-        "endpoints": {
-            "health":             "/health",
-            "auth_signup":        "/api/auth/signup",
-            "auth_login":         "/api/auth/login",
-            "companion_chat":     "/api/companion/chat",
-            "companion_greeting": "/api/companion/greeting/{user_id}",
-            "companion_memory":   "/api/companion/memory/{user_id}",
-            "companion_session":  "/api/companion/session/{user_id}",
-            "companion_caps":     "/api/companion/capabilities",
-            "workflow_list":      "/api/workflow/list",
-            "workflow_run":       "/api/workflow/run",
-            "mitra_evaluate":     "/api/mitra/evaluate",
-            "tts":                "/api/tts",
-            "voice_stt":          "/api/voice/stt",
-            "voice_tts":          "/api/voice/tts",
+        "canonical_apis": {
+            "auth_signup":         "/api/auth/signup",
+            "auth_login":          "/api/auth/login",
+            "companion_chat":      "/api/companion/chat",
+            "companion_greeting":  "/api/companion/greeting/{user_id}",
+            "companion_memory":    "/api/companion/memory/{user_id}",
+            "companion_session":   "/api/companion/session/{user_id}",
+            "companion_caps":      "/api/companion/capabilities",
+            "notifications":       "/api/v1/notifications/{user_id}",
+            "presence":            "/api/v1/presence/{user_id}",
+            "presence_heartbeat":  "/api/v1/presence/heartbeat",
+            "workflow_list":       "/api/workflow/list",
+            "workflow_run":        "/api/workflow/run",
+        },
+        "runtime_apis": {
+            "runtime_status":      "/api/v1/runtime/status",
+            "sessions":            "/api/v1/sessions",
+            "context":             "/api/v1/sessions/{id}/context",
+            "attachments":         "/api/v1/attachments",
+            "intents":             "/api/v1/intents",
+            "dispatch":            "/api/v1/intents/dispatch",
+            "capabilities":        "/api/v1/capabilities",
+        },
+        "integration": {
+            "uniguru":  "https://uniguru-v2.onrender.com",
+            "health":   "/health",
+            "docs":     "/docs",
         },
         "timestamp": datetime.utcnow().isoformat() + "Z",
     }
