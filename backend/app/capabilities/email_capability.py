@@ -3,6 +3,7 @@ email_capability.py — Mitra Email Capability
 Routes email intents through ExecutionService.
 """
 from __future__ import annotations
+import re
 from typing import Any, Dict, List, Optional
 from app.capabilities.base_capability import BaseCapability, CapabilityResult
 import logging
@@ -30,20 +31,34 @@ class EmailCapability(BaseCapability):
             to_addr = ""
             if isinstance(entities.get("email"), list) and entities["email"]:
                 to_addr = entities["email"][0]
+
+            # Fallback regex extraction if entity missing
+            if not to_addr and message:
+                match = re.search(r'[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}', message)
+                if match:
+                    to_addr = match.group(0)
+
+            # Subject extraction
+            subject = "Message from Mitra AI"
+            body = message
+
             action_params = {
                 "to": to_addr,
-                "subject": "Message from Mitra",
-                "body": message,
+                "recipient": to_addr,
+                "subject": subject,
+                "body": body,
+                "message": message,
                 "intent": intent,
                 "raw_message": message,
                 "trace_id": trace_id,
             }
             result = execution_svc.execute_action("email", action_params)
-            summary = result.get("summary") or result.get("message") or "Email action completed."
+            status = "success" if result.get("status") == "success" else "failed"
+            summary = result.get("summary") or result.get("message") or f"Email sent to {to_addr}" if status == "success" else f"Email failed: {result.get('error', 'unknown error')}"
             return CapabilityResult(
-                capability=self.name, intent=intent, status="success",
+                capability=self.name, intent=intent, status=status,
                 summary=summary, data=result, trace_id=trace_id,
-                actions=[{"label": "View Draft", "action": "view_draft"}, {"label": "Send Now", "action": "send_email"}],
+                actions=[{"label": "View Details", "action": "view_email"}],
             )
         except Exception as exc:
             logger.warning("EmailCapability failed: %s", exc)

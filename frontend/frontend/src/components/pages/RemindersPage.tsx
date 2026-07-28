@@ -41,8 +41,14 @@ const RemindersPage: React.FC<{ onChatNavigate: (msg: string) => void }> = ({ on
     return `${mins}m`;
   };
 
-  const removeReminder = (id: string) => {
-    setReminders(prev => prev.filter(r => r.id !== id));
+  const removeReminder = async (id: string) => {
+    try {
+      const base = process.env.REACT_APP_API_URL || 'http://localhost:8000';
+      await fetch(`${base}/api/pages/reminders/${id}`, { method: 'DELETE' });
+      setReminders(prev => prev.filter(r => r.id !== id));
+    } catch (err) {
+      console.error('Failed to delete reminder:', err);
+    }
   };
 
   return (

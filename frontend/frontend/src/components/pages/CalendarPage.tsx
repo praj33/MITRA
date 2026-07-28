@@ -1,7 +1,7 @@
 // components/pages/CalendarPage.tsx — Weekly calendar view with navigation
 import React, { useEffect, useState, useCallback } from 'react';
 import { motion } from 'framer-motion';
-import { Calendar, Clock, MapPin, Plus, ChevronLeft, ChevronRight } from 'lucide-react';
+import { Calendar, Clock, MapPin, Plus, ChevronLeft, ChevronRight, Trash2 } from 'lucide-react';
 import { CompanionService } from '../../services/companion.service';
 
 interface CalendarEvent {
@@ -26,6 +26,16 @@ const CalendarPage: React.FC<{ onChatNavigate: (msg: string) => void }> = ({ onC
   }, []);
 
   useEffect(() => { fetchEvents(); }, [fetchEvents]);
+
+  const deleteEvent = async (eventId: string) => {
+    try {
+      const base = process.env.REACT_APP_API_URL || 'http://localhost:8000';
+      await fetch(`${base}/api/pages/calendar/events/${eventId}`, { method: 'DELETE' });
+      setEvents(prev => prev.filter(e => e.id !== eventId));
+    } catch (err) {
+      console.error('Delete failed:', err);
+    }
+  };
 
   const todayStr = new Date().toDateString();
   const weekStart = new Date(viewDate);
@@ -134,9 +144,12 @@ const CalendarPage: React.FC<{ onChatNavigate: (msg: string) => void }> = ({ onC
               <motion.div key={ev.id} className="page-card" whileHover={{ scale: 1.01 }} style={{ borderLeftColor: ev.color, borderLeftWidth: 3 }}>
                 <div className="page-card-header">
                   <h4 className="page-card-title">{ev.title}</h4>
-                  <span className="page-card-badge" style={{ background: ev.color + '22', color: ev.color }}>
-                    <Clock size={10} /> {formatTime(ev.start)} – {formatTime(ev.end)}
-                  </span>
+                  <div className="flex items-center gap-2">
+                    <span className="page-card-badge" style={{ background: ev.color + '22', color: ev.color }}>
+                      <Clock size={10} /> {formatTime(ev.start)} – {formatTime(ev.end)}
+                    </span>
+                    <button onClick={() => deleteEvent(ev.id)} className="page-btn-icon text-text-muted hover:text-red-400" title="Delete event"><Trash2 size={14} /></button>
+                  </div>
                 </div>
                 {ev.description && <p className="page-card-desc">{ev.description}</p>}
                 {ev.location && <p className="page-card-meta"><MapPin size={12} /> {ev.location}</p>}
