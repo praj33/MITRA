@@ -39,7 +39,7 @@ class EmailExecutor:
             
             msg.attach(MIMEText(message, 'plain'))
             
-            server = smtplib.SMTP(self.smtp_server, self.smtp_port)
+            server = smtplib.SMTP(self.smtp_server, self.smtp_port, timeout=10)
             server.starttls()
             server.login(self.email_user, self.email_password)
             
@@ -89,7 +89,7 @@ class EmailExecutor:
                 'https://api.sendgrid.com/v3/mail/send',
                 headers=headers,
                 json=data,
-                timeout=30
+                timeout=3
             )
             
             if response.status_code == 202:
@@ -104,11 +104,11 @@ class EmailExecutor:
                     "platform": "email"
                 }
             else:
-                logger.error(f"SendGrid API error: {response.status_code} - {response.text}")
+                logger.warning(f"SendGrid API error: {response.status_code} - {response.text}, falling back to SMTP")
                 return self.send_email_smtp(to_email, subject, message, trace_id)
                 
         except Exception as e:
-            logger.error(f"SendGrid execution failed, falling back to SMTP: {e}")
+            logger.warning(f"SendGrid execution failed, falling back to SMTP: {e}")
             return self.send_email_smtp(to_email, subject, message, trace_id)
     
     def send_email_gmail_api(self, to_email: str, subject: str, message: str, trace_id: str) -> Dict[str, Any]:
@@ -135,7 +135,8 @@ class EmailExecutor:
             response = requests.post(
                 'https://gmail.googleapis.com/gmail/v1/users/me/messages/send',
                 headers=headers,
-                json=data
+                json=data,
+                timeout=5
             )
             
             if response.status_code == 200:
@@ -159,13 +160,15 @@ class EmailExecutor:
             return self.send_email_smtp(to_email, subject, message, trace_id)
     
     def send_message(self, to_email: str, subject: str, message: str, trace_id: str) -> Dict[str, Any]:
-        """Main send method - tries SendGrid first, then Gmail API, then SMTP"""
-        # Try SendGrid first (works on Render.com)
+        """Main send method - tries fast SMTP first if configured, else SendGrid/Gmail API"""
+        if self.email_user and self.email_password:
+            res = self.send_email_smtp(to_email, subject, message, trace_id)
+            if res.get("status") == "success":
+                return res
+        
         if self.sendgrid_key:
             return self.send_email_sendgrid(to_email, subject, message, trace_id)
-        # Try Gmail API
         elif self.gmail_token:
             return self.send_email_gmail_api(to_email, subject, message, trace_id)
-        # Fall back to SMTP
         else:
             return self.send_email_smtp(to_email, subject, message, trace_id)
