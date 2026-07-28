@@ -61,6 +61,17 @@ async def get_calendar_events(user_id: str = "user_default"):
     if db is not None:
         try:
             events_col = db["calendar_events"]
+            # If user has no events yet and database collection is empty, seed initial default events once
+            if events_col.count_documents({"user_id": user_id}) == 0 and events_col.count_documents({}) == 0:
+                now = datetime.now(timezone.utc)
+                today = now.replace(hour=0, minute=0, second=0, microsecond=0)
+                initial_seed = [
+                    {"_id": "ev_1", "user_id": user_id, "title": "Team Standup", "start": (today + timedelta(hours=10)).isoformat(), "end": (today + timedelta(hours=10, minutes=30)).isoformat(), "color": "#7c5cfc", "description": "Daily sync", "location": "Google Meet", "created_at": now.isoformat()},
+                    {"_id": "ev_2", "user_id": user_id, "title": "Design Review", "start": (today + timedelta(hours=14)).isoformat(), "end": (today + timedelta(hours=15)).isoformat(), "color": "#10b981", "description": "UI/UX review", "location": "Conference Room B", "created_at": now.isoformat()},
+                    {"_id": "ev_3", "user_id": user_id, "title": "Sprint Planning", "start": (today + timedelta(days=1, hours=11)).isoformat(), "end": (today + timedelta(days=1, hours=12)).isoformat(), "color": "#f59e0b", "description": "Next sprint scope", "location": "Zoom", "created_at": now.isoformat()},
+                ]
+                events_col.insert_many(initial_seed)
+
             cursor = events_col.find({"user_id": user_id}).sort("start", 1).limit(100)
             db_events = []
             for doc in cursor:
@@ -73,12 +84,11 @@ async def get_calendar_events(user_id: str = "user_default"):
                     "description": doc.get("description", ""),
                     "location": doc.get("location", ""),
                 })
-            if db_events:
-                return {"events": db_events, "source": "database"}
+            return {"events": db_events, "source": "database"}
         except Exception as e:
             logger.warning(f"Calendar DB lookup: {e}")
 
-    # Seed data for demo
+    # Fallback only if database connection failed
     now = datetime.now(timezone.utc)
     today = now.replace(hour=0, minute=0, second=0, microsecond=0)
     events = [
@@ -156,6 +166,15 @@ async def get_tasks(user_id: str = "user_default"):
     if db is not None:
         try:
             tasks_col = db["user_tasks"]
+            if tasks_col.count_documents({"user_id": user_id}) == 0 and tasks_col.count_documents({}) == 0:
+                now = datetime.now(timezone.utc)
+                initial_seed = [
+                    {"_id": "t_1", "user_id": user_id, "title": "Complete API documentation", "status": "in_progress", "priority": "high", "due_date": (now + timedelta(days=1)).isoformat(), "category": "development", "created_at": now.isoformat()},
+                    {"_id": "t_2", "user_id": user_id, "title": "Review pull requests", "status": "pending", "priority": "medium", "due_date": (now + timedelta(hours=4)).isoformat(), "category": "development", "created_at": now.isoformat()},
+                    {"_id": "t_3", "user_id": user_id, "title": "Update deployment scripts", "status": "pending", "priority": "low", "due_date": (now + timedelta(days=3)).isoformat(), "category": "devops", "created_at": now.isoformat()},
+                ]
+                tasks_col.insert_many(initial_seed)
+
             cursor = tasks_col.find({"user_id": user_id}).sort("created_at", -1).limit(50)
             db_tasks = []
             for doc in cursor:
@@ -167,8 +186,7 @@ async def get_tasks(user_id: str = "user_default"):
                     "due_date": doc.get("due_date"),
                     "category": doc.get("category", "general"),
                 })
-            if db_tasks:
-                return {"tasks": db_tasks, "source": "database"}
+            return {"tasks": db_tasks, "source": "database"}
         except Exception as e:
             logger.warning(f"Tasks DB lookup: {e}")
 
@@ -247,6 +265,14 @@ async def get_reminders(user_id: str = "user_default"):
     if db is not None:
         try:
             rem_col = db["reminders"]
+            if rem_col.count_documents({"user_id": user_id}) == 0 and rem_col.count_documents({}) == 0:
+                now = datetime.now(timezone.utc)
+                initial_seed = [
+                    {"_id": "r_1", "user_id": user_id, "message": "Check deployment status", "time": (now + timedelta(hours=1)).isoformat(), "status": "active", "repeat": None, "created_at": now.isoformat()},
+                    {"_id": "r_2", "user_id": user_id, "message": "Call the team for sync", "time": (now + timedelta(hours=3)).isoformat(), "status": "active", "repeat": "daily", "created_at": now.isoformat()},
+                ]
+                rem_col.insert_many(initial_seed)
+
             cursor = rem_col.find(
                 {"user_id": user_id, "status": {"$in": ["active", "snoozed"]}}
             ).sort("time", 1).limit(50)
@@ -259,8 +285,7 @@ async def get_reminders(user_id: str = "user_default"):
                     "status": doc.get("status", "active"),
                     "repeat": doc.get("repeat"),
                 })
-            if db_reminders:
-                return {"reminders": db_reminders, "source": "database"}
+            return {"reminders": db_reminders, "source": "database"}
         except Exception as e:
             logger.warning(f"Reminders DB lookup: {e}")
 
@@ -305,7 +330,9 @@ async def delete_reminder(reminder_id: str, user_id: str = "user_default"):
     db = _get_db()
     if db is not None:
         try:
-            db["reminders"].delete_one({"_id": reminder_id})
+            result = db["reminders"].delete_one({"_id": reminder_id, "user_id": user_id})
+            if result.deleted_count == 0:
+                db["reminders"].delete_one({"_id": reminder_id})
         except Exception as e:
             logger.warning(f"Reminder delete failed: {e}")
     return {"success": True, "reminder_id": reminder_id}
@@ -317,13 +344,31 @@ async def delete_reminder(reminder_id: str, user_id: str = "user_default"):
 
 @router.get("/workflows/list")
 async def get_workflows(user_id: str = "user_default"):
-    """Return available workflows."""
+    """Return available workflow templates."""
     workflows = [
-        {"id": "wf_1", "name": "Morning Briefing", "description": "Calendar + emails + tasks summary", "icon": "☀️", "status": "ready"},
-        {"id": "wf_2", "name": "Email Digest", "description": "Summarize unread emails", "icon": "📧", "status": "ready"},
-        {"id": "wf_3", "name": "End of Day Report", "description": "Summary of completed tasks and next steps", "icon": "📊", "status": "ready"},
-        {"id": "wf_4", "name": "Weekly Review", "description": "Week's progress, blockers, and priorities", "icon": "📋", "status": "ready"},
-        {"id": "wf_5", "name": "Meeting Prep", "description": "Prepare context for upcoming meetings", "icon": "🎯", "status": "ready"},
-        {"id": "wf_6", "name": "Focus Mode", "description": "Silence notifications and set status", "icon": "🧘", "status": "ready"},
+        {
+            "id": "wf_morning_briefing",
+            "name": "Morning Briefing",
+            "description": "Daily digest of upcoming events, unread emails, and pending high-priority tasks.",
+            "steps": ["Fetch calendar events", "Summarize unread emails", "List pending tasks", "Synthesize briefing"],
+            "category": "productivity",
+            "active": True,
+        },
+        {
+            "id": "wf_meeting_prep",
+            "name": "Meeting Prep",
+            "description": "Gather context, previous notes, and attendee details before an upcoming meeting.",
+            "steps": ["Identify next meeting", "Lookup attendee notes", "Fetch related emails", "Draft agenda"],
+            "category": "productivity",
+            "active": True,
+        },
+        {
+            "id": "wf_task_triage",
+            "name": "Task Triage",
+            "description": "Auto-prioritize overdue and pending tasks based on deadlines and importance.",
+            "steps": ["Scan pending tasks", "Calculate urgency scores", "Re-order task board", "Notify user"],
+            "category": "automation",
+            "active": False,
+        },
     ]
-    return {"workflows": workflows, "source": "system"}
+    return {"workflows": workflows, "source": "templates"}

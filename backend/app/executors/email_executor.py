@@ -14,7 +14,7 @@ logger = logging.getLogger(__name__)
 class EmailExecutor:
     def __init__(self):
         self.smtp_server = os.getenv("SMTP_SERVER", "smtp.gmail.com")
-        self.smtp_port = int(os.getenv("SMTP_PORT", "587"))
+        self.smtp_port = int(os.getenv("SMTP_PORT", "465"))
         self.email_user = os.getenv("EMAIL_USER")
         self.email_password = os.getenv("EMAIL_PASSWORD")
         self.gmail_token = os.getenv("GMAIL_ACCESS_TOKEN")
@@ -22,7 +22,7 @@ class EmailExecutor:
         self.sendgrid_from = os.getenv("SENDGRID_FROM_EMAIL", self.email_user)
         
     def send_email_smtp(self, to_email: str, subject: str, message: str, trace_id: str) -> Dict[str, Any]:
-        """Send email via SMTP"""
+        """Send email via SMTP (SSL port 465 first for cloud compatibility, fallback to TLS 587)"""
         try:
             if not self.email_user or not self.email_password:
                 return {
@@ -38,25 +38,42 @@ class EmailExecutor:
             msg['Subject'] = subject
             
             msg.attach(MIMEText(message, 'plain'))
-            
-            server = smtplib.SMTP(self.smtp_server, self.smtp_port, timeout=10)
-            server.starttls()
-            server.login(self.email_user, self.email_password)
-            
             text = msg.as_string()
-            server.sendmail(self.email_user, to_email, text)
-            server.quit()
             
-            return {
-                "status": "success",
-                "to": to_email,
-                "subject": subject,
-                "message": message,
-                "method": "smtp",
-                "trace_id": trace_id,
-                "timestamp": datetime.utcnow().isoformat(),
-                "platform": "email"
-            }
+            # Try SMTP_SSL on port 465 first (works reliably on Render/cloud instances)
+            try:
+                server = smtplib.SMTP_SSL("smtp.gmail.com", 465, timeout=10)
+                server.login(self.email_user, self.email_password)
+                server.sendmail(self.email_user, to_email, text)
+                server.quit()
+                logger.info(f"Email sent via SMTP_SSL (465) to {to_email}")
+                return {
+                    "status": "success",
+                    "to": to_email,
+                    "subject": subject,
+                    "message": message,
+                    "method": "smtp_ssl",
+                    "trace_id": trace_id,
+                    "timestamp": datetime.utcnow().isoformat(),
+                    "platform": "email"
+                }
+            except Exception as ssl_err:
+                logger.warning(f"SMTP_SSL 465 failed: {ssl_err}, falling back to TLS 587")
+                server = smtplib.SMTP(self.smtp_server, 587, timeout=10)
+                server.starttls()
+                server.login(self.email_user, self.email_password)
+                server.sendmail(self.email_user, to_email, text)
+                server.quit()
+                return {
+                    "status": "success",
+                    "to": to_email,
+                    "subject": subject,
+                    "message": message,
+                    "method": "smtp_tls",
+                    "trace_id": trace_id,
+                    "timestamp": datetime.utcnow().isoformat(),
+                    "platform": "email"
+                }
             
         except Exception as e:
             logger.error(f"SMTP email execution failed: {e}")
@@ -160,7 +177,7 @@ class EmailExecutor:
             return self.send_email_smtp(to_email, subject, message, trace_id)
     
     def send_message(self, to_email: str, subject: str, message: str, trace_id: str) -> Dict[str, Any]:
-        """Main send method - tries fast SMTP first if configured, else SendGrid/Gmail API"""
+        """Main send method - tries fast SMTP (SSL 465) first if configured, else SendGrid/Gmail API"""
         if self.email_user and self.email_password:
             res = self.send_email_smtp(to_email, subject, message, trace_id)
             if res.get("status") == "success":
