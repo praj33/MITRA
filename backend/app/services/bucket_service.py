@@ -1,4 +1,4 @@
-from typing import Dict, Any, Optional
+from typing import Dict, Any, Optional, List
 from datetime import datetime
 import json
 import logging
@@ -22,16 +22,36 @@ class BucketService:
                 "service": "bucket_service"
             }
             self.logger.info(f"BUCKET_LOG [{trace_id}] {stage}: {json.dumps(log_entry, default=str)}")
+            if self.audit_middleware and self.audit_middleware.audit_collection is not None:
+                self.audit_middleware.audit_collection.insert_one(log_entry)
             return True
         except Exception as e:
             self.logger.error(f"Bucket logging failed for {trace_id}: {e}")
             return False
+
+    def find_recent_stage_events(self, stage: str, user_id: Optional[str] = None, exclude_trace_id: Optional[str] = None, limit: int = 5, **kwargs) -> List[Dict[str, Any]]:
+        try:
+            if self.audit_middleware and self.audit_middleware.audit_collection is not None:
+                query: Dict[str, Any] = {"stage": stage}
+                if user_id:
+                    query["data.user_id"] = user_id
+                if exclude_trace_id:
+                    query["trace_id"] = {"$ne": exclude_trace_id}
+                for k, v in kwargs.items():
+                    if v is not None:
+                        query[f"data.{k}"] = v
+                logs = list(self.audit_middleware.audit_collection.find(query).sort("timestamp", -1).limit(limit))
+                return logs
+            return []
+        except Exception as e:
+            self.logger.error(f"Failed to find recent stage events for stage {stage}: {e}")
+            return []
     
     def get_trace_logs(self, trace_id: str) -> Optional[list]:
         try:
-            if self.audit_middleware and self.audit_middleware.audit_collection:
+            if self.audit_middleware and self.audit_middleware.audit_collection is not None:
                 logs = list(self.audit_middleware.audit_collection.find(
-                    {"artifact_id": trace_id}
+                    {"trace_id": trace_id}
                 ).sort("timestamp", -1))
                 return logs
             return None
