@@ -13,6 +13,7 @@ import WorkflowsPage from './components/pages/WorkflowsPage';
 import KnowledgePage from './components/pages/KnowledgePage';
 import { useCompanionStore } from './store/companion.store';
 import { CompanionService } from './services/companion.service';
+import { cn } from './lib/utils';
 import { LayoutDashboard, Calendar, CheckSquare, Bell, PanelRight } from 'lucide-react';
 
 const USER_ID = 'user_default';
@@ -108,7 +109,8 @@ const MobileBottomNav: React.FC<{
 /* ── Main App ─────────────────────────────────────────── */
 const App: React.FC = () => {
   const {
-    isMobile, setStatus, setSessionId, setUserName, setMemory,
+    sidebar, contextPanel, isMobile,
+    setStatus, setSessionId, setUserName, setMemory,
     addMessage, addNotification, addContextItem,
   } = useCompanionStore();
 
@@ -117,6 +119,9 @@ const App: React.FC = () => {
 
   // Sync isMobile with window size
   useIsMobile();
+
+  const sidebarCollapsed = sidebar === 'collapsed';
+  const contextHidden = contextPanel === 'closed';
 
   // ── Startup: load greeting + memory ────────────────────
   useEffect(() => {
@@ -227,31 +232,32 @@ const App: React.FC = () => {
   }, [handleSend]);
 
   return (
-    <div className="app-shell">
+    <div className={cn(
+      'mitra-shell',
+      sidebarCollapsed && 'sidebar-collapsed',
+      contextHidden && 'context-hidden'
+    )}>
       {/* Top Header */}
       <TopBar />
 
-      {/* Main 3-Zone Body Layout */}
-      <div className="app-body">
-        {/* Left Zone — Sidebar */}
-        <Sidebar activeSection={activeSection} onSectionChange={setActiveSection} />
+      {/* Left Zone — Sidebar */}
+      <Sidebar activeSection={activeSection} onSectionChange={setActiveSection} />
 
-        {/* Center Zone — Main Workspace (Chat or Full Page) */}
-        <div className="center-workspace flex flex-col flex-1 min-w-0 overflow-hidden">
-          {activeSection === 'chat' && <ConversationCenter />}
-          {activeSection === 'calendar' && <CalendarPage onChatNavigate={handleChatNavigate} />}
-          {activeSection === 'tasks' && <TasksPage onChatNavigate={handleChatNavigate} />}
-          {activeSection === 'reminders' && <RemindersPage onChatNavigate={handleChatNavigate} />}
-          {activeSection === 'workflows' && <WorkflowsPage onChatNavigate={handleChatNavigate} />}
-          {activeSection === 'knowledge' && <KnowledgePage onChatNavigate={handleChatNavigate} />}
-
-          {/* Bottom Chat Bar — only visible when on chat tab */}
-          {activeSection === 'chat' && <InputBar onSend={handleSend} />}
-        </div>
-
-        {/* Right Zone — Context Panel */}
-        <ContextPanel />
+      {/* Center Zone — Main Workspace (Chat or Full Page) */}
+      <div className="zone-center flex flex-col flex-1 min-w-0 overflow-hidden">
+        {activeSection === 'chat' && <ConversationCenter />}
+        {activeSection === 'calendar' && <CalendarPage onChatNavigate={handleChatNavigate} />}
+        {activeSection === 'tasks' && <TasksPage onChatNavigate={handleChatNavigate} />}
+        {activeSection === 'reminders' && <RemindersPage onChatNavigate={handleChatNavigate} />}
+        {activeSection === 'workflows' && <WorkflowsPage onChatNavigate={handleChatNavigate} />}
+        {activeSection === 'knowledge' && <KnowledgePage onChatNavigate={handleChatNavigate} />}
       </div>
+
+      {/* Bottom Chat Bar — grid-area 'input' */}
+      {activeSection === 'chat' && <InputBar onSend={handleSend} />}
+
+      {/* Right Zone — Context Panel (grid-area 'context') */}
+      <ContextPanel />
 
       {/* Mobile Bottom Navigation (screens < 1024px) */}
       {isMobile && (
