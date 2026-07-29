@@ -244,7 +244,7 @@ const App: React.FC = () => {
       <Sidebar activeSection={activeSection} onSectionChange={setActiveSection} />
 
       {/* Center Zone — Main Workspace (Chat or Full Page) */}
-      <div className="zone-center flex flex-col flex-1 min-w-0 overflow-hidden">
+      <div className={cn("zone-center flex flex-col flex-1 min-w-0", activeSection === 'chat' ? 'overflow-hidden' : 'overflow-y-auto pb-16')}>
         {activeSection === 'chat' && <ConversationCenter />}
         {activeSection === 'calendar' && <CalendarPage onChatNavigate={handleChatNavigate} />}
         {activeSection === 'tasks' && <TasksPage onChatNavigate={handleChatNavigate} />}

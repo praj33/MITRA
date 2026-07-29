@@ -78,7 +78,7 @@ const CalendarPage: React.FC<{ onChatNavigate: (msg: string) => void }> = ({ onC
   return (
     <motion.div
       initial={{ opacity: 0, y: 12 }} animate={{ opacity: 1, y: 0 }}
-      className="page-container"
+      className="page-container pb-20"
     >
       {/* Header */}
       <div className="page-header">

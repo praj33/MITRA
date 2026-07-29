@@ -37,7 +37,7 @@ class ReminderCreate(BaseModel):
 
 # ── Helper: get MongoDB database ────────────────────────
 def _get_db():
-    """Synchronous database access via pymongo (not motor)."""
+    """Synchronous database access via pymongo."""
     try:
         from pymongo import MongoClient
         import os
@@ -51,27 +51,16 @@ def _get_db():
 
 
 # ═══════════════════════════════════════════════════════════
-# CALENDAR — Full CRUD
+# CALENDAR — Full CRUD (No Auto-Reseed on Delete)
 # ═══════════════════════════════════════════════════════════
 
 @router.get("/calendar/events")
 async def get_calendar_events(user_id: str = "user_default"):
-    """Return calendar events."""
+    """Return calendar events from MongoDB without re-seeding deleted events."""
     db = _get_db()
     if db is not None:
         try:
             events_col = db["calendar_events"]
-            # If user has no events yet and database collection is empty, seed initial default events once
-            if events_col.count_documents({"user_id": user_id}) == 0 and events_col.count_documents({}) == 0:
-                now = datetime.now(timezone.utc)
-                today = now.replace(hour=0, minute=0, second=0, microsecond=0)
-                initial_seed = [
-                    {"_id": "ev_1", "user_id": user_id, "title": "Team Standup", "start": (today + timedelta(hours=10)).isoformat(), "end": (today + timedelta(hours=10, minutes=30)).isoformat(), "color": "#7c5cfc", "description": "Daily sync", "location": "Google Meet", "created_at": now.isoformat()},
-                    {"_id": "ev_2", "user_id": user_id, "title": "Design Review", "start": (today + timedelta(hours=14)).isoformat(), "end": (today + timedelta(hours=15)).isoformat(), "color": "#10b981", "description": "UI/UX review", "location": "Conference Room B", "created_at": now.isoformat()},
-                    {"_id": "ev_3", "user_id": user_id, "title": "Sprint Planning", "start": (today + timedelta(days=1, hours=11)).isoformat(), "end": (today + timedelta(days=1, hours=12)).isoformat(), "color": "#f59e0b", "description": "Next sprint scope", "location": "Zoom", "created_at": now.isoformat()},
-                ]
-                events_col.insert_many(initial_seed)
-
             cursor = events_col.find({"user_id": user_id}).sort("start", 1).limit(100)
             db_events = []
             for doc in cursor:
@@ -86,17 +75,9 @@ async def get_calendar_events(user_id: str = "user_default"):
                 })
             return {"events": db_events, "source": "database"}
         except Exception as e:
-            logger.warning(f"Calendar DB lookup: {e}")
+            logger.warning(f"Calendar DB lookup failed: {e}")
 
-    # Fallback only if database connection failed
-    now = datetime.now(timezone.utc)
-    today = now.replace(hour=0, minute=0, second=0, microsecond=0)
-    events = [
-        {"id": "ev_1", "title": "Team Standup", "start": (today + timedelta(hours=10)).isoformat(), "end": (today + timedelta(hours=10, minutes=30)).isoformat(), "color": "#7c5cfc", "description": "Daily sync", "location": "Google Meet"},
-        {"id": "ev_2", "title": "Design Review", "start": (today + timedelta(hours=14)).isoformat(), "end": (today + timedelta(hours=15)).isoformat(), "color": "#10b981", "description": "UI/UX review", "location": "Conference Room B"},
-        {"id": "ev_3", "title": "Sprint Planning", "start": (today + timedelta(days=1, hours=11)).isoformat(), "end": (today + timedelta(days=1, hours=12)).isoformat(), "color": "#f59e0b", "description": "Next sprint scope", "location": "Zoom"},
-    ]
-    return {"events": events, "source": "seed"}
+    return {"events": [], "source": "database"}
 
 
 @router.post("/calendar/events")
@@ -142,40 +123,31 @@ async def create_calendar_event(event: CalendarEventCreate, user_id: str = "user
 
 @router.delete("/calendar/events/{event_id}")
 async def delete_calendar_event(event_id: str, user_id: str = "user_default"):
-    """Delete a calendar event."""
+    """Permanently delete a calendar event from MongoDB."""
     db = _get_db()
     if db is not None:
         try:
-            result = db["calendar_events"].delete_one({"_id": event_id, "user_id": user_id})
-            if result.deleted_count == 0:
-                # Try without user_id filter (for seed data migration)
-                db["calendar_events"].delete_one({"_id": event_id})
+            res = db["calendar_events"].delete_one({"_id": event_id})
+            if res.deleted_count == 0:
+                db["calendar_events"].delete_one({"id": event_id})
+            logger.info(f"Deleted calendar event: {event_id}")
         except Exception as e:
             logger.warning(f"Calendar delete failed: {e}")
     return {"success": True, "event_id": event_id}
 
 
 # ═══════════════════════════════════════════════════════════
-# TASKS — Full CRUD
+# TASKS — Full CRUD (No Auto-Reseed on Delete)
 # ═══════════════════════════════════════════════════════════
 
 @router.get("/tasks/list")
 async def get_tasks(user_id: str = "user_default"):
-    """Return task list."""
+    """Return task list from MongoDB without re-seeding deleted tasks."""
     db = _get_db()
     if db is not None:
         try:
             tasks_col = db["user_tasks"]
-            if tasks_col.count_documents({"user_id": user_id}) == 0 and tasks_col.count_documents({}) == 0:
-                now = datetime.now(timezone.utc)
-                initial_seed = [
-                    {"_id": "t_1", "user_id": user_id, "title": "Complete API documentation", "status": "in_progress", "priority": "high", "due_date": (now + timedelta(days=1)).isoformat(), "category": "development", "created_at": now.isoformat()},
-                    {"_id": "t_2", "user_id": user_id, "title": "Review pull requests", "status": "pending", "priority": "medium", "due_date": (now + timedelta(hours=4)).isoformat(), "category": "development", "created_at": now.isoformat()},
-                    {"_id": "t_3", "user_id": user_id, "title": "Update deployment scripts", "status": "pending", "priority": "low", "due_date": (now + timedelta(days=3)).isoformat(), "category": "devops", "created_at": now.isoformat()},
-                ]
-                tasks_col.insert_many(initial_seed)
-
-            cursor = tasks_col.find({"user_id": user_id}).sort("created_at", -1).limit(50)
+            cursor = tasks_col.find({"user_id": user_id}).sort("created_at", -1).limit(100)
             db_tasks = []
             for doc in cursor:
                 db_tasks.append({
@@ -188,15 +160,9 @@ async def get_tasks(user_id: str = "user_default"):
                 })
             return {"tasks": db_tasks, "source": "database"}
         except Exception as e:
-            logger.warning(f"Tasks DB lookup: {e}")
+            logger.warning(f"Tasks DB lookup failed: {e}")
 
-    now = datetime.now(timezone.utc)
-    tasks = [
-        {"id": "t_1", "title": "Complete API documentation", "status": "in_progress", "priority": "high", "due_date": (now + timedelta(days=1)).isoformat(), "category": "development"},
-        {"id": "t_2", "title": "Review pull requests", "status": "pending", "priority": "medium", "due_date": (now + timedelta(hours=4)).isoformat(), "category": "development"},
-        {"id": "t_3", "title": "Update deployment scripts", "status": "pending", "priority": "low", "due_date": (now + timedelta(days=3)).isoformat(), "category": "devops"},
-    ]
-    return {"tasks": tasks, "source": "seed"}
+    return {"tasks": [], "source": "database"}
 
 
 @router.post("/tasks/create")
@@ -244,38 +210,33 @@ async def update_task(task_id: str, status: str, user_id: str = "user_default"):
 
 @router.delete("/tasks/{task_id}")
 async def delete_task(task_id: str, user_id: str = "user_default"):
-    """Delete a task."""
+    """Permanently delete a task from MongoDB."""
     db = _get_db()
     if db is not None:
         try:
-            db["user_tasks"].delete_one({"_id": task_id})
+            res = db["user_tasks"].delete_one({"_id": task_id})
+            if res.deleted_count == 0:
+                db["user_tasks"].delete_one({"id": task_id})
+            logger.info(f"Deleted task: {task_id}")
         except Exception as e:
             logger.warning(f"Task delete failed: {e}")
     return {"success": True, "task_id": task_id}
 
 
 # ═══════════════════════════════════════════════════════════
-# REMINDERS — Full CRUD
+# REMINDERS — Full CRUD (No Auto-Reseed on Delete)
 # ═══════════════════════════════════════════════════════════
 
 @router.get("/reminders/list")
 async def get_reminders(user_id: str = "user_default"):
-    """Return active reminders."""
+    """Return active reminders without re-seeding deleted reminders."""
     db = _get_db()
     if db is not None:
         try:
             rem_col = db["reminders"]
-            if rem_col.count_documents({"user_id": user_id}) == 0 and rem_col.count_documents({}) == 0:
-                now = datetime.now(timezone.utc)
-                initial_seed = [
-                    {"_id": "r_1", "user_id": user_id, "message": "Check deployment status", "time": (now + timedelta(hours=1)).isoformat(), "status": "active", "repeat": None, "created_at": now.isoformat()},
-                    {"_id": "r_2", "user_id": user_id, "message": "Call the team for sync", "time": (now + timedelta(hours=3)).isoformat(), "status": "active", "repeat": "daily", "created_at": now.isoformat()},
-                ]
-                rem_col.insert_many(initial_seed)
-
             cursor = rem_col.find(
                 {"user_id": user_id, "status": {"$in": ["active", "snoozed"]}}
-            ).sort("time", 1).limit(50)
+            ).sort("time", 1).limit(100)
             db_reminders = []
             for doc in cursor:
                 db_reminders.append({
@@ -287,14 +248,9 @@ async def get_reminders(user_id: str = "user_default"):
                 })
             return {"reminders": db_reminders, "source": "database"}
         except Exception as e:
-            logger.warning(f"Reminders DB lookup: {e}")
+            logger.warning(f"Reminders DB lookup failed: {e}")
 
-    now = datetime.now(timezone.utc)
-    reminders = [
-        {"id": "r_1", "message": "Check deployment status", "time": (now + timedelta(hours=1)).isoformat(), "status": "active", "repeat": None},
-        {"id": "r_2", "message": "Call the team for sync", "time": (now + timedelta(hours=3)).isoformat(), "status": "active", "repeat": "daily"},
-    ]
-    return {"reminders": reminders, "source": "seed"}
+    return {"reminders": [], "source": "database"}
 
 
 @router.post("/reminders/create")
@@ -321,54 +277,34 @@ async def create_reminder(reminder: ReminderCreate, user_id: str = "user_default
         except Exception as e:
             logger.warning(f"Reminder DB insert failed: {e}")
 
-    return {"success": True, "reminder": {"id": rem_id, "message": reminder.message, "time": reminder.time, "status": "active"}}
+    return {"success": True, "reminder": {"id": rem_id, "message": reminder.message, "time": reminder.time}}
 
 
 @router.delete("/reminders/{reminder_id}")
 async def delete_reminder(reminder_id: str, user_id: str = "user_default"):
-    """Delete a reminder."""
+    """Permanently delete a reminder from MongoDB."""
     db = _get_db()
     if db is not None:
         try:
-            result = db["reminders"].delete_one({"_id": reminder_id, "user_id": user_id})
-            if result.deleted_count == 0:
-                db["reminders"].delete_one({"_id": reminder_id})
+            res = db["reminders"].delete_one({"_id": reminder_id})
+            if res.deleted_count == 0:
+                db["reminders"].delete_one({"id": reminder_id})
+            logger.info(f"Deleted reminder: {reminder_id}")
         except Exception as e:
             logger.warning(f"Reminder delete failed: {e}")
     return {"success": True, "reminder_id": reminder_id}
 
 
 # ═══════════════════════════════════════════════════════════
-# WORKFLOWS
+# WORKFLOWS — Read Only
 # ═══════════════════════════════════════════════════════════
 
 @router.get("/workflows/list")
 async def get_workflows(user_id: str = "user_default"):
-    """Return available workflow templates."""
+    """Return available pre-configured workflows."""
     workflows = [
-        {
-            "id": "wf_morning_briefing",
-            "name": "Morning Briefing",
-            "description": "Daily digest of upcoming events, unread emails, and pending high-priority tasks.",
-            "steps": ["Fetch calendar events", "Summarize unread emails", "List pending tasks", "Synthesize briefing"],
-            "category": "productivity",
-            "active": True,
-        },
-        {
-            "id": "wf_meeting_prep",
-            "name": "Meeting Prep",
-            "description": "Gather context, previous notes, and attendee details before an upcoming meeting.",
-            "steps": ["Identify next meeting", "Lookup attendee notes", "Fetch related emails", "Draft agenda"],
-            "category": "productivity",
-            "active": True,
-        },
-        {
-            "id": "wf_task_triage",
-            "name": "Task Triage",
-            "description": "Auto-prioritize overdue and pending tasks based on deadlines and importance.",
-            "steps": ["Scan pending tasks", "Calculate urgency scores", "Re-order task board", "Notify user"],
-            "category": "automation",
-            "active": False,
-        },
+        {"id": "wf_1", "name": "Morning Briefing", "description": "Summarizes today's schedule, unread emails, and high-priority tasks.", "trigger": "Daily at 8:00 AM", "status": "active", "category": "productivity", "steps_count": 3},
+        {"id": "wf_2", "name": "Smart Email Triage", "description": "Categorizes incoming emails and highlights urgent items.", "trigger": "On email received", "status": "active", "category": "communication", "steps_count": 4},
+        {"id": "wf_3", "name": "End-of-Day Summary", "description": "Logs completed tasks and prepares tomorrow's agenda.", "trigger": "Daily at 6:00 PM", "status": "inactive", "category": "productivity", "steps_count": 2},
     ]
-    return {"workflows": workflows, "source": "templates"}
+    return {"workflows": workflows}
