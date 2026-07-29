@@ -6,7 +6,7 @@ Injects: name, tone, user facts, time context, and capability awareness.
 """
 from __future__ import annotations
 
-from datetime import datetime, timezone
+from datetime import datetime, timezone, timedelta
 from typing import Any, Dict, List, Optional
 
 from app.companion.companion_config import CompanionConfig, CompanionPersonality, get_companion_config
@@ -70,6 +70,7 @@ class PersonalityEngine:
         user_facts: Optional[Dict[str, Any]] = None,
         enabled_capabilities: Optional[List[str]] = None,
         extra_context: Optional[str] = None,
+        tz_offset_hours: float = 5.5,
     ) -> str:
         p: CompanionPersonality = self._config.personality
         tone_instruction = _TONE_INSTRUCTIONS.get(p.tone, _TONE_INSTRUCTIONS["friendly"])
@@ -110,13 +111,14 @@ Core rules:
 - Never make up data (emails, events, tasks). Only report what the system returns.
 - You are not a search engine. You are a companion. Be human, not robotic.{extra}
 
-Today is {_current_date_str()}. Current time: {_current_time_str()}."""
+Today is {_current_date_str(tz_offset_hours)}. Current time: {_current_time_str(tz_offset_hours)} (India Standard Time / IST, UTC+5:30).
+You are fully aware of real-time date, time, and timezone context."""
 
-    def build_greeting(self, user_name: str = "there") -> str:
+    def build_greeting(self, user_name: str = "there", tz_offset_hours: float = 5.5) -> str:
         p = self._config.personality
-        time_of_day = _time_of_day()
+        tod = _time_of_day(tz_offset_hours)
         greeting = p.greeting_template.format(
-            time_of_day=time_of_day,
+            time_of_day=tod,
             user_name=user_name,
         )
         return greeting
@@ -135,8 +137,15 @@ Today is {_current_date_str()}. Current time: {_current_time_str()}."""
 
 # ── helpers ──────────────────────────────────────────────────────────────────
 
-def _time_of_day() -> str:
-    hour = datetime.now(timezone.utc).hour
+def _get_local_now(tz_offset_hours: float = 5.5) -> datetime:
+    """Calculate local datetime based on offset hours (default: IST UTC+5:30)."""
+    utc_now = datetime.now(timezone.utc)
+    return utc_now + timedelta(hours=tz_offset_hours)
+
+
+def _time_of_day(tz_offset_hours: float = 5.5) -> str:
+    local_now = _get_local_now(tz_offset_hours)
+    hour = local_now.hour
     if 5 <= hour < 12:
         return "morning"
     if 12 <= hour < 17:
@@ -146,12 +155,12 @@ def _time_of_day() -> str:
     return "night"
 
 
-def _current_date_str() -> str:
-    return datetime.now(timezone.utc).strftime("%A, %d %B %Y")
+def _current_date_str(tz_offset_hours: float = 5.5) -> str:
+    return _get_local_now(tz_offset_hours).strftime("%A, %d %B %Y")
 
 
-def _current_time_str() -> str:
-    return datetime.now(timezone.utc).strftime("%H:%M UTC")
+def _current_time_str(tz_offset_hours: float = 5.5) -> str:
+    return _get_local_now(tz_offset_hours).strftime("%I:%M %p IST")
 
 
 # Singleton
