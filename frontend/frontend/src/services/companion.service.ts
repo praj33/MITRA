@@ -104,6 +104,16 @@ export const CompanionService = {
     return resp.json();
   },
 
+  async createTask(title: string, priority = 'medium', category = 'general', userId = 'user_default'): Promise<any> {
+    const resp = await fetch(`${getBase()}/api/pages/tasks/create?user_id=${userId}`, {
+      method: 'POST',
+      headers: headers(),
+      body: JSON.stringify({ title, priority, category }),
+    });
+    if (!resp.ok) throw new Error(`HTTP ${resp.status}`);
+    return resp.json();
+  },
+
   async updateTask(taskId: string, status: string, userId = 'user_default'): Promise<any> {
     const resp = await fetch(`${getBase()}/api/pages/tasks/update?task_id=${taskId}&status=${status}&user_id=${userId}`, {
       method: 'POST',

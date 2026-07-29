@@ -1,7 +1,7 @@
-// components/pages/TasksPage.tsx — Kanban-style task board
+// components/pages/TasksPage.tsx — Kanban-style task board with inline task creation
 import React, { useEffect, useState } from 'react';
 import { motion } from 'framer-motion';
-import { CheckSquare, Plus, Clock, AlertTriangle, CheckCircle2, Circle, Trash2 } from 'lucide-react';
+import { CheckSquare, Plus, Clock, AlertTriangle, CheckCircle2, Circle, Trash2, Send } from 'lucide-react';
 import { CompanionService } from '../../services/companion.service';
 
 interface Task {
@@ -23,16 +23,41 @@ const TasksPage: React.FC<{ onChatNavigate: (msg: string) => void }> = ({ onChat
   const [tasks, setTasks] = useState<Task[]>([]);
   const [loading, setLoading] = useState(true);
   const [filter, setFilter] = useState<string>('all');
+  const [newTaskTitle, setNewTaskTitle] = useState('');
+  const [showAddForm, setShowAddForm] = useState(false);
+  const [submitting, setSubmitting] = useState(false);
+
+  const fetchTasks = async () => {
+    try {
+      const data = await CompanionService.getTasks();
+      setTasks(data.tasks || []);
+    } catch { setTasks([]); }
+    setLoading(false);
+  };
 
   useEffect(() => {
-    (async () => {
-      try {
-        const data = await CompanionService.getTasks();
-        setTasks(data.tasks || []);
-      } catch { setTasks([]); }
-      setLoading(false);
-    })();
+    fetchTasks();
   }, []);
+
+  const handleCreateTask = async (e?: React.FormEvent) => {
+    if (e) e.preventDefault();
+    if (!newTaskTitle.trim() || submitting) return;
+
+    setSubmitting(true);
+    try {
+      const res = await CompanionService.createTask(newTaskTitle.trim());
+      if (res.task) {
+        setTasks(prev => [res.task, ...prev]);
+      } else {
+        await fetchTasks();
+      }
+      setNewTaskTitle('');
+      setShowAddForm(false);
+    } catch (err) {
+      console.error('Failed to create task:', err);
+    }
+    setSubmitting(false);
+  };
 
   const toggleStatus = async (task: Task) => {
     const newStatus = task.status === 'completed' ? 'pending' : 'completed';
@@ -60,7 +85,7 @@ const TasksPage: React.FC<{ onChatNavigate: (msg: string) => void }> = ({ onChat
   };
 
   return (
-    <motion.div initial={{ opacity: 0, y: 12 }} animate={{ opacity: 1, y: 0 }} className="page-container">
+    <motion.div initial={{ opacity: 0, y: 12 }} animate={{ opacity: 1, y: 0 }} className="page-container pb-20">
       <div className="page-header">
         <div className="flex items-center gap-3">
           <div className="page-icon" style={{ background: 'rgba(16,185,129,0.15)', color: '#10b981' }}><CheckSquare size={20} /></div>
@@ -69,8 +94,29 @@ const TasksPage: React.FC<{ onChatNavigate: (msg: string) => void }> = ({ onChat
             <p className="page-subtitle">{counts.pending} pending · {counts.in_progress} in progress · {counts.completed} done</p>
           </div>
         </div>
-        <button onClick={() => onChatNavigate('Create a new task')} className="page-btn-primary"><Plus size={14} /> Add Task</button>
+        <button onClick={() => setShowAddForm(prev => !prev)} className="page-btn-primary"><Plus size={14} /> Add Task</button>
       </div>
+
+      {/* Quick Add Task Input Form */}
+      {showAddForm && (
+        <form onSubmit={handleCreateTask} className="mb-4 flex items-center gap-2 bg-surface-elevated p-3 rounded-lg border border-border-default">
+          <input
+            type="text"
+            placeholder="Type task title and press Enter..."
+            value={newTaskTitle}
+            onChange={e => setNewTaskTitle(e.target.value)}
+            className="flex-1 bg-transparent text-text-primary outline-none placeholder:text-text-muted text-sm"
+            autoFocus
+          />
+          <button
+            type="submit"
+            disabled={!newTaskTitle.trim() || submitting}
+            className="page-btn-primary disabled:opacity-40"
+          >
+            {submitting ? 'Adding...' : <><Send size={12} /> Save Task</>}
+          </button>
+        </form>
+      )}
 
       {/* Filter tabs */}
       <div className="page-tabs">
@@ -89,7 +135,7 @@ const TasksPage: React.FC<{ onChatNavigate: (msg: string) => void }> = ({ onChat
         <div className="page-empty">
           <CheckSquare size={32} className="text-text-muted" />
           <p>No tasks found</p>
-          <button onClick={() => onChatNavigate('Create a new task')} className="page-btn-primary mt-2"><Plus size={14} /> Create Task</button>
+          <button onClick={() => setShowAddForm(true)} className="page-btn-primary mt-2"><Plus size={14} /> Create Task</button>
         </div>
       ) : (
         <div className="page-card-list">
