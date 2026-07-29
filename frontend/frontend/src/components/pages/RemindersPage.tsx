@@ -43,9 +43,8 @@ const RemindersPage: React.FC<{ onChatNavigate: (msg: string) => void }> = ({ on
 
   const removeReminder = async (id: string) => {
     try {
-      const base = process.env.REACT_APP_API_URL || 'http://localhost:8000';
-      await fetch(`${base}/api/pages/reminders/${id}`, { method: 'DELETE' });
       setReminders(prev => prev.filter(r => r.id !== id));
+      await CompanionService.deleteReminder(id);
     } catch (err) {
       console.error('Failed to delete reminder:', err);
     }
@@ -98,7 +97,7 @@ const RemindersPage: React.FC<{ onChatNavigate: (msg: string) => void }> = ({ on
                       </div>
                     </div>
                   </div>
-                  <button onClick={() => removeReminder(rem.id)} className="page-btn-icon text-text-muted hover:text-red-400"><Trash2 size={14} /></button>
+                  <button onClick={() => removeReminder(rem.id)} className="page-btn-icon text-text-muted hover:text-red-400" title="Delete Reminder"><Trash2 size={14} /></button>
                 </div>
               </motion.div>
             );

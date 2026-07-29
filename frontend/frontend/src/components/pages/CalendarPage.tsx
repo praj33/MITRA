@@ -29,9 +29,8 @@ const CalendarPage: React.FC<{ onChatNavigate: (msg: string) => void }> = ({ onC
 
   const deleteEvent = async (eventId: string) => {
     try {
-      const base = process.env.REACT_APP_API_URL || 'http://localhost:8000';
-      await fetch(`${base}/api/pages/calendar/events/${eventId}`, { method: 'DELETE' });
       setEvents(prev => prev.filter(e => e.id !== eventId));
+      await CompanionService.deleteCalendarEvent(eventId);
     } catch (err) {
       console.error('Delete failed:', err);
     }
@@ -98,66 +97,78 @@ const CalendarPage: React.FC<{ onChatNavigate: (msg: string) => void }> = ({ onC
         </div>
       </div>
 
-      {/* Week strip */}
-      <div className="calendar-week-strip">
-        {weekDays.map((day, i) => {
-          const isToday = day.toDateString() === todayStr;
-          const dayEvents = getEventsForDay(day);
-          return (
-            <div
-              key={`${day.toISOString()}-${i}`}
-              className={`calendar-day-col ${isToday ? 'calendar-day-today' : ''}`}
-              onClick={() => setViewDate(new Date(day))}
-              style={{ cursor: 'pointer' }}
-            >
-              <span className="calendar-day-label">{DAYS[day.getDay()]}</span>
-              <span className={`calendar-day-num ${isToday ? 'active' : ''}`}>{day.getDate()}</span>
-              <div className="calendar-day-events">
-                {dayEvents.map(ev => (
-                  <div key={ev.id} className="calendar-event-chip" style={{ borderLeftColor: ev.color }}>
-                    <span className="calendar-event-time">{formatTime(ev.start)}</span>
-                    <span className="calendar-event-title">{ev.title}</span>
-                    {ev.location && <span className="calendar-event-loc"><MapPin size={10} /> {ev.location}</span>}
-                  </div>
-                ))}
-                {dayEvents.length === 0 && <span className="calendar-no-events">No events</span>}
-              </div>
-            </div>
-          );
-        })}
-      </div>
+      {/* Grid view */}
+      {loading ? (
+        <div className="page-loading">Loading events...</div>
+      ) : (
+        <>
+          <div className="calendar-week-grid mb-6">
+            {weekDays.map(day => {
+              const isToday = day.toDateString() === todayStr;
+              const dayEvents = getEventsForDay(day);
 
-      {/* Upcoming list */}
-      <div className="page-section">
-        <h3 className="page-section-title">Upcoming Events</h3>
-        {loading ? (
-          <div className="page-loading">Loading events...</div>
-        ) : upcomingEvents.length === 0 ? (
-          <div className="page-empty">
-            <Calendar size={32} className="text-text-muted" />
-            <p>No upcoming events</p>
-            <button onClick={() => onChatNavigate('Create a calendar event for tomorrow')} className="page-btn-primary mt-2"><Plus size={14} /> Create Event</button>
-          </div>
-        ) : (
-          <div className="page-card-list">
-            {upcomingEvents.map(ev => (
-              <motion.div key={ev.id} className="page-card" whileHover={{ scale: 1.01 }} style={{ borderLeftColor: ev.color, borderLeftWidth: 3 }}>
-                <div className="page-card-header">
-                  <h4 className="page-card-title">{ev.title}</h4>
-                  <div className="flex items-center gap-2">
-                    <span className="page-card-badge" style={{ background: ev.color + '22', color: ev.color }}>
-                      <Clock size={10} /> {formatTime(ev.start)} – {formatTime(ev.end)}
-                    </span>
-                    <button onClick={() => deleteEvent(ev.id)} className="page-btn-icon text-text-muted hover:text-red-400" title="Delete event"><Trash2 size={14} /></button>
+              return (
+                <div key={day.toISOString()} className={`calendar-day-col ${isToday ? 'is-today' : ''}`}>
+                  <div className="calendar-day-header">
+                    <span className="day-name">{DAYS[day.getDay()]}</span>
+                    <span className={`day-number ${isToday ? 'today-pill' : ''}`}>{day.getDate()}</span>
+                  </div>
+                  <div className="calendar-day-events">
+                    {dayEvents.map(ev => (
+                      <div
+                        key={ev.id}
+                        className="calendar-event-chip"
+                        style={{ borderLeftColor: ev.color }}
+                        title={`${ev.title} (${formatTime(ev.start)})`}
+                      >
+                        <span className="event-time">{formatTime(ev.start)}</span>
+                        <span className="event-title">{ev.title}</span>
+                      </div>
+                    ))}
+                    {dayEvents.length === 0 && (
+                      <span className="no-events-text">No events</span>
+                    )}
                   </div>
                 </div>
-                {ev.description && <p className="page-card-desc">{ev.description}</p>}
-                {ev.location && <p className="page-card-meta"><MapPin size={12} /> {ev.location}</p>}
-              </motion.div>
-            ))}
+              );
+            })}
           </div>
-        )}
-      </div>
+
+          {/* Upcoming Events List */}
+          <div className="calendar-upcoming-section">
+            <h3 className="section-title">Upcoming Events</h3>
+            {upcomingEvents.length === 0 ? (
+              <div className="page-empty">
+                <Calendar size={28} className="text-text-muted" />
+                <p>No upcoming events found</p>
+              </div>
+            ) : (
+              <div className="page-card-list">
+                {upcomingEvents.map(ev => (
+                  <motion.div key={ev.id} className="page-card calendar-event-card" whileHover={{ scale: 1.01 }}>
+                    <div className="event-color-bar" style={{ background: ev.color }} />
+                    <div className="flex-1 min-w-0">
+                      <h4 className="page-card-title">{ev.title}</h4>
+                      {ev.description && <p className="page-card-desc">{ev.description}</p>}
+                      <div className="flex items-center gap-3 mt-2 flex-wrap">
+                        <span className="page-card-meta"><Clock size={12} /> {formatTime(ev.start)} – {formatTime(ev.end)}</span>
+                        {ev.location && <span className="page-card-meta"><MapPin size={12} /> {ev.location}</span>}
+                      </div>
+                    </div>
+                    <button
+                      onClick={() => deleteEvent(ev.id)}
+                      className="page-btn-icon text-text-muted hover:text-red-400"
+                      title="Delete Event"
+                    >
+                      <Trash2 size={14} />
+                    </button>
+                  </motion.div>
+                ))}
+              </div>
+            )}
+          </div>
+        </>
+      )}
     </motion.div>
   );
 };

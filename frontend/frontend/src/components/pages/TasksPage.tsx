@@ -1,7 +1,7 @@
 // components/pages/TasksPage.tsx — Kanban-style task board
 import React, { useEffect, useState } from 'react';
 import { motion } from 'framer-motion';
-import { CheckSquare, Plus, Clock, AlertTriangle, CheckCircle2, Circle } from 'lucide-react';
+import { CheckSquare, Plus, Clock, AlertTriangle, CheckCircle2, Circle, Trash2 } from 'lucide-react';
 import { CompanionService } from '../../services/companion.service';
 
 interface Task {
@@ -37,7 +37,18 @@ const TasksPage: React.FC<{ onChatNavigate: (msg: string) => void }> = ({ onChat
   const toggleStatus = async (task: Task) => {
     const newStatus = task.status === 'completed' ? 'pending' : 'completed';
     setTasks(prev => prev.map(t => t.id === task.id ? { ...t, status: newStatus } : t));
-    try { await CompanionService.updateTask(task.id, newStatus); } catch {}
+    try { await CompanionService.updateTask(task.id, newStatus); } catch (err) {
+      console.error('Task update failed:', err);
+    }
+  };
+
+  const deleteTask = async (taskId: string) => {
+    try {
+      setTasks(prev => prev.filter(t => t.id !== taskId));
+      await CompanionService.deleteTask(taskId);
+    } catch (err) {
+      console.error('Task delete failed:', err);
+    }
   };
 
   const filtered = filter === 'all' ? tasks : tasks.filter(t => t.status === filter);
@@ -78,28 +89,33 @@ const TasksPage: React.FC<{ onChatNavigate: (msg: string) => void }> = ({ onChat
         <div className="page-empty">
           <CheckSquare size={32} className="text-text-muted" />
           <p>No tasks found</p>
-          <button onClick={() => onChatNavigate('Create a task to review code')} className="page-btn-primary mt-2"><Plus size={14} /> Create Task</button>
+          <button onClick={() => onChatNavigate('Create a new task')} className="page-btn-primary mt-2"><Plus size={14} /> Create Task</button>
         </div>
       ) : (
         <div className="page-card-list">
           {filtered.map(task => (
             <motion.div key={task.id} className="page-card task-card" whileHover={{ scale: 1.01 }}>
-              <div className="flex items-start gap-3">
-                <button onClick={() => toggleStatus(task)} className="task-check-btn mt-0.5">
-                  {statusIcons[task.status] || statusIcons.pending}
-                </button>
-                <div className="flex-1 min-w-0">
-                  <h4 className={`page-card-title ${task.status === 'completed' ? 'line-through opacity-50' : ''}`}>{task.title}</h4>
-                  <div className="flex items-center gap-2 mt-1 flex-wrap">
-                    <span className="page-card-badge" style={{ background: (priorityColors[task.priority] || '#888') + '22', color: priorityColors[task.priority] || '#888' }}>
-                      {task.priority === 'high' && <AlertTriangle size={10} />} {task.priority}
-                    </span>
-                    <span className="page-card-badge">{task.category}</span>
-                    {task.due_date && (
-                      <span className="page-card-meta"><Clock size={10} /> {new Date(task.due_date).toLocaleDateString()}</span>
-                    )}
+              <div className="flex items-start justify-between gap-3">
+                <div className="flex items-start gap-3 flex-1 min-w-0">
+                  <button onClick={() => toggleStatus(task)} className="task-check-btn mt-0.5" title="Toggle status">
+                    {statusIcons[task.status] || statusIcons.pending}
+                  </button>
+                  <div className="flex-1 min-w-0">
+                    <h4 className={`page-card-title ${task.status === 'completed' ? 'line-through opacity-50' : ''}`}>{task.title}</h4>
+                    <div className="flex items-center gap-2 mt-1 flex-wrap">
+                      <span className="page-card-badge" style={{ background: (priorityColors[task.priority] || '#888') + '22', color: priorityColors[task.priority] || '#888' }}>
+                        {task.priority === 'high' && <AlertTriangle size={10} />} {task.priority}
+                      </span>
+                      <span className="page-card-badge">{task.category}</span>
+                      {task.due_date && (
+                        <span className="page-card-meta"><Clock size={10} /> {new Date(task.due_date).toLocaleDateString()}</span>
+                      )}
+                    </div>
                   </div>
                 </div>
+                <button onClick={() => deleteTask(task.id)} className="page-btn-icon text-text-muted hover:text-red-400" title="Delete Task">
+                  <Trash2 size={14} />
+                </button>
               </div>
             </motion.div>
           ))}

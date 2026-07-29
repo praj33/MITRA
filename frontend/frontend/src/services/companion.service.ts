@@ -1,7 +1,13 @@
 // services/companion.service.ts — Mitra API client (expanded)
 
-const getBase = () =>
-  process.env.REACT_APP_API_URL || 'http://localhost:8000';
+const getBase = () => {
+  if (process.env.REACT_APP_API_URL) return process.env.REACT_APP_API_URL;
+  if (typeof window !== 'undefined' && window.location.hostname !== 'localhost') {
+    return 'https://mitra-backend-q1f3.onrender.com';
+  }
+  return 'http://localhost:8000';
+};
+
 const getKey = () =>
   process.env.REACT_APP_API_KEY || '';
 
@@ -81,6 +87,15 @@ export const CompanionService = {
     return resp.json();
   },
 
+  async deleteCalendarEvent(eventId: string, userId = 'user_default'): Promise<any> {
+    const resp = await fetch(`${getBase()}/api/pages/calendar/events/${eventId}?user_id=${userId}`, {
+      method: 'DELETE',
+      headers: headers(),
+    });
+    if (!resp.ok) throw new Error(`HTTP ${resp.status}`);
+    return resp.json();
+  },
+
   async getTasks(userId = 'user_default'): Promise<{ tasks: any[] }> {
     const resp = await fetch(`${getBase()}/api/pages/tasks/list?user_id=${userId}`, {
       headers: headers(),
@@ -98,8 +113,26 @@ export const CompanionService = {
     return resp.json();
   },
 
+  async deleteTask(taskId: string, userId = 'user_default'): Promise<any> {
+    const resp = await fetch(`${getBase()}/api/pages/tasks/${taskId}?user_id=${userId}`, {
+      method: 'DELETE',
+      headers: headers(),
+    });
+    if (!resp.ok) throw new Error(`HTTP ${resp.status}`);
+    return resp.json();
+  },
+
   async getReminders(userId = 'user_default'): Promise<{ reminders: any[] }> {
     const resp = await fetch(`${getBase()}/api/pages/reminders/list?user_id=${userId}`, {
+      headers: headers(),
+    });
+    if (!resp.ok) throw new Error(`HTTP ${resp.status}`);
+    return resp.json();
+  },
+
+  async deleteReminder(reminderId: string, userId = 'user_default'): Promise<any> {
+    const resp = await fetch(`${getBase()}/api/pages/reminders/${reminderId}?user_id=${userId}`, {
+      method: 'DELETE',
       headers: headers(),
     });
     if (!resp.ok) throw new Error(`HTTP ${resp.status}`);
