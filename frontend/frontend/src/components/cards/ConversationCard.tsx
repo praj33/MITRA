@@ -1,6 +1,7 @@
-// components/cards/ConversationCard.tsx — Chat message bubble (responsive)
-import React from 'react';
+// components/cards/ConversationCard.tsx — Chat message bubble with Nilesh TTS voice output
+import React, { useState } from 'react';
 import { motion } from 'framer-motion';
+import { Volume2, VolumeX } from 'lucide-react';
 import { cn, formatTime } from '../../lib/utils';
 import { Message } from '../../store/companion.store';
 import ActionCard from './ActionCard';
@@ -12,6 +13,59 @@ interface Props {
 
 const ConversationCard: React.FC<Props> = ({ message, onActionConfirm }) => {
   const isAssistant = message.role === 'assistant';
+  const [isPlaying, setIsPlaying] = useState(false);
+
+  const handleSpeak = async () => {
+    if (isPlaying) {
+      window.speechSynthesis.cancel();
+      setIsPlaying(false);
+      return;
+    }
+
+    setIsPlaying(true);
+
+    try {
+      // Try Nilesh's Live TTS Service endpoint on Render
+      const res = await fetch('https://ai-assistant-backend-8hur.onrender.com/api/tts', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'X-API-Key': 'localtest',
+        },
+        body: JSON.stringify({
+          text: message.content,
+          language: 'en',
+        }),
+      });
+
+      const data = await res.json();
+      if (data.audio_base64) {
+        const audio = new Audio(`data:audio/${data.audio_format || 'wav'};base64,${data.audio_base64}`);
+        audio.onended = () => setIsPlaying(false);
+        audio.onerror = () => fallbackBrowserSpeech();
+        await audio.play();
+        return;
+      }
+    } catch (err) {
+      console.warn('Nilesh TTS service unavailable, falling back to Web Speech API:', err);
+    }
+
+    fallbackBrowserSpeech();
+  };
+
+  const fallbackBrowserSpeech = () => {
+    if (!('speechSynthesis' in window)) {
+      setIsPlaying(false);
+      return;
+    }
+    window.speechSynthesis.cancel();
+    const utterance = new SpeechSynthesisUtterance(message.content);
+    utterance.rate = 1.0;
+    utterance.pitch = 1.0;
+    utterance.onend = () => setIsPlaying(false);
+    utterance.onerror = () => setIsPlaying(false);
+    window.speechSynthesis.speak(utterance);
+  };
 
   return (
     <motion.div
@@ -40,7 +94,7 @@ const ConversationCard: React.FC<Props> = ({ message, onActionConfirm }) => {
       )}>
         {/* Bubble */}
         <div className={cn(
-          'px-3 py-2 sm:px-3.5 sm:py-2.5 rounded-lg text-sm leading-relaxed break-words',
+          'relative group px-3 py-2 sm:px-3.5 sm:py-2.5 rounded-lg text-sm leading-relaxed break-words',
           isAssistant
             ? 'bg-surface-elevated border border-border-subtle text-text-primary rounded-tl-sm'
             : 'bg-brand-dim text-text-primary border border-brand/30 rounded-tr-sm',
@@ -64,10 +118,23 @@ const ConversationCard: React.FC<Props> = ({ message, onActionConfirm }) => {
           />
         )}
 
-        {/* Timestamp */}
-        <span className="text-2xs text-text-muted select-none">
-          {formatTime(message.timestamp)}
-        </span>
+        {/* Timestamp & Voice Speaker Button */}
+        <div className="flex items-center gap-2 text-2xs text-text-muted select-none">
+          <span>{formatTime(message.timestamp)}</span>
+          {isAssistant && (
+            <button
+              onClick={handleSpeak}
+              className={cn(
+                'flex items-center gap-1 px-1.5 py-0.5 rounded transition-colors',
+                isPlaying ? 'text-brand-light bg-brand-muted font-medium' : 'hover:text-brand-light'
+              )}
+              title={isPlaying ? 'Stop Voice' : 'Listen to Voice Output (Nilesh TTS)'}
+            >
+              {isPlaying ? <VolumeX size={12} className="animate-pulse" /> : <Volume2 size={12} />}
+              <span>{isPlaying ? 'Speaking...' : 'Voice'}</span>
+            </button>
+          )}
+        </div>
       </div>
     </motion.div>
   );

@@ -1,7 +1,7 @@
 // components/shell/InputBar.tsx — Message input with send + voice + attach (responsive)
 import React, { useState, useRef, KeyboardEvent } from 'react';
 import { motion } from 'framer-motion';
-import { Send, Mic, Paperclip, Zap } from 'lucide-react';
+import { Send, Mic, MicOff, Paperclip, Zap } from 'lucide-react';
 import { cn } from '../../lib/utils';
 import { useCompanionStore } from '../../store/companion.store';
 
@@ -20,6 +20,7 @@ const quickActions = [
 const InputBar: React.FC<Props> = ({ onSend, disabled }) => {
   const [value, setValue] = useState('');
   const [showQuick, setShowQuick] = useState(false);
+  const [isListening, setIsListening] = useState(false);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const { status, isMobile } = useCompanionStore();
 
@@ -49,6 +50,44 @@ const InputBar: React.FC<Props> = ({ onSend, disabled }) => {
     ta.style.height = Math.min(ta.scrollHeight, isMobile ? 100 : 120) + 'px';
   };
 
+  const toggleVoiceInput = () => {
+    const SR = (window as any).SpeechRecognition || (window as any).webkitSpeechRecognition;
+    if (!SR) {
+      alert('Voice input is not supported in this browser. Please use Chrome or Edge.');
+      return;
+    }
+    if (isListening) {
+      setIsListening(false);
+      return;
+    }
+
+    try {
+      const recognition = new SR();
+      recognition.continuous = false;
+      recognition.interimResults = true;
+      recognition.lang = 'en-US';
+
+      recognition.onstart = () => setIsListening(true);
+      recognition.onresult = (event: any) => {
+        const transcript = Array.from(event.results)
+          .map((r: any) => r[0].transcript)
+          .join('');
+        setValue(transcript);
+      };
+      recognition.onerror = (err: any) => {
+        console.error('Speech recognition error:', err);
+        setIsListening(false);
+      };
+      recognition.onend = () => {
+        setIsListening(false);
+      };
+      recognition.start();
+    } catch (err) {
+      console.error('Failed to start speech recognition:', err);
+      setIsListening(false);
+    }
+  };
+
   return (
     <div className="zone-input bg-surface-raised border-t border-border-subtle px-3 sm:px-4 py-2 sm:py-2.5 flex flex-col gap-1.5 sm:gap-2">
       {/* Quick actions */}
@@ -63,7 +102,7 @@ const InputBar: React.FC<Props> = ({ onSend, disabled }) => {
             <button
               key={qa.value}
               onClick={() => { onSend(qa.value); setShowQuick(false); }}
-              className="text-2xs px-2 sm:px-2.5 py-1 rounded-full bg-surface-overlay border border-border-subtle text-text-secondary hover:border-brand/40 hover:text-brand-light transition-all duration-150 active:scale-95"
+              className="text-2xs px-2.5 py-1 rounded-md bg-surface-elevated border border-border-subtle hover:border-brand/40 hover:text-brand-light text-text-muted transition-colors cursor-pointer"
             >
               {qa.label}
             </button>
@@ -71,47 +110,40 @@ const InputBar: React.FC<Props> = ({ onSend, disabled }) => {
         </motion.div>
       )}
 
-      {/* Input row */}
+      {/* Input container */}
       <div className="flex items-end gap-1.5 sm:gap-2">
-        {/* Quick actions trigger */}
+        {/* Quick action toggle */}
         <button
-          id="inputbar-quick-actions"
           onClick={() => setShowQuick(!showQuick)}
           className={cn(
             'flex-shrink-0 w-8 h-8 flex items-center justify-center rounded-lg transition-colors mb-0.5',
-            showQuick
-              ? 'bg-brand-muted text-brand-light'
-              : 'text-text-muted hover:text-text-secondary hover:bg-surface-overlay',
+            showQuick ? 'bg-brand-muted text-brand-light' : 'text-text-muted hover:text-text-secondary hover:bg-surface-overlay',
           )}
           aria-label="Quick actions"
+          title="Quick prompts"
         >
           <Zap size={14} />
         </button>
 
-        {/* Textarea */}
-        <div className="flex-1 relative">
+        {/* Textarea wrapper */}
+        <div className="flex-1 relative min-w-0">
           <textarea
             ref={textareaRef}
-            id="companion-input"
+            rows={1}
             value={value}
             onChange={handleChange}
             onKeyDown={handleKey}
+            placeholder={isListening ? 'Listening to your voice...' : disabled ? 'Processing...' : 'Ask Mitra anything...'}
             disabled={disabled || isThinking}
-            rows={1}
-            placeholder={isThinking ? 'Mitra is thinking…' : 'Ask Mitra anything…'}
             className={cn(
-              'w-full resize-none bg-surface-overlay border border-border-subtle rounded-xl px-3 sm:px-3.5 py-2',
-              'text-sm text-text-primary placeholder:text-text-muted',
-              'focus:outline-none focus:border-brand/50 focus:ring-1 focus:ring-brand/30',
-              'transition-all duration-150 leading-relaxed',
-              'max-h-[100px] sm:max-h-[120px] overflow-y-auto',
-              (disabled || isThinking) && 'opacity-50 cursor-not-allowed',
+              'w-full bg-surface-overlay text-text-primary text-xs sm:text-sm rounded-lg px-3 py-2 border border-border-subtle focus:outline-none focus:border-brand/50 transition-colors resize-none overflow-y-auto leading-relaxed placeholder:text-text-muted/60',
+              isListening ? 'border-brand text-brand-light animate-pulse' : '',
             )}
-            style={{ fontSize: '16px' }} /* Prevents iOS zoom on focus */
+            style={{ maxHeight: isMobile ? '100px' : '120px' }}
           />
         </div>
 
-        {/* Attach — hidden on very small screens */}
+        {/* Attach file */}
         <button
           id="inputbar-attach"
           className="flex-shrink-0 w-8 h-8 items-center justify-center rounded-lg text-text-muted hover:text-text-secondary hover:bg-surface-overlay transition-colors mb-0.5 hidden sm:flex"
@@ -120,28 +152,18 @@ const InputBar: React.FC<Props> = ({ onSend, disabled }) => {
           <Paperclip size={14} />
         </button>
 
-        {/* Voice — Web Speech API */}
+        {/* Voice Input — Nilesh Duplex / Web Speech STT */}
         <button
           id="inputbar-voice"
-          onClick={() => {
-            const SR = (window as any).SpeechRecognition || (window as any).webkitSpeechRecognition;
-            if (!SR) { alert('Voice input not supported in this browser.'); return; }
-            const recognition = new SR();
-            recognition.continuous = false;
-            recognition.interimResults = false;
-            recognition.lang = 'en-US';
-            recognition.onresult = (event: any) => {
-              const transcript = event.results[0][0].transcript;
-              if (transcript.trim()) onSend(transcript.trim());
-            };
-            recognition.onerror = () => {};
-            recognition.start();
-          }}
-          className="flex-shrink-0 w-8 h-8 flex items-center justify-center rounded-lg text-text-muted hover:text-brand-light hover:bg-brand-muted transition-colors mb-0.5"
+          onClick={toggleVoiceInput}
+          className={cn(
+            'flex-shrink-0 w-8 h-8 flex items-center justify-center rounded-lg transition-colors mb-0.5',
+            isListening ? 'bg-red-500/20 text-red-400 border border-red-500/40 animate-pulse' : 'text-text-muted hover:text-brand-light hover:bg-brand-muted',
+          )}
           aria-label="Voice input"
-          title="Click to speak"
+          title={isListening ? 'Listening... click to stop' : 'Click to speak (Voice STT)'}
         >
-          <Mic size={14} />
+          {isListening ? <MicOff size={14} className="text-red-400" /> : <Mic size={14} />}
         </button>
 
         {/* Send */}
