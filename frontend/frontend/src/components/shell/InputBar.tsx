@@ -6,7 +6,7 @@ import { cn } from '../../lib/utils';
 import { useCompanionStore } from '../../store/companion.store';
 
 interface Props {
-  onSend:     (message: string) => void;
+  onSend:     (message: string, isVoice?: boolean) => void;
   disabled?:  boolean;
 }
 
@@ -23,19 +23,19 @@ const InputBar: React.FC<Props> = ({ onSend, disabled }) => {
   const [isListening, setIsListening] = useState(false);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const { status, isMobile } = useCompanionStore();
+  const transcriptRef = useRef('');
 
   const isThinking = status === 'thinking';
 
   const handleSend = () => {
     const trimmed = value.trim();
     if (!trimmed || disabled || isThinking) return;
-    onSend(trimmed);
+    onSend(trimmed, false);
     setValue('');
     if (textareaRef.current) textareaRef.current.style.height = 'auto';
   };
 
   const handleKey = (e: KeyboardEvent<HTMLTextAreaElement>) => {
-    // On mobile, Enter should create a newline (Send button is always visible)
     if (e.key === 'Enter' && !e.shiftKey && !isMobile) {
       e.preventDefault();
       handleSend();
@@ -44,7 +44,6 @@ const InputBar: React.FC<Props> = ({ onSend, disabled }) => {
 
   const handleChange = (e: React.ChangeEvent<HTMLTextAreaElement>) => {
     setValue(e.target.value);
-    // Auto-grow
     const ta = e.target;
     ta.style.height = 'auto';
     ta.style.height = Math.min(ta.scrollHeight, isMobile ? 100 : 120) + 'px';
@@ -62,6 +61,7 @@ const InputBar: React.FC<Props> = ({ onSend, disabled }) => {
     }
 
     try {
+      transcriptRef.current = '';
       const recognition = new SR();
       recognition.continuous = false;
       recognition.interimResults = true;
@@ -72,6 +72,7 @@ const InputBar: React.FC<Props> = ({ onSend, disabled }) => {
         const transcript = Array.from(event.results)
           .map((r: any) => r[0].transcript)
           .join('');
+        transcriptRef.current = transcript;
         setValue(transcript);
       };
       recognition.onerror = (err: any) => {
@@ -80,6 +81,12 @@ const InputBar: React.FC<Props> = ({ onSend, disabled }) => {
       };
       recognition.onend = () => {
         setIsListening(false);
+        const finalSpeech = transcriptRef.current.trim();
+        if (finalSpeech) {
+          onSend(finalSpeech, true);
+          setValue('');
+          if (textareaRef.current) textareaRef.current.style.height = 'auto';
+        }
       };
       recognition.start();
     } catch (err) {
@@ -133,7 +140,7 @@ const InputBar: React.FC<Props> = ({ onSend, disabled }) => {
             value={value}
             onChange={handleChange}
             onKeyDown={handleKey}
-            placeholder={isListening ? 'Listening to your voice...' : disabled ? 'Processing...' : 'Ask Mitra anything...'}
+            placeholder={isListening ? 'Listening to your voice... Speak now!' : disabled ? 'Processing...' : 'Ask Mitra anything...'}
             disabled={disabled || isThinking}
             className={cn(
               'w-full bg-surface-overlay text-text-primary text-xs sm:text-sm rounded-lg px-3 py-2 border border-border-subtle focus:outline-none focus:border-brand/50 transition-colors resize-none overflow-y-auto leading-relaxed placeholder:text-text-muted/60',

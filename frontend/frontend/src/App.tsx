@@ -1,69 +1,89 @@
-// App.tsx — Mitra v5 Companion Shell (fully responsive + page routing)
 import React, { useEffect, useState, useCallback } from 'react';
-import { motion } from 'framer-motion';
-import { useCompanionStore, useIsMobile } from './store/companion.store';
-import { CompanionService } from './services/companion.service';
-import {
-  MessageCircle, Calendar, CheckSquare, Bell,
-  LayoutGrid, PanelRight,
-} from 'lucide-react';
-import { cn } from './lib/utils';
-
-// Shell components
-import TopBar            from './components/shell/TopBar';
-import Sidebar           from './components/shell/Sidebar';
+import Sidebar from './components/shell/Sidebar';
+import TopBar from './components/shell/TopBar';
 import ConversationCenter from './components/shell/ConversationCenter';
-import ContextPanel      from './components/shell/ContextPanel';
-import InputBar          from './components/shell/InputBar';
-import SettingsModal     from './components/shell/SettingsModal';
-import ToastContainer, { showToast } from './components/shell/Toast';
+import ContextPanel from './components/shell/ContextPanel';
+import InputBar from './components/shell/InputBar';
+import SettingsModal from './components/shell/SettingsModal';
+import Toast from './components/shell/Toast';
+import CalendarPage from './components/pages/CalendarPage';
+import TasksPage from './components/pages/TasksPage';
+import RemindersPage from './components/pages/RemindersPage';
+import WorkflowsPage from './components/pages/WorkflowsPage';
+import KnowledgePage from './components/pages/KnowledgePage';
+import { useCompanionStore, showToast } from './store/companion.store';
+import { CompanionService } from './services/companion.service';
+import { LayoutDashboard, Calendar, CheckSquare, Bell, PanelRight } from 'lucide-react';
 
-// Page components
-import CalendarPage   from './components/pages/CalendarPage';
-import TasksPage      from './components/pages/TasksPage';
-import RemindersPage  from './components/pages/RemindersPage';
-import KnowledgePage  from './components/pages/KnowledgePage';
-import WorkflowsPage  from './components/pages/WorkflowsPage';
+const USER_ID = 'user_default';
 
-const USER_ID = process.env.REACT_APP_USER_ID || 'user_default';
+/* Helper hook to keep isMobile store value in sync */
+const useIsMobile = () => {
+  const setIsMobile = useCompanionStore(s => s.setIsMobile);
+  useEffect(() => {
+    const check = () => setIsMobile(window.innerWidth < 1024);
+    check();
+    window.addEventListener('resize', check);
+    return () => window.removeEventListener('resize', check);
+  }, [setIsMobile]);
+};
 
-/* ── Bottom Navigation (Mobile Only) ──────────────────── */
-interface BottomNavProps {
-  activeSection: string;
-  onSectionChange: (id: string) => void;
-}
+/* Helper for speaking voice responses out loud */
+const speakAudioResponse = async (text: string) => {
+  if (!text) return;
+  try {
+    const res = await fetch('https://ai-assistant-backend-8hur.onrender.com/api/tts', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'X-API-Key': 'localtest',
+      },
+      body: JSON.stringify({ text, language: 'en' }),
+    });
+    const data = await res.json();
+    if (data.audio_base64) {
+      const audio = new Audio(`data:audio/${data.audio_format || 'wav'};base64,${data.audio_base64}`);
+      await audio.play();
+      return;
+    }
+  } catch (err) {
+    console.warn('Nilesh TTS service unavailable, falling back to Web Speech API:', err);
+  }
 
-const bottomNavItems = [
-  { id: 'chat',      icon: MessageCircle, label: 'Chat' },
-  { id: 'calendar',  icon: Calendar,      label: 'Calendar' },
-  { id: 'tasks',     icon: CheckSquare,   label: 'Tasks' },
-  { id: 'reminders', icon: Bell,          label: 'Reminders' },
-  { id: 'more',      icon: LayoutGrid,    label: 'More' },
+  if ('speechSynthesis' in window) {
+    window.speechSynthesis.cancel();
+    const utterance = new SpeechSynthesisUtterance(text);
+    utterance.rate = 1.0;
+    utterance.pitch = 1.0;
+    window.speechSynthesis.speak(utterance);
+  }
+};
+
+/* Mobile bottom nav items */
+const mobileNavItems = [
+  { id: 'chat',      label: 'Chat',      icon: LayoutDashboard },
+  { id: 'calendar',  label: 'Calendar',  icon: Calendar },
+  { id: 'tasks',     label: 'Tasks',     icon: CheckSquare },
+  { id: 'reminders', label: 'Reminders', icon: Bell },
 ];
 
-const BottomNav: React.FC<BottomNavProps> = ({ activeSection, onSectionChange }) => {
-  const { toggleMobileMenu, toggleMobileContext } = useCompanionStore();
-
-  const handleTap = (id: string) => {
-    if (id === 'more') {
-      toggleMobileMenu();
-    } else {
-      onSectionChange(id);
-    }
-  };
+/* ── Mobile Bottom Navigation ─────────────────────────── */
+const MobileBottomNav: React.FC<{
+  active: string;
+  onSelect: (id: string) => void;
+}> = ({ active, onSelect }) => {
+  const toggleMobileContext = useCompanionStore(s => s.toggleMobileContext);
 
   return (
-    <nav className="bottom-nav zone-bottomnav" role="navigation" aria-label="Bottom navigation">
-      {bottomNavItems.map(item => {
-        const active = activeSection === item.id;
+    <nav className="mobile-bottom-nav">
+      {mobileNavItems.map(item => {
         const Icon = item.icon;
+        const isActive = active === item.id;
         return (
           <button
             key={item.id}
-            id={`bottomnav-${item.id}`}
-            onClick={() => handleTap(item.id)}
-            className={cn('bottom-nav-item', active && 'active')}
-            aria-current={active ? 'page' : undefined}
+            onClick={() => onSelect(item.id)}
+            className={`bottom-nav-item ${isActive ? 'active' : ''}`}
             aria-label={item.label}
           >
             <Icon size={20} className="bottom-nav-icon" />
@@ -142,7 +162,7 @@ const App: React.FC = () => {
   }, []);
 
   // ── Send message handler ────────────────────────────────
-  const handleSend = useCallback(async (message: string) => {
+  const handleSend = useCallback(async (message: string, isVoice = false) => {
     // If on another page, switch to chat first
     setActiveSection('chat');
 
@@ -161,6 +181,11 @@ const App: React.FC = () => {
         capabilityResult: resp.capability_result || null,
         suggestedActions: resp.suggested_actions || [],
       });
+
+      // If sent via Voice, automatically speak response out loud!
+      if (isVoice && resp.message) {
+        speakAudioResponse(resp.message);
+      }
 
       // Push capability result to context panel
       if (resp.capability_result?.data) {
@@ -202,67 +227,44 @@ const App: React.FC = () => {
     handleSend(msg);
   }, [handleSend]);
 
-  // ── Render active section ──────────────────────────────
-  const renderActiveSection = () => {
-    switch (activeSection) {
-      case 'calendar':
-        return <CalendarPage onChatNavigate={handleChatNavigate} />;
-      case 'tasks':
-        return <TasksPage onChatNavigate={handleChatNavigate} />;
-      case 'reminders':
-        return <RemindersPage onChatNavigate={handleChatNavigate} />;
-      case 'knowledge':
-        return <KnowledgePage onChatNavigate={handleChatNavigate} />;
-      case 'workflows':
-        return <WorkflowsPage onChatNavigate={handleChatNavigate} />;
-      case 'chat':
-      default:
-        return <ConversationCenter />;
-    }
-  };
-
-  // ── Shell class names ───────────────────────────────────
-  const shellClass = [
-    'mitra-shell',
-    sidebar      === 'collapsed' ? 'sidebar-collapsed'  : '',
-    contextPanel === 'closed'    ? 'context-hidden'     : '',
-  ].filter(Boolean).join(' ');
-
   return (
-    <>
-    <div className={shellClass}>
+    <div className="app-shell">
+      {/* Top Header */}
       <TopBar />
-      <Sidebar activeSection={activeSection} onSectionChange={setActiveSection} />
 
-      {/* Main content area — switches between chat and pages */}
-      {activeSection === 'chat' ? (
-        <ConversationCenter />
-      ) : (
-        <main className="zone-center flex flex-col overflow-hidden bg-surface-base">
-          <motion.div
-            key={activeSection}
-            initial={{ opacity: 0, y: 12 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ duration: 0.2, ease: 'easeOut' }}
-            className="flex-1 overflow-y-auto"
-          >
-            {renderActiveSection()}
-          </motion.div>
-        </main>
-      )}
+      {/* Main 3-Zone Body Layout */}
+      <div className="app-body">
+        {/* Left Zone — Sidebar */}
+        <Sidebar activeSection={activeSection} onSelectSection={setActiveSection} />
 
-      {/* Input bar only on chat */}
-      {activeSection === 'chat' && <InputBar onSend={handleSend} />}
+        {/* Center Zone — Main Workspace (Chat or Full Page) */}
+        <div className="center-workspace flex flex-col flex-1 min-w-0 overflow-hidden">
+          {activeSection === 'chat' && <ConversationCenter />}
+          {activeSection === 'calendar' && <CalendarPage onChatNavigate={handleChatNavigate} />}
+          {activeSection === 'tasks' && <TasksPage onChatNavigate={handleChatNavigate} />}
+          {activeSection === 'reminders' && <RemindersPage onChatNavigate={handleChatNavigate} />}
+          {activeSection === 'workflows' && <WorkflowsPage onChatNavigate={handleChatNavigate} />}
+          {activeSection === 'knowledge' && <KnowledgePage onChatNavigate={handleChatNavigate} />}
 
-      <ContextPanel />
-      {/* Mobile bottom navigation */}
+          {/* Bottom Chat Bar — only visible when on chat tab */}
+          {activeSection === 'chat' && <InputBar onSend={handleSend} />}
+        </div>
+
+        {/* Right Zone — Context Panel */}
+        <ContextPanel />
+      </div>
+
+      {/* Mobile Bottom Navigation (screens < 1024px) */}
       {isMobile && (
-        <BottomNav activeSection={activeSection} onSectionChange={setActiveSection} />
+        <MobileBottomNav active={activeSection} onSelect={setActiveSection} />
       )}
+
+      {/* Settings Modal */}
+      {settingsOpen && <SettingsModal onClose={() => setSettingsOpen(false)} />}
+
+      {/* Global Toast Notifications */}
+      <Toast />
     </div>
-    <SettingsModal open={settingsOpen} onClose={() => setSettingsOpen(false)} />
-    <ToastContainer />
-    </>
   );
 };
 
