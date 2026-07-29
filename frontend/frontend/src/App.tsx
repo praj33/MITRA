@@ -5,13 +5,13 @@ import ConversationCenter from './components/shell/ConversationCenter';
 import ContextPanel from './components/shell/ContextPanel';
 import InputBar from './components/shell/InputBar';
 import SettingsModal from './components/shell/SettingsModal';
-import Toast from './components/shell/Toast';
+import Toast, { showToast } from './components/shell/Toast';
 import CalendarPage from './components/pages/CalendarPage';
 import TasksPage from './components/pages/TasksPage';
 import RemindersPage from './components/pages/RemindersPage';
 import WorkflowsPage from './components/pages/WorkflowsPage';
 import KnowledgePage from './components/pages/KnowledgePage';
-import { useCompanionStore, showToast } from './store/companion.store';
+import { useCompanionStore } from './store/companion.store';
 import { CompanionService } from './services/companion.service';
 import { LayoutDashboard, Calendar, CheckSquare, Bell, PanelRight } from 'lucide-react';
 
@@ -108,8 +108,7 @@ const MobileBottomNav: React.FC<{
 /* ── Main App ─────────────────────────────────────────── */
 const App: React.FC = () => {
   const {
-    sidebar, contextPanel, isMobile,
-    setStatus, setSessionId, setUserName, setMemory,
+    isMobile, setStatus, setSessionId, setUserName, setMemory,
     addMessage, addNotification, addContextItem,
   } = useCompanionStore();
 
@@ -235,7 +234,7 @@ const App: React.FC = () => {
       {/* Main 3-Zone Body Layout */}
       <div className="app-body">
         {/* Left Zone — Sidebar */}
-        <Sidebar activeSection={activeSection} onSelectSection={setActiveSection} />
+        <Sidebar activeSection={activeSection} onSectionChange={setActiveSection} />
 
         {/* Center Zone — Main Workspace (Chat or Full Page) */}
         <div className="center-workspace flex flex-col flex-1 min-w-0 overflow-hidden">
@@ -260,7 +259,7 @@ const App: React.FC = () => {
       )}
 
       {/* Settings Modal */}
-      {settingsOpen && <SettingsModal onClose={() => setSettingsOpen(false)} />}
+      <SettingsModal open={settingsOpen} onClose={() => setSettingsOpen(false)} />
 
       {/* Global Toast Notifications */}
       <Toast />
