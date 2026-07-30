@@ -284,8 +284,8 @@ app.add_middleware(
 # -------------------------------------------------
 @app.middleware("http")
 async def security_middleware(request: Request, call_next):
-    # Allow health check and root without auth
-    if request.url.path in ["/health", "/", "/health/system", "/docs", "/openapi.json", "/redoc"]:
+    # Allow health check, static assets, and root without auth
+    if request.url.path in ["/health", "/", "/health/system", "/docs", "/openapi.json", "/redoc"] or request.url.path.startswith("/static"):
         response = await call_next(request)
         return response
 
@@ -409,6 +409,15 @@ if _email_router:
 if _pages_router:
     app.include_router(pages_router, tags=["Page Data"])
     logger.info("Pages data router registered")
+
+# -------------------------------------------------
+# Static files for embed widget (mitra-hover.js)
+# -------------------------------------------------
+from fastapi.staticfiles import StaticFiles
+static_dir = os.path.join(ROOT_DIR, "app", "static")
+if os.path.exists(static_dir):
+    app.mount("/static", StaticFiles(directory=static_dir), name="static")
+    logger.info(f"Static files mounted from {static_dir}")
 
 # -------------------------------------------------
 # System Endpoints
