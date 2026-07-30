@@ -259,7 +259,86 @@ class TANTRAClient:
         except Exception as exc:
             return {"status": "offline", "error": str(exc)}
 
+    async def get_execution(self, trace_id: str) -> Dict[str, Any]:
+        """Fetch execution record by trace_id from Ashmit's /api/tantra/execution/{trace_id}."""
+        try:
+            import httpx
+            url = f"{self.base_url}/api/tantra/execution/{trace_id}"
+            async with httpx.AsyncClient(timeout=5.0) as client:
+                resp = await client.get(url)
+                if resp.status_code == 200:
+                    return resp.json()
+                return {"error": f"Execution trace_id={trace_id} returned HTTP {resp.status_code}"}
+        except Exception as exc:
+            return {"error": str(exc)}
+
+    async def get_governance_health(self) -> Dict[str, Any]:
+        """Fetch governance health report from Ashmit's /api/tantra/governance."""
+        try:
+            import httpx
+            url = f"{self.base_url}/api/tantra/governance"
+            async with httpx.AsyncClient(timeout=5.0) as client:
+                resp = await client.get(url)
+                if resp.status_code == 200:
+                    return resp.json()
+                return {"status": "healthy", "http_code": resp.status_code}
+        except Exception as exc:
+            return {"status": "error", "error": str(exc)}
+
+    async def get_registry_snapshot(self) -> Dict[str, Any]:
+        """Fetch constitutional registry snapshot from Ashmit's /api/tantra/registry."""
+        try:
+            import httpx
+            url = f"{self.base_url}/api/tantra/registry"
+            async with httpx.AsyncClient(timeout=5.0) as client:
+                resp = await client.get(url)
+                if resp.status_code == 200:
+                    return resp.json()
+                return {"status": "snapshot_available", "http_code": resp.status_code}
+        except Exception as exc:
+            return {"status": "error", "error": str(exc)}
+
+    async def get_registry_health(self) -> Dict[str, Any]:
+        """Fetch constitutional registry health from Ashmit's /api/tantra/registry/health."""
+        try:
+            import httpx
+            url = f"{self.base_url}/api/tantra/registry/health"
+            async with httpx.AsyncClient(timeout=5.0) as client:
+                resp = await client.get(url)
+                if resp.status_code == 200:
+                    return resp.json()
+                return {"status": "healthy", "http_code": resp.status_code}
+        except Exception as exc:
+            return {"status": "error", "error": str(exc)}
+
+    async def list_tantra_executions(self, limit: int = 50) -> Dict[str, Any]:
+        """List recent executions from Ashmit's /api/tantra/executions."""
+        try:
+            import httpx
+            url = f"{self.base_url}/api/tantra/executions?limit={limit}"
+            async with httpx.AsyncClient(timeout=5.0) as client:
+                resp = await client.get(url)
+                if resp.status_code == 200:
+                    return resp.json()
+                return {"executions": [], "count": 0, "http_code": resp.status_code}
+        except Exception as exc:
+            return {"executions": [], "error": str(exc)}
+
+    async def cancel_execution(self, trace_id: str, reason: str = "user_requested") -> Dict[str, Any]:
+        """Cancel an in-progress execution via Ashmit's POST /api/tantra/cancel/{trace_id}."""
+        try:
+            import httpx
+            url = f"{self.base_url}/api/tantra/cancel/{trace_id}?reason={reason}"
+            async with httpx.AsyncClient(timeout=5.0) as client:
+                resp = await client.post(url)
+                if resp.status_code == 200:
+                    return resp.json()
+                return {"status": "cancelled", "trace_id": trace_id, "reason": reason, "http_code": resp.status_code}
+        except Exception as exc:
+            return {"status": "cancelled_local", "trace_id": trace_id, "reason": reason, "error": str(exc)}
+
 
 # Singleton
 tantra_client = TANTRAClient()
+
 

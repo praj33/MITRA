@@ -228,3 +228,55 @@ async def execute_capability(request: CompanionExecuteRequest):
     )
     return {"status": "executed", "request": request.dict(), "result": result}
 
+
+# ── TANTRA Runtime Governed Proxy Endpoints ─────────────────────────────────
+
+@router.get("/api/tantra/status")
+async def tantra_status_proxy():
+    """Proxy for Ashmit TANTRA Runtime status."""
+    from app.services.tantra_client import tantra_client
+    return await tantra_client.get_tantra_status()
+
+
+@router.get("/api/tantra/execution/{trace_id}")
+async def tantra_get_execution_proxy(trace_id: str):
+    """Fetch execution trace from TANTRA Runtime."""
+    from app.services.tantra_client import tantra_client
+    return await tantra_client.get_execution(trace_id)
+
+
+@router.get("/api/tantra/governance")
+async def tantra_governance_proxy():
+    """Fetch governance health from TANTRA Runtime."""
+    from app.services.tantra_client import tantra_client
+    return await tantra_client.get_governance_health()
+
+
+@router.get("/api/tantra/registry")
+async def tantra_registry_proxy():
+    """Fetch constitutional registry snapshot from TANTRA Runtime."""
+    from app.services.tantra_client import tantra_client
+    return await tantra_client.get_registry_snapshot()
+
+
+@router.get("/api/tantra/registry/health")
+async def tantra_registry_health_proxy():
+    """Fetch constitutional registry health from TANTRA Runtime."""
+    from app.services.tantra_client import tantra_client
+    return await tantra_client.get_registry_health()
+
+
+@router.get("/api/tantra/executions")
+async def tantra_list_executions_proxy(limit: int = 50):
+    """List recent executions from TANTRA Runtime."""
+    from app.services.tantra_client import tantra_client
+    return await tantra_client.list_tantra_executions(limit=limit)
+
+
+@router.post("/api/tantra/cancel/{trace_id}")
+async def tantra_cancel_execution_proxy(trace_id: str, reason: str = "user_requested"):
+    """Cancel an in-progress execution on TANTRA Runtime."""
+    from app.services.tantra_client import tantra_client
+    return await tantra_client.cancel_execution(trace_id=trace_id, reason=reason)
+
+
