@@ -53,36 +53,7 @@ const InputBar: React.FC<Props> = ({ onSend, disabled }) => {
   const mediaRecorderRef = useRef<MediaRecorder | null>(null);
   const audioChunksRef = useRef<Blob[]>([]);
 
-  const startMediaRecorderRecording = async () => {
-    if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
-      showToast('error', 'Microphone access is not supported on this browser.');
-      return;
-    }
-    try {
-      const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
-      audioChunksRef.current = [];
-      const mediaRecorder = new MediaRecorder(stream);
-      mediaRecorderRef.current = mediaRecorder;
-
-      mediaRecorder.ondataavailable = (e) => {
-        if (e.data.size > 0) audioChunksRef.current.push(e.data);
-      };
-
-      mediaRecorder.onstop = async () => {
-        stream.getTracks().forEach(t => t.stop());
-        setIsListening(false);
-      };
-
-      mediaRecorder.start();
-      setIsListening(true);
-    } catch (err) {
-      console.error('MediaRecorder error:', err);
-      setIsListening(false);
-      showToast('error', 'Microphone permission denied.');
-    }
-  };
-
-  const toggleVoiceInput = () => {
+  const toggleVoiceInput = async () => {
     if (isListening) {
       setIsListening(false);
       if ((window as any)._activeRecognition) {
@@ -94,64 +65,99 @@ const InputBar: React.FC<Props> = ({ onSend, disabled }) => {
       return;
     }
 
-    const SR = (window as any).SpeechRecognition || (window as any).webkitSpeechRecognition;
-
-    if (!SR) {
-      startMediaRecorderRecording();
-      return;
+    // Step 1: Trigger native browser getUserMedia prompt so iOS Safari / Android Chrome presents the Allow Microphone modal
+    let stream: MediaStream | null = null;
+    if (navigator.mediaDevices && navigator.mediaDevices.getUserMedia) {
+      try {
+        stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+      } catch (err: any) {
+        console.warn('Microphone permission denied:', err);
+        showToast('error', 'Microphone permission denied. Please allow mic access in browser settings.');
+        return;
+      }
     }
 
-    try {
-      transcriptRef.current = '';
-      const recognition = new SR();
-      (window as any)._activeRecognition = recognition;
-      recognition.continuous = false;
-      recognition.interimResults = true;
-      recognition.maxAlternatives = 1;
-      recognition.lang = 'en-US';
+    // Step 2: SpeechRecognition API
+    const SR = (window as any).SpeechRecognition || (window as any).webkitSpeechRecognition;
 
-      recognition.onstart = () => {
+    if (SR) {
+      try {
+        transcriptRef.current = '';
+        const recognition = new SR();
+        (window as any)._activeRecognition = recognition;
+        recognition.continuous = false;
+        recognition.interimResults = true;
+        recognition.maxAlternatives = 1;
+        recognition.lang = 'en-US';
+
+        recognition.onstart = () => {
+          setIsListening(true);
+          if (stream) stream.getTracks().forEach(t => t.stop());
+        };
+
+        recognition.onresult = (event: any) => {
+          let currentText = '';
+          for (let i = event.resultIndex; i < event.results.length; ++i) {
+            currentText += event.results[i][0].transcript;
+          }
+          if (currentText) {
+            transcriptRef.current = currentText;
+            setValue(currentText);
+          }
+        };
+
+        recognition.onerror = (err: any) => {
+          console.warn('Speech recognition notice:', err.error);
+          setIsListening(false);
+          if (stream) stream.getTracks().forEach(t => t.stop());
+          if (err.error === 'no-speech') {
+            showToast('info', 'No speech heard. Please try speaking again.');
+          }
+        };
+
+        recognition.onend = () => {
+          setIsListening(false);
+          if (stream) stream.getTracks().forEach(t => t.stop());
+          const finalSpeech = transcriptRef.current.trim();
+          if (finalSpeech) {
+            onSend(finalSpeech, true);
+            setValue('');
+            if (textareaRef.current) textareaRef.current.style.height = 'auto';
+          }
+        };
+
+        recognition.start();
+        return;
+      } catch (err) {
+        console.warn('SpeechRecognition error, using MediaRecorder fallback:', err);
+      }
+    }
+
+    // Step 3: MediaRecorder Fallback
+    if (stream) {
+      try {
+        audioChunksRef.current = [];
+        const mediaRecorder = new MediaRecorder(stream);
+        mediaRecorderRef.current = mediaRecorder;
+
+        mediaRecorder.ondataavailable = (e) => {
+          if (e.data.size > 0) audioChunksRef.current.push(e.data);
+        };
+
+        mediaRecorder.onstop = () => {
+          if (stream) stream.getTracks().forEach(t => t.stop());
+          setIsListening(false);
+        };
+
+        mediaRecorder.start();
         setIsListening(true);
-      };
-
-      recognition.onresult = (event: any) => {
-        let currentText = '';
-        for (let i = event.resultIndex; i < event.results.length; ++i) {
-          currentText += event.results[i][0].transcript;
-        }
-        if (currentText) {
-          transcriptRef.current = currentText;
-          setValue(currentText);
-        }
-      };
-
-      recognition.onerror = (err: any) => {
-        console.warn('Speech recognition error on mobile:', err);
+      } catch (err) {
+        if (stream) stream.getTracks().forEach(t => t.stop());
         setIsListening(false);
-        if (err.error === 'not-allowed' || err.error === 'service-not-allowed' || err.error === 'audio-capture') {
-          showToast('error', 'Microphone permission required. Please enable mic access in browser settings.');
-        } else if (err.error !== 'no-speech') {
-          startMediaRecorderRecording();
-        }
-      };
-
-      recognition.onend = () => {
-        setIsListening(false);
-        const finalSpeech = transcriptRef.current.trim();
-        if (finalSpeech) {
-          onSend(finalSpeech, true);
-          setValue('');
-          if (textareaRef.current) textareaRef.current.style.height = 'auto';
-        } else {
-          showToast('info', 'Could not hear speech clearly. Please try speaking again.');
-        }
-      };
-
-      // Call start() SYNCHRONOUSLY directly inside user tap gesture context
-      recognition.start();
-    } catch (err) {
-      console.warn('Failed to start speech recognition synchronously, trying MediaRecorder:', err);
-      startMediaRecorderRecording();
+        showToast('error', 'Microphone recorder error.');
+      }
+    } else {
+      showToast('error', 'Microphone access is not supported on this browser.');
     }
   };
 
