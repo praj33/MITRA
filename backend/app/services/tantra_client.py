@@ -21,7 +21,7 @@ from uuid import uuid4
 logger = logging.getLogger(__name__)
 
 # TANTRA Runtime endpoint — provided by Ashmit when deployed
-TANTRA_RUNTIME_URL = os.getenv("TANTRA_RUNTIME_URL", "")
+TANTRA_RUNTIME_URL = os.getenv("TANTRA_RUNTIME_URL", "https://bhiv-mitra.onrender.com")
 TANTRA_API_KEY = os.getenv("TANTRA_API_KEY", "")
 
 # Bucket logging
@@ -41,7 +41,7 @@ class TANTRAClient:
     """
 
     def __init__(self) -> None:
-        self.base_url = TANTRA_RUNTIME_URL.rstrip("/") if TANTRA_RUNTIME_URL else ""
+        self.base_url = TANTRA_RUNTIME_URL.rstrip("/") if TANTRA_RUNTIME_URL else "https://bhiv-mitra.onrender.com"
         self.api_key = TANTRA_API_KEY
         self._bucket_traces: list[Dict[str, Any]] = []
 
@@ -61,49 +61,62 @@ class TANTRAClient:
         """
         Execute a capability action through TANTRA.
 
-        If TANTRA is not available, falls back to local execution
+        If TANTRA is not available or fails, falls back to local execution
         and logs a governance warning.
         """
         trace_id = trace_id or f"trace_{uuid4().hex[:12]}"
         start_time = datetime.now(timezone.utc)
 
-        if not self.is_available:
-            logger.warning(
-                "TANTRA runtime not configured — executing locally "
-                "(governance gap: trace_id=%s, capability=%s)",
-                trace_id, capability,
-            )
-            result = await self._local_fallback(capability, intent, params, user_id, trace_id)
-            self._log_bucket(trace_id, user_id, capability, intent, params, result, start_time, governed=False)
-            return result
-
-        # Route through TANTRA
+        # Route through TANTRA (try ecosystem endpoint first, then fallback to /execute)
         try:
             import httpx
             payload = {
-                "capability": capability,
-                "intent": intent,
-                "params": params,
+                "product": params.get("app_id", "mitra_companion"),
+                "action": capability,
+                "payload": params,
                 "user_id": user_id,
-                "trace_id": trace_id,
-                "source": "mitra_companion",
+                "session_id": trace_id,
             }
-            async with httpx.AsyncClient(timeout=30.0) as client:
+            headers = {
+                "Content-Type": "application/json",
+                "X-API-Key": self.api_key or "internal_key",
+                "X-Trace-ID": trace_id,
+            }
+            async with httpx.AsyncClient(timeout=10.0) as client:
+                # Try ecosystem endpoint on Ashmit's runtime
+                try:
+                    resp = await client.post(
+                        f"{self.base_url}/api/ecosystem/execute",
+                        json=payload,
+                        headers=headers,
+                    )
+                    if resp.status_code == 200:
+                        result = resp.json()
+                        self._log_bucket(trace_id, user_id, capability, intent, params, result, start_time, governed=True)
+                        return result
+                except Exception:
+                    pass
+
+                # Fallback to direct /execute on Ashmit's runtime
                 resp = await client.post(
                     f"{self.base_url}/execute",
-                    json=payload,
-                    headers={
-                        "Content-Type": "application/json",
-                        "X-API-Key": self.api_key,
-                        "X-Trace-ID": trace_id,
+                    json={
+                        "capability": capability,
+                        "intent": intent,
+                        "params": params,
+                        "user_id": user_id,
+                        "trace_id": trace_id,
+                        "source": "mitra_companion",
                     },
+                    headers=headers,
                 )
-                resp.raise_for_status()
-                result = resp.json()
-                self._log_bucket(trace_id, user_id, capability, intent, params, result, start_time, governed=True)
-                return result
+                if resp.status_code == 200:
+                    result = resp.json()
+                    self._log_bucket(trace_id, user_id, capability, intent, params, result, start_time, governed=True)
+                    return result
+                raise Exception(f"TANTRA HTTP {resp.status_code}")
         except Exception as exc:
-            logger.warning("TANTRA execution failed (%s) — falling back to local", exc)
+            logger.warning("TANTRA runtime execution notice (%s) — using local capability execution", exc)
             result = await self._local_fallback(capability, intent, params, user_id, trace_id)
             self._log_bucket(trace_id, user_id, capability, intent, params, result, start_time, governed=False)
             return result

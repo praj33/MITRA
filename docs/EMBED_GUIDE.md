@@ -7,7 +7,7 @@
 
 ## 1. Quick Integration (1-Line HTML Embed)
 
-Add the following `<script>` tag to the HTML `<head>` or before `</body>` of any BHIV application (Gurukul, Samruddhi, SETU, Prana, etc.):
+Add the following `<script>` tag to the HTML `<head>` or before `</body>` of any BHIV application (**Gurukul**, **Samruddhi**, **SETU**, Prana, etc.):
 
 ```html
 <!-- MITRA Universal Companion Embed -->
@@ -19,6 +19,17 @@ Add the following `<script>` tag to the HTML `<head>` or before `</body>` of any
   async>
 </script>
 ```
+
+---
+
+## 2. Targeted VM-Hosted Ecosystem Applications
+
+- **Gurukul**: `https://gurukul.blackholeinfiverse.com`
+- **Samruddhi**: `https://samruddhi.blackholeinfiverse.com`
+- **TANTRA Governed Runtime (Ashmit)**: `https://bhiv-mitra.onrender.com`
+- **MITRA Companion Backend**: `https://mitra-backend.onrender.com`
+- **MITRA CDN & App**: `https://mitra.blackholeinfiverse.com`
+
 
 ---
 
