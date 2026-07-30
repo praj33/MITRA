@@ -188,6 +188,78 @@ class TANTRAClient:
         """Return recent execution traces."""
         return self._bucket_traces[-limit:]
 
+    async def evaluate_mitra_event(
+        self,
+        title: str,
+        content: str,
+        category: str = "general",
+        user_id: str = "anonymous",
+    ) -> Dict[str, Any]:
+        """Call Ashmit's /api/mitra/evaluate endpoint for event governance evaluation."""
+        try:
+            import httpx
+            url = f"{self.base_url}/api/mitra/evaluate"
+            payload = {
+                "event": {"title": title, "content": content, "category": category, "confidence": 1.0},
+                "user_id": user_id,
+                "context": {"platform": "mitra_companion", "device": "api"},
+            }
+            headers = {
+                "Content-Type": "application/json",
+                "X-API-Key": self.api_key or "localtest",
+                "X-User-Id": user_id,
+            }
+            async with httpx.AsyncClient(timeout=10.0) as client:
+                resp = await client.post(url, json=payload, headers=headers)
+                if resp.status_code == 200:
+                    return resp.json()
+                return {"status": "ALLOW", "reason": f"Fallback HTTP {resp.status_code}"}
+        except Exception as exc:
+            logger.warning("Evaluate event failed (%s) — allowing locally", exc)
+            return {"status": "ALLOW", "reason": "Local evaluation fallback"}
+
+    async def call_assistant(
+        self,
+        message: str,
+        user_id: str = "anonymous",
+        session_id: Optional[str] = None,
+    ) -> Dict[str, Any]:
+        """Call Ashmit's /api/assistant single entrypoint."""
+        try:
+            import httpx
+            url = f"{self.base_url}/api/assistant"
+            payload = {
+                "version": "3.0.0",
+                "input": {"message": message},
+                "context": {"platform": "web", "device": "browser", "session_id": session_id or "sess_default"},
+            }
+            headers = {
+                "Content-Type": "application/json",
+                "x-api-key": self.api_key or "localtest",
+            }
+            async with httpx.AsyncClient(timeout=10.0) as client:
+                resp = await client.post(url, json=payload, headers=headers)
+                if resp.status_code == 200:
+                    return resp.json()
+                return {"status": "error", "error": f"HTTP {resp.status_code}"}
+        except Exception as exc:
+            logger.warning("Call assistant endpoint failed (%s)", exc)
+            return {"status": "error", "error": str(exc)}
+
+    async def get_tantra_status(self) -> Dict[str, Any]:
+        """Fetch status report from Ashmit's /api/tantra/status endpoint."""
+        try:
+            import httpx
+            url = f"{self.base_url}/api/tantra/status"
+            async with httpx.AsyncClient(timeout=5.0) as client:
+                resp = await client.get(url)
+                if resp.status_code == 200:
+                    return resp.json()
+                return {"status": "reachable", "http_code": resp.status_code}
+        except Exception as exc:
+            return {"status": "offline", "error": str(exc)}
+
 
 # Singleton
 tantra_client = TANTRAClient()
+
