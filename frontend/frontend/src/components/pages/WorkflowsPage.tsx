@@ -11,20 +11,37 @@ interface Workflow {
   icon: string; status: string; last_run?: string;
 }
 
+const defaultWorkflows: Workflow[] = [
+  { id: 'wf_briefing', name: 'Morning Briefing', description: 'Summarize today\'s schedule, priority tasks, and key reminders', icon: '🌅', status: 'idle' },
+  { id: 'wf_email_sync', name: 'Email Audit & Digest', description: 'Review recent unread messages and highlight action items', icon: '📧', status: 'idle' },
+  { id: 'wf_task_triage', name: 'Task Triage', description: 'Organize high priority pending tasks and clear completed ones', icon: '⚡', status: 'idle' },
+  { id: 'wf_calendar_sync', name: 'Calendar Guard', description: 'Check upcoming meetings and set automatic reminder alerts', icon: '📅', status: 'idle' },
+];
+
 const WorkflowsPage: React.FC<{ onChatNavigate: (msg: string) => void }> = ({ onChatNavigate }) => {
-  const [workflows, setWorkflows] = useState<Workflow[]>([]);
-  const [loading, setLoading] = useState(true);
+  const [workflows, setWorkflows] = useState<Workflow[]>(defaultWorkflows);
+  const [loading, setLoading] = useState(false);
   const [running, setRunning] = useState<string | null>(null);
   const [results, setResults] = useState<Record<string, string>>({});
 
   useEffect(() => {
+    let active = true;
     (async () => {
       try {
-        const data = await CompanionService.getWorkflows();
-        setWorkflows(data.workflows || []);
-      } catch { setWorkflows([]); }
-      setLoading(false);
+        const data = await Promise.race([
+          CompanionService.getWorkflows(),
+          new Promise<any>((_, reject) => setTimeout(() => reject(new Error('timeout')), 2500))
+        ]);
+        if (active && data?.workflows && data.workflows.length > 0) {
+          setWorkflows(data.workflows);
+        }
+      } catch {
+        if (active) setWorkflows(defaultWorkflows);
+      } finally {
+        if (active) setLoading(false);
+      }
     })();
+    return () => { active = false; };
   }, []);
 
   const runWorkflow = async (wf: Workflow) => {
