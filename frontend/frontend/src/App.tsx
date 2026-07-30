@@ -44,6 +44,7 @@ const speakAudioResponse = async (text: string) => {
     const data = await res.json();
     if (data.audio_base64) {
       const audio = new Audio(`data:audio/${data.audio_format || 'wav'};base64,${data.audio_base64}`);
+      audio.setAttribute('playsinline', 'true');
       await audio.play();
       return;
     }
@@ -53,7 +54,11 @@ const speakAudioResponse = async (text: string) => {
 
   if ('speechSynthesis' in window) {
     window.speechSynthesis.cancel();
+    if (window.speechSynthesis.paused) {
+      window.speechSynthesis.resume();
+    }
     const utterance = new SpeechSynthesisUtterance(text);
+    utterance.lang = 'en-US';
     utterance.rate = 1.0;
     utterance.pitch = 1.0;
     window.speechSynthesis.speak(utterance);
@@ -76,7 +81,7 @@ const MobileBottomNav: React.FC<{
   const toggleMobileContext = useCompanionStore(s => s.toggleMobileContext);
 
   return (
-    <nav className="mobile-bottom-nav">
+    <nav className="zone-bottomnav mobile-bottom-nav bottom-nav flex flex-row items-center justify-around w-full bg-surface-raised border-t border-border-subtle py-1.5 px-2">
       {mobileNavItems.map(item => {
         const Icon = item.icon;
         const isActive = active === item.id;

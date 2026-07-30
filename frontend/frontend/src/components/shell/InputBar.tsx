@@ -49,10 +49,10 @@ const InputBar: React.FC<Props> = ({ onSend, disabled }) => {
     ta.style.height = Math.min(ta.scrollHeight, isMobile ? 100 : 120) + 'px';
   };
 
-  const toggleVoiceInput = () => {
+  const toggleVoiceInput = async () => {
     const SR = (window as any).SpeechRecognition || (window as any).webkitSpeechRecognition;
     if (!SR) {
-      alert('Voice input is not supported in this browser. Please use Chrome or Edge.');
+      alert('Voice input is not supported in this browser. Please use Chrome, Edge, or Safari.');
       return;
     }
     if (isListening) {
@@ -60,11 +60,20 @@ const InputBar: React.FC<Props> = ({ onSend, disabled }) => {
       return;
     }
 
+    // Explicitly request microphone permission first for mobile devices
+    if (navigator.mediaDevices && navigator.mediaDevices.getUserMedia) {
+      try {
+        await navigator.mediaDevices.getUserMedia({ audio: true });
+      } catch (err) {
+        console.warn('Microphone permission warning:', err);
+      }
+    }
+
     try {
       transcriptRef.current = '';
       const recognition = new SR();
       recognition.continuous = false;
-      recognition.interimResults = true;
+      recognition.interimResults = !isMobile;
       recognition.lang = 'en-US';
 
       recognition.onstart = () => setIsListening(true);

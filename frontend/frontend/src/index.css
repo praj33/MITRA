@@ -254,19 +254,21 @@ body {
   display: none;
 }
 
-@media (max-width: 767px) {
-  .bottom-nav {
-    display: flex;
-    align-items: center;
-    justify-content: space-around;
-    background: var(--surface-raised);
-    border-top: 1px solid var(--border-subtle);
-    padding: 6px 0;
-    padding-bottom: calc(6px + var(--safe-bottom));
-    min-height: var(--bottomnav-height);
-    user-select: none;
-    -webkit-user-select: none;
-  }
+.bottom-nav,
+.mobile-bottom-nav {
+  display: flex !important;
+  flex-direction: row !important;
+  align-items: center !important;
+  justify-content: space-around !important;
+  background: var(--surface-raised);
+  border-top: 1px solid var(--border-subtle);
+  padding: 6px 0;
+  padding-bottom: max(6px, calc(6px + var(--safe-bottom)));
+  min-height: var(--bottomnav-height);
+  width: 100%;
+  user-select: none;
+  -webkit-user-select: none;
+}
 
   .bottom-nav-item {
     display: flex;
@@ -298,7 +300,6 @@ body {
   .bottom-nav-item.active .bottom-nav-icon {
     color: var(--brand-light);
   }
-}
 
 /* ── Card Base ───────────────────────────────────────── */
 .card {

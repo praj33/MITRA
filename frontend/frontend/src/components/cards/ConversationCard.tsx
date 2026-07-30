@@ -41,6 +41,7 @@ const ConversationCard: React.FC<Props> = ({ message, onActionConfirm }) => {
       const data = await res.json();
       if (data.audio_base64) {
         const audio = new Audio(`data:audio/${data.audio_format || 'wav'};base64,${data.audio_base64}`);
+        audio.setAttribute('playsinline', 'true');
         audio.onended = () => setIsPlaying(false);
         audio.onerror = () => fallbackBrowserSpeech();
         await audio.play();
@@ -59,7 +60,11 @@ const ConversationCard: React.FC<Props> = ({ message, onActionConfirm }) => {
       return;
     }
     window.speechSynthesis.cancel();
+    if (window.speechSynthesis.paused) {
+      window.speechSynthesis.resume();
+    }
     const utterance = new SpeechSynthesisUtterance(message.content);
+    utterance.lang = 'en-US';
     utterance.rate = 1.0;
     utterance.pitch = 1.0;
     utterance.onend = () => setIsPlaying(false);
