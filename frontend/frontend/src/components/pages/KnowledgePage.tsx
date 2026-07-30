@@ -3,6 +3,7 @@ import React, { useState } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { BookOpen, Search, Sparkles, Loader2 } from 'lucide-react';
 import { CompanionService } from '../../services/companion.service';
+import FormattedMarkdown from '../primitives/FormattedMarkdown';
 
 const USER_ID = process.env.REACT_APP_USER_ID || 'user_default';
 
@@ -58,16 +59,16 @@ const KnowledgePage: React.FC<{ onChatNavigate: (msg: string) => void }> = ({ on
 
       {/* Search bar */}
       <div className="knowledge-search-bar">
-        <Search size={16} className="text-text-muted" />
+        <Search size={16} className="text-text-muted flex-shrink-0" />
         <input
           type="text" value={query}
           onChange={e => setQuery(e.target.value)}
           onKeyDown={e => e.key === 'Enter' && doSearch(query)}
           placeholder="Ask a question..."
-          className="knowledge-search-input"
+          className="knowledge-search-input min-w-0"
         />
         <button onClick={() => doSearch(query)} disabled={!query.trim() || searching}
-          className="page-btn-primary">
+          className="page-btn-primary flex-shrink-0">
           {searching ? <Loader2 size={14} className="animate-spin" /> : <Sparkles size={14} />} Search
         </button>
       </div>
@@ -94,7 +95,9 @@ const KnowledgePage: React.FC<{ onChatNavigate: (msg: string) => void }> = ({ on
             <div className="knowledge-result-query">
               <Search size={12} /> {r.query}
             </div>
-            <div className="knowledge-result-answer">{r.answer}</div>
+            <div className="knowledge-result-answer">
+              <FormattedMarkdown content={r.answer} />
+            </div>
           </motion.div>
         ))}
       </AnimatePresence>

@@ -49,59 +49,110 @@ const InputBar: React.FC<Props> = ({ onSend, disabled }) => {
     ta.style.height = Math.min(ta.scrollHeight, isMobile ? 100 : 120) + 'px';
   };
 
-  const toggleVoiceInput = async () => {
-    const SR = (window as any).SpeechRecognition || (window as any).webkitSpeechRecognition;
-    if (!SR) {
-      alert('Voice input is not supported in this browser. Please use Chrome, Edge, or Safari.');
-      return;
+  const mediaRecorderRef = useRef<MediaRecorder | null>(null);
+  const audioChunksRef = useRef<Blob[]>([]);
+
+  const startMediaRecorderFallback = async () => {
+    try {
+      const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+      audioChunksRef.current = [];
+      const mediaRecorder = new MediaRecorder(stream);
+      mediaRecorderRef.current = mediaRecorder;
+
+      mediaRecorder.ondataavailable = (e) => {
+        if (e.data.size > 0) audioChunksRef.current.push(e.data);
+      };
+
+      mediaRecorder.onstop = async () => {
+        stream.getTracks().forEach(t => t.stop());
+        const audioBlob = new Blob(audioChunksRef.current, { type: 'audio/webm' });
+        try {
+          const formData = new FormData();
+          formData.append('file', audioBlob, 'voice.webm');
+          const res = await fetch('https://ai-assistant-backend-8hur.onrender.com/api/stt', {
+            method: 'POST',
+            body: formData,
+          });
+          const data = await res.json();
+          if (data.text) {
+            onSend(data.text, true);
+          } else {
+            onSend('Voice message captured', true);
+          }
+        } catch {
+          onSend('Voice message captured', true);
+        }
+      };
+
+      mediaRecorder.start();
+      setIsListening(true);
+    } catch (err) {
+      console.error('MediaRecorder fallback error:', err);
+      alert('Unable to access microphone on this device.');
     }
+  };
+
+  const toggleVoiceInput = async () => {
     if (isListening) {
       setIsListening(false);
+      if (mediaRecorderRef.current && mediaRecorderRef.current.state === 'recording') {
+        mediaRecorderRef.current.stop();
+      }
       return;
     }
 
-    // Explicitly request microphone permission first for mobile devices
+    const SR = (window as any).SpeechRecognition || (window as any).webkitSpeechRecognition;
+
+    // Test microphone permission & immediately release stream so mic track is unlocked
     if (navigator.mediaDevices && navigator.mediaDevices.getUserMedia) {
       try {
-        await navigator.mediaDevices.getUserMedia({ audio: true });
+        const testStream = await navigator.mediaDevices.getUserMedia({ audio: true });
+        testStream.getTracks().forEach(t => t.stop());
       } catch (err) {
-        console.warn('Microphone permission warning:', err);
+        console.warn('Microphone permission denied:', err);
+        alert('Microphone access is required for voice input. Please enable microphone permissions in your browser settings.');
+        return;
       }
     }
 
-    try {
-      transcriptRef.current = '';
-      const recognition = new SR();
-      recognition.continuous = false;
-      recognition.interimResults = !isMobile;
-      recognition.lang = 'en-US';
+    if (SR) {
+      try {
+        transcriptRef.current = '';
+        const recognition = new SR();
+        recognition.continuous = false;
+        recognition.interimResults = true;
+        recognition.lang = 'en-US';
 
-      recognition.onstart = () => setIsListening(true);
-      recognition.onresult = (event: any) => {
-        const transcript = Array.from(event.results)
-          .map((r: any) => r[0].transcript)
-          .join('');
-        transcriptRef.current = transcript;
-        setValue(transcript);
-      };
-      recognition.onerror = (err: any) => {
-        console.error('Speech recognition error:', err);
-        setIsListening(false);
-      };
-      recognition.onend = () => {
-        setIsListening(false);
-        const finalSpeech = transcriptRef.current.trim();
-        if (finalSpeech) {
-          onSend(finalSpeech, true);
-          setValue('');
-          if (textareaRef.current) textareaRef.current.style.height = 'auto';
-        }
-      };
-      recognition.start();
-    } catch (err) {
-      console.error('Failed to start speech recognition:', err);
-      setIsListening(false);
+        recognition.onstart = () => setIsListening(true);
+        recognition.onresult = (event: any) => {
+          const transcript = Array.from(event.results)
+            .map((r: any) => r[0].transcript)
+            .join('');
+          transcriptRef.current = transcript;
+          setValue(transcript);
+        };
+        recognition.onerror = (err: any) => {
+          console.warn('Speech recognition error on mobile:', err);
+          setIsListening(false);
+          startMediaRecorderFallback();
+        };
+        recognition.onend = () => {
+          setIsListening(false);
+          const finalSpeech = transcriptRef.current.trim();
+          if (finalSpeech) {
+            onSend(finalSpeech, true);
+            setValue('');
+            if (textareaRef.current) textareaRef.current.style.height = 'auto';
+          }
+        };
+        recognition.start();
+        return;
+      } catch (err) {
+        console.warn('Failed to start speech recognition, using MediaRecorder fallback:', err);
+      }
     }
+
+    startMediaRecorderFallback();
   };
 
   return (

@@ -183,7 +183,8 @@ class CompanionOrchestrator:
     async def get_greeting(self, user_id: str) -> str:
         """Return a personalized greeting for the user."""
         facts = await companion_memory.get_user_facts(user_id)
-        user_name = facts.get("name") or "there"
+        raw_name = facts.get("name") or "User"
+        user_name = "User" if raw_name.lower() in ("there", "user_default", "using", "anonymous") else raw_name
         return personality_engine.build_greeting(user_name=user_name)
 
     # ── private helpers ───────────────────────────────────────────

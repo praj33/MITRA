@@ -14,7 +14,7 @@ import KnowledgePage from './components/pages/KnowledgePage';
 import { useCompanionStore } from './store/companion.store';
 import { CompanionService } from './services/companion.service';
 import { cn } from './lib/utils';
-import { LayoutDashboard, Calendar, CheckSquare, Bell, PanelRight } from 'lucide-react';
+import { LayoutDashboard, Calendar, CheckSquare, Bell, BookOpen, PlayCircle, PanelRight } from 'lucide-react';
 
 const USER_ID = 'user_default';
 
@@ -70,7 +70,8 @@ const mobileNavItems = [
   { id: 'chat',      label: 'Chat',      icon: LayoutDashboard },
   { id: 'calendar',  label: 'Calendar',  icon: Calendar },
   { id: 'tasks',     label: 'Tasks',     icon: CheckSquare },
-  { id: 'reminders', label: 'Reminders', icon: Bell },
+  { id: 'knowledge', label: 'Knowledge', icon: BookOpen },
+  { id: 'workflows', label: 'Workflows', icon: PlayCircle },
 ];
 
 /* ── Mobile Bottom Navigation ─────────────────────────── */

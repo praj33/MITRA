@@ -121,7 +121,7 @@ export const useCompanionStore = create<CompanionStore>()(
     (set, get) => ({
       // Defaults
       userId:    'user_default',
-      userName:  'there',
+      userName:  'User',
       apiKey:    process.env.REACT_APP_API_KEY || '',
       apiBase:   process.env.REACT_APP_API_URL || 'http://localhost:8000',
 

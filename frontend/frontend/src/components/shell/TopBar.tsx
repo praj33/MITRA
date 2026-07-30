@@ -64,7 +64,7 @@ const TopBar: React.FC<Props> = ({ onSearch }) => {
 
       {/* User greeting — hidden on mobile & small tablets */}
       <span className="text-xs text-text-muted hidden lg:block">
-        Hey, {userName} 👋
+        Hey, {!userName || ['there', 'user_default', 'using', 'anonymous'].includes(userName.toLowerCase()) ? 'User' : userName} 👋
       </span>
 
       {/* Search — compact on mobile */}

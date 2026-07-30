@@ -5,6 +5,7 @@ import { Volume2, VolumeX } from 'lucide-react';
 import { cn, formatTime } from '../../lib/utils';
 import { Message } from '../../store/companion.store';
 import ActionCard from './ActionCard';
+import FormattedMarkdown from '../primitives/FormattedMarkdown';
 
 interface Props {
   message: Message;
@@ -104,7 +105,7 @@ const ConversationCard: React.FC<Props> = ({ message, onActionConfirm }) => {
             ? 'bg-surface-elevated border border-border-subtle text-text-primary rounded-tl-sm'
             : 'bg-brand-dim text-text-primary border border-brand/30 rounded-tr-sm',
         )}>
-          {message.content}
+          {isAssistant ? <FormattedMarkdown content={message.content} /> : message.content}
         </div>
 
         {/* Inline capability result */}

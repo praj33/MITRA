@@ -829,13 +829,16 @@ body {
 /* ── Responsive for pages & small screens ──────────────── */
 @media (max-width: 767px) {
   .page-container {
-    padding: 14px 12px 110px 12px;
+    padding: 14px 12px 120px 12px;
     max-width: 100%;
+    box-sizing: border-box;
+    overflow-x: hidden;
   }
   .page-header {
     flex-direction: column;
     align-items: flex-start;
-    gap: 12px;
+    gap: 10px;
+    margin-bottom: 16px;
   }
   .page-header > div:last-child {
     width: 100%;
@@ -844,6 +847,28 @@ body {
     justify-content: space-between;
     gap: 6px;
     flex-wrap: wrap;
+  }
+  .workflows-grid {
+    grid-template-columns: 1fr;
+    gap: 12px;
+  }
+  .knowledge-topics-grid {
+    grid-template-columns: 1fr;
+    gap: 8px;
+  }
+  .knowledge-search-bar {
+    display: flex;
+    flex-direction: row;
+    align-items: center;
+    gap: 8px;
+    padding: 8px 12px;
+    width: 100%;
+    box-sizing: border-box;
+  }
+  .knowledge-search-input {
+    min-width: 0;
+    flex: 1;
+    font-size: 0.85rem;
   }
   .calendar-week-strip {
     display: flex;
