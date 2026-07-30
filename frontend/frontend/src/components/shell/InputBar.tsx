@@ -50,11 +50,46 @@ const InputBar: React.FC<Props> = ({ onSend, disabled }) => {
     ta.style.height = Math.min(ta.scrollHeight, isMobile ? 100 : 120) + 'px';
   };
 
-  const toggleVoiceInput = async () => {
+  const mediaRecorderRef = useRef<MediaRecorder | null>(null);
+  const audioChunksRef = useRef<Blob[]>([]);
+
+  const startMediaRecorderRecording = async () => {
+    if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
+      showToast('error', 'Microphone access is not supported on this browser.');
+      return;
+    }
+    try {
+      const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+      audioChunksRef.current = [];
+      const mediaRecorder = new MediaRecorder(stream);
+      mediaRecorderRef.current = mediaRecorder;
+
+      mediaRecorder.ondataavailable = (e) => {
+        if (e.data.size > 0) audioChunksRef.current.push(e.data);
+      };
+
+      mediaRecorder.onstop = async () => {
+        stream.getTracks().forEach(t => t.stop());
+        setIsListening(false);
+      };
+
+      mediaRecorder.start();
+      setIsListening(true);
+    } catch (err) {
+      console.error('MediaRecorder error:', err);
+      setIsListening(false);
+      showToast('error', 'Microphone permission denied.');
+    }
+  };
+
+  const toggleVoiceInput = () => {
     if (isListening) {
       setIsListening(false);
       if ((window as any)._activeRecognition) {
         try { (window as any)._activeRecognition.stop(); } catch {}
+      }
+      if (mediaRecorderRef.current && mediaRecorderRef.current.state === 'recording') {
+        try { mediaRecorderRef.current.stop(); } catch {}
       }
       return;
     }
@@ -62,20 +97,8 @@ const InputBar: React.FC<Props> = ({ onSend, disabled }) => {
     const SR = (window as any).SpeechRecognition || (window as any).webkitSpeechRecognition;
 
     if (!SR) {
-      showToast('warning', 'Voice input is not supported in this browser. Please use Safari or Chrome.');
+      startMediaRecorderRecording();
       return;
-    }
-
-    // Explicitly request mic permission first for mobile devices
-    if (navigator.mediaDevices && navigator.mediaDevices.getUserMedia) {
-      try {
-        const testStream = await navigator.mediaDevices.getUserMedia({ audio: true });
-        testStream.getTracks().forEach(t => t.stop());
-      } catch (err) {
-        console.warn('Microphone permission denied:', err);
-        showToast('error', 'Microphone access is required. Please grant permission in browser settings.');
-        return;
-      }
     }
 
     try {
@@ -83,7 +106,7 @@ const InputBar: React.FC<Props> = ({ onSend, disabled }) => {
       const recognition = new SR();
       (window as any)._activeRecognition = recognition;
       recognition.continuous = false;
-      recognition.interimResults = false;
+      recognition.interimResults = true;
       recognition.maxAlternatives = 1;
       recognition.lang = 'en-US';
 
@@ -92,16 +115,24 @@ const InputBar: React.FC<Props> = ({ onSend, disabled }) => {
       };
 
       recognition.onresult = (event: any) => {
-        if (event.results && event.results[0] && event.results[0][0]) {
-          const speechText = event.results[0][0].transcript;
-          transcriptRef.current = speechText;
-          setValue(speechText);
+        let currentText = '';
+        for (let i = event.resultIndex; i < event.results.length; ++i) {
+          currentText += event.results[i][0].transcript;
+        }
+        if (currentText) {
+          transcriptRef.current = currentText;
+          setValue(currentText);
         }
       };
 
       recognition.onerror = (err: any) => {
-        console.warn('Speech recognition error:', err);
+        console.warn('Speech recognition error on mobile:', err);
         setIsListening(false);
+        if (err.error === 'not-allowed' || err.error === 'service-not-allowed' || err.error === 'audio-capture') {
+          showToast('error', 'Microphone permission required. Please enable mic access in browser settings.');
+        } else if (err.error !== 'no-speech') {
+          startMediaRecorderRecording();
+        }
       };
 
       recognition.onend = () => {
@@ -116,11 +147,11 @@ const InputBar: React.FC<Props> = ({ onSend, disabled }) => {
         }
       };
 
+      // Call start() SYNCHRONOUSLY directly inside user tap gesture context
       recognition.start();
     } catch (err) {
-      console.error('Failed to start speech recognition:', err);
-      setIsListening(false);
-      showToast('error', 'Microphone initialisation failed.');
+      console.warn('Failed to start speech recognition synchronously, trying MediaRecorder:', err);
+      startMediaRecorderRecording();
     }
   };
 
