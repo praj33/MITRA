@@ -1,0 +1,54 @@
+{
+  "system": "MITRA Canonical Companion Layer",
+  "version": "5.0.0",
+  "contracts": {
+    "auth": {
+      "endpoint": "POST /api/companion/auth",
+      "sample_request": {
+        "app_id": "gurukul",
+        "user_id": "raj_prajapati",
+        "auth_token": "bearer_token_xyz"
+      },
+      "sample_response": {
+        "status": "authenticated",
+        "app_id": "gurukul",
+        "user_id": "raj_prajapati",
+        "session_id": "sess_89a7f10b",
+        "authenticated_at": "2026-07-30T09:45:00Z"
+      }
+    },
+    "state": {
+      "endpoint": "POST /api/companion/state",
+      "sample_request": {
+        "user_id": "raj_prajapati",
+        "app_id": "gurukul",
+        "active_section": "calendar",
+        "theme": "dark"
+      },
+      "sample_response": {
+        "status": "synced",
+        "user_id": "raj_prajapati",
+        "app_id": "gurukul"
+      }
+    },
+    "execute": {
+      "endpoint": "POST /api/companion/execute",
+      "sample_request": {
+        "capability": "task_management",
+        "intent": "create_task",
+        "params": {
+          "title": "Review UniGuru Integration",
+          "due": "today"
+        },
+        "user_id": "raj_prajapati"
+      },
+      "sample_response": {
+        "status": "executed",
+        "result": {
+          "success": true,
+          "task_id": "task_102"
+        }
+      }
+    }
+  }
+}

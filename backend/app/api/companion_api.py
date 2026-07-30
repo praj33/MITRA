@@ -148,3 +148,83 @@ async def list_capabilities(
     _ = x_api_key
     from app.companion.capability_registry import capability_registry
     return {"capabilities": capability_registry.list_capabilities()}
+
+
+# ── Canonical BHIV Orchestration Models ────────────────────────────────────
+
+class CompanionAuthRequest(BaseModel):
+    app_id: str
+    user_id: str
+    auth_token: Optional[str] = None
+
+
+class CompanionStateSyncRequest(BaseModel):
+    user_id: str
+    app_id: str
+    active_section: Optional[str] = "chat"
+    theme: Optional[str] = "dark"
+    meta: Optional[dict] = None
+
+
+class CompanionExecuteRequest(BaseModel):
+    capability: str
+    intent: str
+    params: dict = {}
+    user_id: str = "anonymous"
+    trace_id: Optional[str] = None
+
+
+# ── Canonical BHIV Orchestration Endpoints ─────────────────────────────────
+
+@router.post("/api/companion/auth")
+async def companion_auth(request: CompanionAuthRequest):
+    """Canonical authentication handshake for BHIV products."""
+    from datetime import datetime, timezone
+    session = await session_manager.get_or_create(request.user_id)
+    return {
+        "status": "authenticated",
+        "app_id": request.app_id,
+        "user_id": request.user_id,
+        "session_id": session.session_id,
+        "authenticated_at": datetime.now(timezone.utc).isoformat(),
+    }
+
+
+@router.post("/api/companion/state")
+async def sync_state(request: CompanionStateSyncRequest):
+    """Sync UI/session state across BHIV applications."""
+    from datetime import datetime, timezone
+    await companion_memory.set_fact(
+        user_id=request.user_id,
+        key=f"app_state_{request.app_id}",
+        value=str({
+            "active_section": request.active_section,
+            "theme": request.theme,
+            "updated_at": datetime.now(timezone.utc).isoformat(),
+        }),
+        source=request.app_id,
+    )
+    return {"status": "synced", "user_id": request.user_id, "app_id": request.app_id}
+
+
+@router.get("/api/companion/state/{user_id}")
+async def get_state(user_id: str, app_id: Optional[str] = "universal_app"):
+    """Fetch stored UI/session state for a user across apps."""
+    facts = await companion_memory.get_user_facts(user_id)
+    state_value = facts.get(f"app_state_{app_id}")
+    return {"user_id": user_id, "app_id": app_id, "state": state_value}
+
+
+@router.post("/api/companion/execute")
+async def execute_capability(request: CompanionExecuteRequest):
+    """Execute a capability action via TANTRA runtime client."""
+    from app.services.tantra_client import tantra_client
+    result = await tantra_client.execute(
+        capability=request.capability,
+        intent=request.intent,
+        params=request.params,
+        user_id=request.user_id,
+        trace_id=request.trace_id,
+    )
+    return {"status": "executed", "request": request.dict(), "result": result}
+
