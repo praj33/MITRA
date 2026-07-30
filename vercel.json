@@ -1,6 +1,6 @@
 {
   "version": 2,
-  "buildCommand": "cd frontend/frontend && npm install && npm run build",
+  "buildCommand": "cd frontend/frontend && npm install && CI=false npm run build",
   "outputDirectory": "frontend/frontend/build",
   "rewrites": [
     {

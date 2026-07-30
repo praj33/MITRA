@@ -14,7 +14,7 @@ import KnowledgePage from './components/pages/KnowledgePage';
 import { useCompanionStore } from './store/companion.store';
 import { CompanionService } from './services/companion.service';
 import { cn } from './lib/utils';
-import { LayoutDashboard, Calendar, CheckSquare, Bell, BookOpen, PlayCircle, PanelRight } from 'lucide-react';
+import { LayoutDashboard, Calendar, CheckSquare, BookOpen, PlayCircle, PanelRight } from 'lucide-react';
 
 const USER_ID = 'user_default';
 
