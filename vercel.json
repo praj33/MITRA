@@ -1,0 +1,15 @@
+{
+  "version": 2,
+  "buildCommand": "cd frontend/frontend && npm install && npm run build",
+  "outputDirectory": "frontend/frontend/build",
+  "rewrites": [
+    {
+      "source": "/api/:path*",
+      "destination": "https://mitra-backend.onrender.com/api/:path*"
+    },
+    {
+      "source": "/(.*)",
+      "destination": "/index.html"
+    }
+  ]
+}
