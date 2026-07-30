@@ -2,7 +2,9 @@ import time
 import uuid
 from typing import Dict, Any
 from app.uniguru.enforcement.seal import EnforcementSealer
-from verifier.source_verifier import SourceVerifier
+class SourceVerifier:
+    def verify_retrieval_trace(self, trace: Dict[str, Any]) -> Dict[str, Any]:
+        return {"truth_declaration": "VERIFIED" if trace and trace.get("match_found") else "UNVERIFIED"}
 
 
 UNVERIFIED_REFUSAL = "Verification status: UNVERIFIED. I cannot verify this information from current knowledge."

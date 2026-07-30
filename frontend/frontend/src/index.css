@@ -825,12 +825,44 @@ body {
   overflow-y: auto;
 }
 
-/* ── Responsive for pages ──────────────────────────────── */
+/* ── Responsive for pages & small screens ──────────────── */
 @media (max-width: 767px) {
-  .page-container { padding: 16px; }
-  .calendar-week-strip { grid-template-columns: repeat(3, 1fr); }
+  .page-container {
+    padding: 14px 12px 110px 12px;
+    max-width: 100%;
+  }
+  .page-header {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 12px;
+  }
+  .page-header > div:last-child {
+    width: 100%;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 6px;
+    flex-wrap: wrap;
+  }
+  .calendar-week-strip {
+    display: flex;
+    overflow-x: auto;
+    scroll-snap-type: x mandatory;
+    gap: 8px;
+    padding-bottom: 10px;
+    -webkit-overflow-scrolling: touch;
+  }
+  .calendar-day-col {
+    min-width: 115px;
+    scroll-snap-align: start;
+    flex-shrink: 0;
+  }
   .knowledge-topics-grid { grid-template-columns: 1fr; }
   .workflows-grid { grid-template-columns: 1fr; }
+  .page-btn-icon, .page-btn-sm, .page-btn-primary {
+    min-height: 38px;
+    touch-action: manipulation;
+  }
 }
 
 /* ══════════════════════════════════════════════════════════

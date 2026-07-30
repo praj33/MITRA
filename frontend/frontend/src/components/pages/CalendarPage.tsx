@@ -102,7 +102,7 @@ const CalendarPage: React.FC<{ onChatNavigate: (msg: string) => void }> = ({ onC
         <div className="page-loading">Loading events...</div>
       ) : (
         <>
-          <div className="calendar-week-grid mb-6">
+          <div className="calendar-week-strip mb-6">
             {weekDays.map(day => {
               const isToday = day.toDateString() === todayStr;
               const dayEvents = getEventsForDay(day);
