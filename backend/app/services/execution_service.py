@@ -161,16 +161,18 @@ class ExecutionService:
 
                 if is_read and db is not None:
                     docs = list(db["user_tasks"].find({"$or": [{"user_id": user_id}, {"user_id": "user_default"}]}).sort("created_at", -1).limit(10))
-                    if docs:
-                        task_titles = ", ".join([f"'{d.get('title', d.get('task', 'Task'))}'" for d in docs[:5]])
-                        summary = f"You have {len(docs)} task(s) on your board: {task_titles}."
+                    dummy_exact = {"task", "new task", "create task", "check my tasks", "show my pending tasks", "what are my tasks"}
+                    filtered_docs = [d for d in docs if (d.get("title") or d.get("task") or "").lower().strip() not in dummy_exact and not (d.get("title") or d.get("task") or "").lower().strip().startswith("check my task")]
+                    if filtered_docs:
+                        task_titles = ", ".join([f"'{d.get('title', d.get('task', 'Task'))}'" for d in filtered_docs[:5]])
+                        summary = f"You have {len(filtered_docs)} task(s) on your board: {task_titles}."
                     else:
                         summary = "You have no pending tasks on your task board."
                     return {
                         "status": "success",
                         "action_type": "list_tasks",
                         "summary": summary,
-                        "tasks": [{"id": str(d.get("_id")), "title": d.get("title")} for d in docs],
+                        "tasks": [{"id": str(d.get("_id")), "title": d.get("title")} for d in filtered_docs],
                         "trace_id": trace_id,
                         "timestamp": datetime.utcnow().isoformat(),
                         "service": "execution_service"
@@ -225,16 +227,18 @@ class ExecutionService:
 
                 if is_read and db is not None:
                     docs = list(db["reminders"].find({"$or": [{"user_id": user_id}, {"user_id": "user_default"}]}).sort("created_at", -1).limit(10))
-                    if docs:
-                        rem_msgs = ", ".join([f"'{d.get('message')}'" for d in docs[:5]])
-                        summary = f"You have {len(docs)} active reminder(s): {rem_msgs}."
+                    dummy_exact = {"reminder", "check my reminders", "what are my reminders", "what is a reminder", "set reminder", "create reminder"}
+                    filtered_docs = [d for d in docs if (d.get("message") or d.get("title") or "").lower().strip() not in dummy_exact and not (d.get("message") or d.get("title") or "").lower().strip().startswith("check my reminder")]
+                    if filtered_docs:
+                        rem_msgs = ", ".join([f"'{d.get('message')}'" for d in filtered_docs[:5]])
+                        summary = f"You have {len(filtered_docs)} active reminder(s): {rem_msgs}."
                     else:
                         summary = "You have no active reminders at the moment."
                     return {
                         "status": "success",
                         "action_type": "list_reminders",
                         "summary": summary,
-                        "reminders": [{"id": str(d.get("_id")), "message": d.get("message")} for d in docs],
+                        "reminders": [{"id": str(d.get("_id")), "message": d.get("message")} for d in filtered_docs],
                         "trace_id": trace_id,
                         "timestamp": datetime.utcnow().isoformat(),
                         "service": "execution_service"

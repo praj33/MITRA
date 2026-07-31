@@ -58,7 +58,7 @@ def _save_reminder_to_db(user_id: str, message: str, remind_at: str, trace_id: s
 
 
 def _get_user_reminders_from_db(user_id: str) -> List[Dict[str, Any]]:
-    """Fetch active reminders for user from MongoDB."""
+    """Fetch active reminders for user from MongoDB, filtering out legacy test entries."""
     try:
         from pymongo import MongoClient
         import os
@@ -67,10 +67,16 @@ def _get_user_reminders_from_db(user_id: str) -> List[Dict[str, Any]]:
         client = MongoClient(uri, serverSelectionTimeoutMS=3000)
         db = client[db_name]
         docs = list(db["reminders"].find({"$or": [{"user_id": user_id}, {"user_id": "user_default"}]}).sort("created_at", -1).limit(20))
+        filtered = []
+        dummy_exact = {"reminder", "check my reminders", "what are my reminders", "what is a reminder", "set reminder", "create reminder"}
         for doc in docs:
+            msg_lower = (doc.get("message") or doc.get("title") or "").lower().strip()
+            if msg_lower in dummy_exact or msg_lower.startswith("check my reminder") or msg_lower.startswith("what is a reminder"):
+                continue
             doc["id"] = str(doc.get("_id"))
             doc.pop("_id", None)
-        return docs
+            filtered.append(doc)
+        return filtered
     except Exception as e:
         logger.warning(f"Failed to fetch reminders from DB: {e}")
         return []

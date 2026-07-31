@@ -8,7 +8,7 @@ import logging
 logger = logging.getLogger(__name__)
 
 def _get_user_tasks_from_db(user_id: str) -> List[Dict[str, Any]]:
-    """Fetch tasks for user from MongoDB."""
+    """Fetch tasks for user from MongoDB, filtering out legacy test entries."""
     try:
         from pymongo import MongoClient
         import os
@@ -17,10 +17,16 @@ def _get_user_tasks_from_db(user_id: str) -> List[Dict[str, Any]]:
         client = MongoClient(uri, serverSelectionTimeoutMS=3000)
         db = client[db_name]
         docs = list(db["tasks"].find({"$or": [{"user_id": user_id}, {"user_id": "user_default"}]}).sort("created_at", -1).limit(20))
+        filtered = []
+        dummy_exact = {"task", "new task", "create task", "check my tasks", "show my pending tasks", "what are my tasks"}
         for doc in docs:
+            t_lower = (doc.get("title") or doc.get("task") or "").lower().strip()
+            if t_lower in dummy_exact or t_lower.startswith("check my task") or t_lower.startswith("what is a task"):
+                continue
             doc["id"] = str(doc.get("_id"))
             doc.pop("_id", None)
-        return docs
+            filtered.append(doc)
+        return filtered
     except Exception as e:
         logger.warning(f"Failed to fetch tasks from DB: {e}")
         return []
