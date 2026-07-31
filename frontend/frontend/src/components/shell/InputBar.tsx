@@ -117,11 +117,12 @@ const InputBar: React.FC<Props> = ({ onSend, disabled }) => {
 
         recognition.onerror = (err: any) => {
           console.warn('SpeechRecognition notice:', err.error);
-          if (err.error === 'not-allowed') {
+          // If SpeechRecognition fails for any reason (service-not-allowed, not-allowed, network, etc.),
+          // fallback seamlessly to MediaRecorder audio capture
+          if (err.error !== 'aborted') {
             setIsListening(false);
-            showToast('error', 'Microphone permission denied. Please allow mic access in your browser settings.');
-          } else if (err.error !== 'no-speech' && err.error !== 'aborted') {
-            setIsListening(false);
+            try { (window as any)._activeRecognition?.stop(); } catch {}
+            (window as any)._activeRecognition = null;
             startMediaRecorderFallback();
           }
         };
