@@ -61,6 +61,25 @@ def _save_event_to_db(user_id: str, title: str, date_str: str, time_str: str, tr
         return None
 
 
+def _get_user_events_from_db(user_id: str) -> List[Dict[str, Any]]:
+    """Fetch calendar events for user from MongoDB."""
+    try:
+        from pymongo import MongoClient
+        import os
+        uri = os.getenv("MONGODB_URI", "mongodb://localhost:27017")
+        db_name = os.getenv("DATABASE_NAME", "ai_assistant")
+        client = MongoClient(uri, serverSelectionTimeoutMS=3000)
+        db = client[db_name]
+        docs = list(db["calendar_events"].find({"$or": [{"user_id": user_id}, {"user_id": "user_default"}]}).sort("created_at", -1).limit(20))
+        for doc in docs:
+            doc["id"] = str(doc.get("_id"))
+            doc.pop("_id", None)
+        return docs
+    except Exception as e:
+        logger.warning(f"Failed to fetch calendar events from DB: {e}")
+        return []
+
+
 class CalendarCapability(BaseCapability):
     @property
     def name(self) -> str:
@@ -77,16 +96,44 @@ class CalendarCapability(BaseCapability):
     async def execute(self, intent: str, params: Dict[str, Any], trace_id: Optional[str] = None) -> CapabilityResult:
         try:
             user_id = params.get("user_id", "user_default")
-            message = params.get("message", "")
+            message = params.get("message", "").strip()
+            msg_lower = message.lower()
             dates = params.get("dates", {})
             date_str = dates.get("resolved_date", "")
             time_str = dates.get("time", "")
 
-            # Extract title from message
+            # Differentiate READ / CHECK queries from CREATE actions
+            read_keywords = (
+                "check", "what", "show", "view", "list", "get", "see",
+                "do i have", "any event", "my schedule", "my calendar", "upcoming"
+            )
+            create_keywords = ("create", "add", "schedule", "book", "set")
+
+            is_read_query = any(k in msg_lower for k in read_keywords) and not any(msg_lower.startswith(k) for k in create_keywords)
+
+            if is_read_query or intent in ("list_events", "check_availability"):
+                events = _get_user_events_from_db(user_id)
+                if events:
+                    event_list_str = ", ".join([f"'{e.get('title')}'" for e in events[:5]])
+                    summary = f"You have {len(events)} event(s) on your calendar: {event_list_str}."
+                else:
+                    summary = "Your calendar is clear! You have no upcoming events scheduled."
+
+                return CapabilityResult(
+                    capability=self.name,
+                    intent="list_events",
+                    status="success",
+                    summary=summary,
+                    data={"events": events, "count": len(events)},
+                    trace_id=trace_id,
+                    actions=[{"label": "Add to calendar", "action": "Add to calendar"}],
+                )
+
+            # Otherwise: CREATE EVENT action
             title = message
             for prefix in ("create a calendar event", "create calendar event", "create event",
-                          "add event", "schedule", "add to calendar", "calendar event"):
-                if message.lower().startswith(prefix):
+                          "add event", "schedule a meeting", "schedule meeting", "schedule", "add to calendar", "calendar event"):
+                if msg_lower.startswith(prefix):
                     title = message[len(prefix):].strip().strip(":.,-") or message
                     break
 
