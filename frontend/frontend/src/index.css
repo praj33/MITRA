@@ -55,6 +55,33 @@
   --safe-right:  env(safe-area-inset-right, 0px);
 }
 
+/* ── Light / Day Mode Theme Tokens ───────────────────────── */
+[data-theme="light"] {
+  --brand:          #6366F1;
+  --brand-light:    #4F46E5;
+  --brand-dim:      #C7D2FE;
+  --brand-muted:    rgba(99,102,241,0.12);
+
+  --surface-base:     #F8FAFC;
+  --surface-raised:   #FFFFFF;
+  --surface-elevated: #F1F5F9;
+  --surface-overlay:  #E2E8F0;
+  --surface-hover:    #CBD5E1;
+
+  --border-subtle:  rgba(0,0,0,0.08);
+  --border-default: rgba(0,0,0,0.14);
+  --border-strong:  rgba(0,0,0,0.22);
+
+  --text-primary:   #0F172A;
+  --text-secondary: #475569;
+  --text-muted:     #64748B;
+  --text-brand:     #4F46E5;
+
+  --shadow-card:  0 1px 3px rgba(0,0,0,0.08), 0 1px 2px rgba(0,0,0,0.06);
+  --shadow-panel: 0 4px 24px rgba(0,0,0,0.12);
+  --shadow-glow:  0 0 20px rgba(99,102,241,0.2);
+}
+
 /* ── Base Reset & Global ──────────────────────────────── */
 *, *::before, *::after {
   box-sizing: border-box;

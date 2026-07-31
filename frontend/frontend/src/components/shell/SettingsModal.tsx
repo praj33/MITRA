@@ -1,8 +1,9 @@
-// components/shell/SettingsModal.tsx — Settings with theme toggle
+// components/shell/SettingsModal.tsx — Settings with theme toggle & user profile
 import React, { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { X, Sun, Moon, Monitor, User, Key, Palette, Info } from 'lucide-react';
+import { X, Sun, Moon, Monitor, User, Key, Palette, Info, Check } from 'lucide-react';
 import { useCompanionStore } from '../../store/companion.store';
+import { showToast } from './Toast';
 
 type Theme = 'dark' | 'light' | 'system';
 
@@ -18,7 +19,12 @@ const SettingsModal: React.FC<Props> = ({ open, onClose }) => {
   });
   const [localName, setLocalName] = useState(userName);
 
-  // Apply theme
+  // Keep localName synced when modal opens
+  useEffect(() => {
+    if (open) setLocalName(userName);
+  }, [open, userName]);
+
+  // Apply theme dynamically
   useEffect(() => {
     const root = document.documentElement;
     let resolved = theme;
@@ -30,7 +36,10 @@ const SettingsModal: React.FC<Props> = ({ open, onClose }) => {
   }, [theme]);
 
   const handleSaveName = () => {
-    setUserName(localName || 'there');
+    const cleanName = localName.trim() || 'User';
+    setUserName(cleanName);
+    localStorage.setItem('mitra_user_name', cleanName);
+    showToast('success', 'Settings Saved', `Display name updated to "${cleanName}"`);
     onClose();
   };
 
@@ -64,7 +73,7 @@ const SettingsModal: React.FC<Props> = ({ open, onClose }) => {
                 <div className="settings-theme-row">
                   {([
                     { value: 'dark', icon: <Moon size={16} />, label: 'Dark' },
-                    { value: 'light', icon: <Sun size={16} />, label: 'Light' },
+                    { value: 'light', icon: <Sun size={16} />, label: 'Light (Day)' },
                     { value: 'system', icon: <Monitor size={16} />, label: 'System' },
                   ] as { value: Theme; icon: React.ReactNode; label: string }[]).map(t => (
                     <button
@@ -83,12 +92,21 @@ const SettingsModal: React.FC<Props> = ({ open, onClose }) => {
                 <h3 className="settings-section-title"><User size={14} /> Profile</h3>
                 <div className="settings-field">
                   <label className="settings-label">Display Name</label>
-                  <input
-                    type="text" value={localName}
-                    onChange={e => setLocalName(e.target.value)}
-                    className="settings-input"
-                    placeholder="Your name"
-                  />
+                  <div className="flex items-center gap-2 mt-1">
+                    <input
+                      type="text" value={localName}
+                      onChange={e => setLocalName(e.target.value)}
+                      onKeyDown={e => { if (e.key === 'Enter') handleSaveName(); }}
+                      className="settings-input flex-1"
+                      placeholder="Your name"
+                    />
+                    <button
+                      onClick={handleSaveName}
+                      className="px-3 py-2 rounded-lg bg-brand hover:bg-brand-light text-white text-xs font-semibold flex items-center gap-1 transition-colors"
+                    >
+                      <Check size={14} /> Save
+                    </button>
+                  </div>
                 </div>
               </section>
 
@@ -118,7 +136,7 @@ const SettingsModal: React.FC<Props> = ({ open, onClose }) => {
             {/* Footer */}
             <div className="settings-footer">
               <button onClick={onClose} className="settings-btn-cancel">Cancel</button>
-              <button onClick={handleSaveName} className="settings-btn-save">Save</button>
+              <button onClick={handleSaveName} className="settings-btn-save">Save Changes</button>
             </div>
           </motion.div>
         </>

@@ -25,40 +25,47 @@ const ThinkingIndicator = () => (
   </motion.div>
 );
 
-const EmptyState = () => (
-  <motion.div
-    initial={{ opacity: 0, y: 12 }}
-    animate={{ opacity: 1, y: 0 }}
-    transition={{ delay: 0.1 }}
-    className="flex flex-col items-center justify-center h-full gap-4 sm:gap-5 text-center px-5 sm:px-8 select-none"
-  >
-    <div className="w-14 h-14 sm:w-16 sm:h-16 rounded-2xl bg-brand-muted border border-brand/30 flex items-center justify-center">
-      <Zap size={24} className="text-brand-light sm:hidden" />
-      <Zap size={28} className="text-brand-light hidden sm:block" />
-    </div>
-    <div>
-      <h2 className="text-lg sm:text-xl font-semibold text-text-primary mb-1 sm:mb-1.5">Good to see you</h2>
-      <p className="text-xs sm:text-sm text-text-muted max-w-xs leading-relaxed">
-        I'm Mitra — your AI companion. Ask me anything, run a workflow, or let me help you get things done.
-      </p>
-    </div>
-    <div className="flex flex-wrap justify-center gap-1.5 sm:gap-2">
-      {[
-        'What\'s on my calendar today?',
-        'Summarize my emails',
-        'Create a reminder',
-        'Run morning briefing',
-      ].map(s => (
-        <button key={s} onClick={() => {
-          const store = (window as any).__MITRA_SEND__;
-          if (store) store(s);
-        }} className="text-2xs px-2.5 sm:px-3 py-1 sm:py-1.5 rounded-full border border-border-subtle text-text-muted bg-surface-overlay hover:border-brand/40 hover:text-brand-light transition-all cursor-pointer active:scale-95">
-          {s}
-        </button>
-      ))}
-    </div>
-  </motion.div>
-);
+const EmptyState = () => {
+  const userName = useCompanionStore(s => s.userName);
+  const displayName = !userName || ['there', 'user_default', 'using', 'anonymous'].includes(userName.toLowerCase()) ? '' : `, ${userName}`;
+
+  return (
+    <motion.div
+      initial={{ opacity: 0, y: 12 }}
+      animate={{ opacity: 1, y: 0 }}
+      transition={{ delay: 0.1 }}
+      className="flex flex-col items-center justify-center h-full gap-4 sm:gap-5 text-center px-5 sm:px-8 select-none"
+    >
+      <div className="w-14 h-14 sm:w-16 sm:h-16 rounded-2xl bg-brand-muted border border-brand/30 flex items-center justify-center">
+        <Zap size={24} className="text-brand-light sm:hidden" />
+        <Zap size={28} className="text-brand-light hidden sm:block" />
+      </div>
+      <div>
+        <h2 className="text-lg sm:text-xl font-semibold text-text-primary mb-1 sm:mb-1.5">
+          Good to see you{displayName} 👋
+        </h2>
+        <p className="text-xs sm:text-sm text-text-muted max-w-xs leading-relaxed">
+          I'm Mitra — your AI companion. Ask me anything, run a workflow, or let me help you get things done.
+        </p>
+      </div>
+      <div className="flex flex-wrap justify-center gap-1.5 sm:gap-2">
+        {[
+          'What\'s on my calendar today?',
+          'Summarize my emails',
+          'Create a reminder',
+          'Run morning briefing',
+        ].map(s => (
+          <button key={s} onClick={() => {
+            const store = (window as any).__MITRA_SEND__;
+            if (store) store(s);
+          }} className="text-2xs px-2.5 sm:px-3 py-1 sm:py-1.5 rounded-full border border-border-subtle text-text-muted bg-surface-overlay hover:border-brand/40 hover:text-brand-light transition-all cursor-pointer active:scale-95">
+            {s}
+          </button>
+        ))}
+      </div>
+    </motion.div>
+  );
+};
 
 const ConversationCenter: React.FC = () => {
   const { messages, status } = useCompanionStore();

@@ -1,7 +1,7 @@
 // components/shell/TopBar.tsx — Mitra top navigation bar (responsive)
 import React, { useState } from 'react';
 import { motion } from 'framer-motion';
-import { Search, Bell, PanelRight, Zap, Menu, User } from 'lucide-react';
+import { Search, Bell, PanelRight, Zap, Menu, User, Settings } from 'lucide-react';
 import { cn } from '../../lib/utils';
 import { useCompanionStore } from '../../store/companion.store';
 import CompanionDot from '../primitives/CompanionDot';
@@ -95,6 +95,20 @@ const TopBar: React.FC<Props> = ({ onSearch }) => {
         </button>
         <NotificationDropdown open={notifOpen} onClose={() => setNotifOpen(false)} />
       </div>
+
+      {/* Settings Trigger */}
+      <button
+        id="topbar-settings-button"
+        onClick={() => {
+          const fn = (window as any).__MITRA_SETTINGS__;
+          if (fn) fn();
+        }}
+        className="w-8 h-8 flex items-center justify-center rounded-lg hover:bg-surface-overlay text-text-secondary hover:text-text-primary transition-colors"
+        aria-label="Settings"
+        title="Settings"
+      >
+        <Settings size={15} />
+      </button>
 
       {/* Account / Login Trigger */}
       <button

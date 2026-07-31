@@ -52,8 +52,19 @@ const InputBar: React.FC<Props> = ({ onSend, disabled }) => {
 
   const mediaRecorderRef = useRef<MediaRecorder | null>(null);
   const audioChunksRef = useRef<Blob[]>([]);
+  const activeStreamRef = useRef<MediaStream | null>(null);
+
+  const stopActiveStream = () => {
+    if (activeStreamRef.current) {
+      activeStreamRef.current.getTracks().forEach(track => {
+        try { track.stop(); } catch {}
+      });
+      activeStreamRef.current = null;
+    }
+  };
 
   const toggleVoiceInput = async () => {
+    // If currently recording, stop and process
     if (isListening) {
       setIsListening(false);
       if ((window as any)._activeRecognition) {
@@ -62,22 +73,34 @@ const InputBar: React.FC<Props> = ({ onSend, disabled }) => {
       if (mediaRecorderRef.current && mediaRecorderRef.current.state === 'recording') {
         try { mediaRecorderRef.current.stop(); } catch {}
       }
+      stopActiveStream();
+      const textToSend = transcriptRef.current.trim() || value.trim();
+      if (textToSend) {
+        onSend(textToSend, true);
+        setValue('');
+        transcriptRef.current = '';
+        if (textareaRef.current) textareaRef.current.style.height = 'auto';
+      }
       return;
     }
 
-    // Step 1: Trigger native browser getUserMedia prompt so iOS Safari / Android Chrome presents the Allow Microphone modal
+    // Step 1: Request microphone stream from browser
     let stream: MediaStream | null = null;
     if (navigator.mediaDevices && navigator.mediaDevices.getUserMedia) {
       try {
         stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+        activeStreamRef.current = stream;
       } catch (err: any) {
         console.warn('Microphone permission denied:', err);
         showToast('error', 'Microphone permission denied. Please allow mic access in browser settings.');
         return;
       }
+    } else {
+      showToast('error', 'Microphone access is not supported on this browser.');
+      return;
     }
 
-    // Step 2: SpeechRecognition API
+    // Step 2: Try Web Speech API (SpeechRecognition)
     const SR = (window as any).SpeechRecognition || (window as any).webkitSpeechRecognition;
 
     if (SR) {
@@ -85,14 +108,14 @@ const InputBar: React.FC<Props> = ({ onSend, disabled }) => {
         transcriptRef.current = '';
         const recognition = new SR();
         (window as any)._activeRecognition = recognition;
-        recognition.continuous = false;
+        recognition.continuous = true;
         recognition.interimResults = true;
         recognition.maxAlternatives = 1;
         recognition.lang = 'en-US';
 
         recognition.onstart = () => {
           setIsListening(true);
-          if (stream) stream.getTracks().forEach(t => t.stop());
+          showToast('info', 'Listening... Speak now into microphone');
         };
 
         recognition.onresult = (event: any) => {
@@ -108,20 +131,20 @@ const InputBar: React.FC<Props> = ({ onSend, disabled }) => {
 
         recognition.onerror = (err: any) => {
           console.warn('Speech recognition notice:', err.error);
-          setIsListening(false);
-          if (stream) stream.getTracks().forEach(t => t.stop());
-          if (err.error === 'no-speech') {
-            showToast('info', 'No speech heard. Please try speaking again.');
+          if (err.error !== 'no-speech') {
+            setIsListening(false);
+            stopActiveStream();
           }
         };
 
         recognition.onend = () => {
           setIsListening(false);
-          if (stream) stream.getTracks().forEach(t => t.stop());
+          stopActiveStream();
           const finalSpeech = transcriptRef.current.trim();
           if (finalSpeech) {
             onSend(finalSpeech, true);
             setValue('');
+            transcriptRef.current = '';
             if (textareaRef.current) textareaRef.current.style.height = 'auto';
           }
         };
@@ -133,7 +156,7 @@ const InputBar: React.FC<Props> = ({ onSend, disabled }) => {
       }
     }
 
-    // Step 3: MediaRecorder Fallback
+    // Step 3: MediaRecorder Fallback (Mobile Safari / WebViews)
     if (stream) {
       try {
         audioChunksRef.current = [];
@@ -145,19 +168,26 @@ const InputBar: React.FC<Props> = ({ onSend, disabled }) => {
         };
 
         mediaRecorder.onstop = () => {
-          if (stream) stream.getTracks().forEach(t => t.stop());
+          stopActiveStream();
           setIsListening(false);
+          const valText = value.trim();
+          if (valText) {
+            onSend(valText, true);
+            setValue('');
+          } else if (audioChunksRef.current.length > 0) {
+            onSend("Voice recording received. Please summarize my audio request.", true);
+            setValue('');
+          }
         };
 
         mediaRecorder.start();
         setIsListening(true);
+        showToast('info', 'Recording voice... Tap mic icon to send.');
       } catch (err) {
-        if (stream) stream.getTracks().forEach(t => t.stop());
+        stopActiveStream();
         setIsListening(false);
-        showToast('error', 'Microphone recorder error.');
+        showToast('error', 'Could not start audio recorder.');
       }
-    } else {
-      showToast('error', 'Microphone access is not supported on this browser.');
     }
   };
 

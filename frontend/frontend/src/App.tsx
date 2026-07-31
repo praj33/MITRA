@@ -122,6 +122,10 @@ const App: React.FC = () => {
   const [activeSection, setActiveSection] = useState('chat');
   const [settingsOpen, setSettingsOpen] = useState(false);
 
+  useEffect(() => {
+    (window as any).__MITRA_SETTINGS__ = () => setSettingsOpen(true);
+  }, []);
+
   // Sync isMobile with window size
   useIsMobile();
 
