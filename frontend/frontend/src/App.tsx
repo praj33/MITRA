@@ -115,7 +115,7 @@ const MobileBottomNav: React.FC<{
 const App: React.FC = () => {
   const {
     userId, sidebar, contextPanel, isMobile, authModalOpen, setAuthModalOpen,
-    setStatus, setSessionId, setUserName, setMemory,
+    setStatus, setSessionId, setUserName, setMemory, setAuth,
     addMessage, addNotification, addContextItem,
   } = useCompanionStore();
 
@@ -132,16 +132,31 @@ const App: React.FC = () => {
   const sidebarCollapsed = sidebar === 'collapsed';
   const contextHidden = contextPanel === 'closed';
 
-  // ── Startup: load greeting + memory ────────────────────
+  // ── Startup: load session + greeting + memory ───────────
   useEffect(() => {
     const init = async () => {
+      // 1. Session recovery for logged-in user
+      const existingToken = localStorage.getItem('mitra_auth_token');
+      if (existingToken) {
+        try {
+          const res = await CompanionService.getMe(existingToken);
+          if (res?.user) {
+            setAuth(res.user, existingToken);
+          }
+        } catch {
+          // Token expired or server restarted
+        }
+      }
+
+      const activeUserId = useCompanionStore.getState().userId;
+
       try {
         // Greeting
-        const { greeting } = await CompanionService.getGreeting(userId);
+        const { greeting } = await CompanionService.getGreeting(activeUserId);
         addMessage({ role: 'assistant', content: greeting });
 
         // Memory
-        const { facts } = await CompanionService.getMemory(userId);
+        const { facts } = await CompanionService.getMemory(activeUserId);
         if (facts?.name) setUserName(facts.name);
         setMemory(facts);
 
