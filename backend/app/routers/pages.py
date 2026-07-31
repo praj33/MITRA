@@ -136,6 +136,25 @@ async def delete_calendar_event(event_id: str, user_id: str = "user_default"):
     return {"success": True, "event_id": event_id}
 
 
+@router.delete("/calendar/events/cleanup/past")
+async def clear_past_calendar_events(user_id: str = "user_default"):
+    """Delete all past calendar events before today for the given user."""
+    db = _get_db()
+    deleted_count = 0
+    if db is not None:
+        try:
+            today_str = datetime.now(timezone.utc).strftime("%Y-%m-%d")
+            res = db["calendar_events"].delete_many({
+                "user_id": user_id,
+                "start": {"$lt": today_str}
+            })
+            deleted_count = res.deleted_count
+            logger.info(f"Cleared {deleted_count} past calendar events for user {user_id}")
+        except Exception as e:
+            logger.warning(f"Failed to clear past events: {e}")
+    return {"success": True, "deleted_count": deleted_count}
+
+
 # ═══════════════════════════════════════════════════════════
 # TASKS — Full CRUD (No Auto-Reseed on Delete)
 # ═══════════════════════════════════════════════════════════

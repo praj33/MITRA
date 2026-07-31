@@ -104,6 +104,15 @@ export const CompanionService = {
     return resp.json();
   },
 
+  async clearPastCalendarEvents(userId = getCurrentUserId()): Promise<{ deleted_count: number }> {
+    const resp = await fetch(`${getBase()}/api/pages/calendar/events/cleanup/past?user_id=${userId}`, {
+      method: 'DELETE',
+      headers: headers(),
+    });
+    if (!resp.ok) throw new Error(`HTTP ${resp.status}`);
+    return resp.json();
+  },
+
   async getTasks(userId = getCurrentUserId()): Promise<{ tasks: any[] }> {
     const resp = await fetch(`${getBase()}/api/pages/tasks/list?user_id=${userId}`, {
       headers: headers(),
