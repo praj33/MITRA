@@ -25,10 +25,19 @@ const InputBar: React.FC<Props> = ({ onSend, disabled }) => {
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const { status, isMobile } = useCompanionStore();
   const transcriptRef = useRef('');
+  const autoSendTimerRef = useRef<NodeJS.Timeout | null>(null);
 
   const isThinking = status === 'thinking';
 
+  const clearAutoSendTimer = () => {
+    if (autoSendTimerRef.current) {
+      clearTimeout(autoSendTimerRef.current);
+      autoSendTimerRef.current = null;
+    }
+  };
+
   const handleSend = () => {
+    clearAutoSendTimer();
     const trimmed = value.trim();
     if (!trimmed || disabled || isThinking) return;
     onSend(trimmed, false);
@@ -44,6 +53,7 @@ const InputBar: React.FC<Props> = ({ onSend, disabled }) => {
   };
 
   const handleChange = (e: React.ChangeEvent<HTMLTextAreaElement>) => {
+    clearAutoSendTimer();
     setValue(e.target.value);
     const ta = e.target;
     ta.style.height = 'auto';
@@ -65,6 +75,7 @@ const InputBar: React.FC<Props> = ({ onSend, disabled }) => {
 
   // ── Cancel Voice Input (Stops & Discards) ─────
   const cancelVoiceInput = () => {
+    clearAutoSendTimer();
     setIsListening(false);
     if ((window as any)._activeRecognition) {
       try {
@@ -87,6 +98,7 @@ const InputBar: React.FC<Props> = ({ onSend, disabled }) => {
 
   // ── Finish & Send Voice Input ─────
   const stopAndSendVoiceInput = () => {
+    clearAutoSendTimer();
     setIsListening(false);
     if ((window as any)._activeRecognition) {
       try { (window as any)._activeRecognition.stop(); } catch {}
@@ -110,6 +122,7 @@ const InputBar: React.FC<Props> = ({ onSend, disabled }) => {
 
   // ── Toggle Voice Input (Start or Finish) ─────
   const toggleVoiceInput = () => {
+    clearAutoSendTimer();
     if (isListening) {
       stopAndSendVoiceInput();
       return;
@@ -117,14 +130,13 @@ const InputBar: React.FC<Props> = ({ onSend, disabled }) => {
 
     const SR = (window as any).SpeechRecognition || (window as any).webkitSpeechRecognition;
 
-    // ── Strategy A: Native Web Speech API (Chrome, Edge, iOS & Android Safari) ─────
+    // ── Strategy A: Native Web Speech API ─────
     if (SR) {
       try {
         transcriptRef.current = '';
         const recognition = new SR();
         (window as any)._activeRecognition = recognition;
 
-        // Mobile browsers (iOS Safari, Android Chrome) REQUIRE continuous = false
         recognition.continuous = false;
         recognition.interimResults = true;
         recognition.maxAlternatives = 1;
@@ -158,16 +170,23 @@ const InputBar: React.FC<Props> = ({ onSend, disabled }) => {
 
         recognition.onend = () => {
           setIsListening(false);
-          const finalSpeech = transcriptRef.current.trim();
+          const finalSpeech = transcriptRef.current.trim() || value.trim();
           if (finalSpeech) {
-            onSend(finalSpeech, true);
-            setValue('');
-            transcriptRef.current = '';
-            if (textareaRef.current) textareaRef.current.style.height = 'auto';
+            setValue(finalSpeech);
+            showToast('info', 'Voice captured! Auto-sending in 5s — tap X to cancel.', 'reminder');
+            clearAutoSendTimer();
+            autoSendTimerRef.current = setTimeout(() => {
+              const currentVal = transcriptRef.current.trim() || value.trim() || finalSpeech;
+              if (currentVal) {
+                onSend(currentVal, true);
+                setValue('');
+                transcriptRef.current = '';
+                if (textareaRef.current) textareaRef.current.style.height = 'auto';
+              }
+            }, 5000);
           }
         };
 
-        // Synchronous start for iOS Safari gesture compliance!
         recognition.start();
         return;
       } catch (err) {
@@ -211,8 +230,7 @@ const InputBar: React.FC<Props> = ({ onSend, disabled }) => {
         setIsListening(false);
         const textVal = value.trim();
         if (textVal) {
-          onSend(textVal, true);
-          setValue('');
+          showToast('info', 'Voice captured! Tap check to send or X to cancel.');
         }
       };
 
@@ -298,16 +316,16 @@ const InputBar: React.FC<Props> = ({ onSend, disabled }) => {
           </button>
         )}
 
-        {/* Listening Mode Controls: Cancel (X) & Finish (Check) */}
-        {isListening ? (
+        {/* Listening / Recorded Controls: Cancel (X) & Finish (Check) */}
+        {isListening || value.trim() ? (
           <div className="flex items-center gap-1 flex-shrink-0">
             {/* Cancel Button */}
             <button
               type="button"
               onClick={cancelVoiceInput}
               className="w-8 h-8 flex items-center justify-center rounded-lg bg-red-500/20 text-red-400 border border-red-500/40 hover:bg-red-500/30 transition-colors cursor-pointer"
-              title="Cancel voice input"
-              aria-label="Cancel voice input"
+              title="Cancel & clear text"
+              aria-label="Cancel & clear text"
             >
               <X size={14} />
             </button>

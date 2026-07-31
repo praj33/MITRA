@@ -28,7 +28,7 @@ const useIsMobile = () => {
   }, [setIsMobile]);
 };
 
-/* Helper for speaking voice responses out loud */
+// eslint-disable-next-line @typescript-eslint/no-unused-vars
 const speakAudioResponse = async (text: string) => {
   if (!text) return;
   try {
@@ -210,10 +210,7 @@ const App: React.FC = () => {
         suggestedActions: resp.suggested_actions || [],
       });
 
-      // If sent via Voice, automatically speak response out loud!
-      if (isVoice && resp.message) {
-        speakAudioResponse(resp.message);
-      }
+      // Auto TTS playback removed — TTS is off by default and only plays when user manually clicks speaker icon on message
 
       // Push capability result to context panel
       if (resp.capability_result?.data) {
