@@ -57,6 +57,10 @@ interface CompanionStore {
   // Identity
   userId:    string;
   userName:  string;
+  userEmail: string;
+  authToken: string;
+  isAuthenticated: boolean;
+  authModalOpen:   boolean;
   apiKey:    string;
   apiBase:   string;
 
@@ -113,15 +117,33 @@ interface CompanionStore {
 
   setMemory: (m: Partial<UserMemory>) => void;
   setUserName: (name: string) => void;
+
+  setAuth: (user: { id: string; name: string; email: string }, token: string) => void;
+  logoutUser: () => void;
+  setAuthModalOpen: (open: boolean) => void;
 }
+
+export const getUserId = (): string => {
+  if (typeof window === 'undefined') return 'user_default';
+  let stored = localStorage.getItem('mitra_user_id');
+  if (!stored) {
+    stored = 'usr_' + Math.random().toString(36).substring(2, 8);
+    localStorage.setItem('mitra_user_id', stored);
+  }
+  return stored;
+};
 
 // ── Store Implementation ────────────────────────────────
 export const useCompanionStore = create<CompanionStore>()(
   devtools(
     (set, get) => ({
       // Defaults
-      userId:    'user_default',
-      userName:  'User',
+      userId:          localStorage.getItem('mitra_user_id') || getUserId(),
+      userName:        localStorage.getItem('mitra_user_name') || 'User',
+      userEmail:       localStorage.getItem('mitra_user_email') || '',
+      authToken:       localStorage.getItem('mitra_auth_token') || '',
+      isAuthenticated: Boolean(localStorage.getItem('mitra_auth_token')),
+      authModalOpen:   false,
       apiKey:    process.env.REACT_APP_API_KEY || '',
       apiBase:   process.env.REACT_APP_API_URL || 'http://localhost:8000',
 
@@ -204,7 +226,44 @@ export const useCompanionStore = create<CompanionStore>()(
 
       // ── Memory ──────────────────────────────────────
       setMemory:   (m)    => set(s => ({ memory: { ...s.memory, ...m } })),
-      setUserName: (name) => set({ userName: name }),
+      setUserName: (name) => {
+        if (name) localStorage.setItem('mitra_user_name', name);
+        set({ userName: name });
+      },
+
+      // ── Authentication Actions ───────────────────────
+      setAuthModalOpen: (open) => set({ authModalOpen: open }),
+
+      setAuth: (user, token) => {
+        if (user.id) localStorage.setItem('mitra_user_id', user.id);
+        if (user.name) localStorage.setItem('mitra_user_name', user.name);
+        if (user.email) localStorage.setItem('mitra_user_email', user.email);
+        if (token) localStorage.setItem('mitra_auth_token', token);
+        set({
+          userId:          user.id || getUserId(),
+          userName:        user.name || 'User',
+          userEmail:       user.email || '',
+          authToken:       token,
+          isAuthenticated: true,
+          authModalOpen:   false,
+        });
+      },
+
+      logoutUser: () => {
+        localStorage.removeItem('mitra_auth_token');
+        localStorage.removeItem('mitra_user_email');
+        localStorage.removeItem('mitra_user_name');
+        localStorage.removeItem('mitra_user_id');
+        const newId = getUserId();
+        set({
+          userId:          newId,
+          userName:        'User',
+          userEmail:       '',
+          authToken:       '',
+          isAuthenticated: false,
+          messages:        [],
+        });
+      },
     }),
     { name: 'MitraCompanion' }
   )

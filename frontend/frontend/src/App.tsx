@@ -5,6 +5,7 @@ import ConversationCenter from './components/shell/ConversationCenter';
 import ContextPanel from './components/shell/ContextPanel';
 import InputBar from './components/shell/InputBar';
 import SettingsModal from './components/shell/SettingsModal';
+import AuthModal from './components/shell/AuthModal';
 import Toast, { showToast } from './components/shell/Toast';
 import CalendarPage from './components/pages/CalendarPage';
 import TasksPage from './components/pages/TasksPage';
@@ -15,8 +16,6 @@ import { useCompanionStore } from './store/companion.store';
 import { CompanionService } from './services/companion.service';
 import { cn } from './lib/utils';
 import { LayoutDashboard, Calendar, CheckSquare, BookOpen, PlayCircle, PanelRight } from 'lucide-react';
-
-const USER_ID = 'user_default';
 
 /* Helper hook to keep isMobile store value in sync */
 const useIsMobile = () => {
@@ -115,7 +114,7 @@ const MobileBottomNav: React.FC<{
 /* ── Main App ─────────────────────────────────────────── */
 const App: React.FC = () => {
   const {
-    sidebar, contextPanel, isMobile,
+    userId, sidebar, contextPanel, isMobile, authModalOpen, setAuthModalOpen,
     setStatus, setSessionId, setUserName, setMemory,
     addMessage, addNotification, addContextItem,
   } = useCompanionStore();
@@ -134,11 +133,11 @@ const App: React.FC = () => {
     const init = async () => {
       try {
         // Greeting
-        const { greeting } = await CompanionService.getGreeting(USER_ID);
+        const { greeting } = await CompanionService.getGreeting(userId);
         addMessage({ role: 'assistant', content: greeting });
 
         // Memory
-        const { facts } = await CompanionService.getMemory(USER_ID);
+        const { facts } = await CompanionService.getMemory(userId);
         if (facts?.name) setUserName(facts.name);
         setMemory(facts);
 
@@ -180,7 +179,7 @@ const App: React.FC = () => {
     setStatus('thinking');
 
     try {
-      const resp = await CompanionService.chat(USER_ID, message);
+      const resp = await CompanionService.chat(userId, message);
       setStatus('active');
       if (resp.session_id) setSessionId(resp.session_id);
 
@@ -222,7 +221,7 @@ const App: React.FC = () => {
       });
       setTimeout(() => setStatus('active'), 3000);
     }
-  }, [addMessage, addContextItem, setStatus, setSessionId, setActiveSection]);
+  }, [userId, addMessage, addContextItem, setStatus, setSessionId, setActiveSection]);
 
   // Expose handleSend for suggestion chips
   useEffect(() => { (window as any).__MITRA_SEND__ = handleSend; }, [handleSend]);
@@ -272,6 +271,9 @@ const App: React.FC = () => {
 
       {/* Settings Modal */}
       <SettingsModal open={settingsOpen} onClose={() => setSettingsOpen(false)} />
+
+      {/* Auth Modal */}
+      <AuthModal open={authModalOpen} onClose={() => setAuthModalOpen(false)} />
 
       {/* Global Toast Notifications */}
       <Toast />

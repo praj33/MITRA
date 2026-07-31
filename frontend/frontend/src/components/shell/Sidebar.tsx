@@ -3,7 +3,7 @@ import React from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import {
   MessageCircle, Calendar, CheckSquare, Bell, BookOpen,
-  Settings, ChevronLeft, ChevronRight, Play, X,
+  Settings, ChevronLeft, ChevronRight, Play, X, User,
 } from 'lucide-react';
 import { cn } from '../../lib/utils';
 import { useCompanionStore } from '../../store/companion.store';
@@ -220,8 +220,25 @@ const MobileSidebarDrawer: React.FC<Props> = ({
             </nav>
 
             {/* Footer */}
-            <div className="px-3 pb-4 border-t border-border-subtle pt-3">
-              <button className="w-full flex items-center gap-3 px-3 py-3 rounded-xl text-text-muted hover:text-text-secondary hover:bg-surface-overlay transition-all">
+            <div className="px-3 pb-4 border-t border-border-subtle pt-3 space-y-1">
+              <button
+                onClick={() => {
+                  setMobileMenuOpen(false);
+                  useCompanionStore.getState().setAuthModalOpen(true);
+                }}
+                className="w-full flex items-center gap-3 px-3 py-3 rounded-xl text-text-primary bg-surface-overlay hover:bg-surface-overlay/80 transition-all font-medium"
+              >
+                <User size={15} className="text-brand-light" />
+                <span className="text-sm font-medium">Account / Login</span>
+              </button>
+              <button
+                onClick={() => {
+                  setMobileMenuOpen(false);
+                  const fn = (window as any).__MITRA_SETTINGS__;
+                  if (fn) fn();
+                }}
+                className="w-full flex items-center gap-3 px-3 py-3 rounded-xl text-text-muted hover:text-text-secondary hover:bg-surface-overlay transition-all"
+              >
                 <Settings size={15} />
                 <span className="text-sm font-medium">Settings</span>
               </button>

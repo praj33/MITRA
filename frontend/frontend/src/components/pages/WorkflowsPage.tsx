@@ -3,8 +3,7 @@ import React, { useEffect, useState } from 'react';
 import { motion } from 'framer-motion';
 import { Play, Loader2, CheckCircle2, Clock } from 'lucide-react';
 import { CompanionService } from '../../services/companion.service';
-
-const USER_ID = process.env.REACT_APP_USER_ID || 'user_default';
+import { useCompanionStore } from '../../store/companion.store';
 
 interface Workflow {
   id: string; name: string; description: string;
@@ -47,7 +46,8 @@ const WorkflowsPage: React.FC<{ onChatNavigate: (msg: string) => void }> = ({ on
   const runWorkflow = async (wf: Workflow) => {
     setRunning(wf.id);
     try {
-      const resp = await CompanionService.runWorkflow(wf.name.toLowerCase().replace(/\s+/g, '_'), USER_ID);
+      const userId = useCompanionStore.getState().userId;
+      const resp = await CompanionService.runWorkflow(wf.name.toLowerCase().replace(/\s+/g, '_'), userId);
       setResults(prev => ({ ...prev, [wf.id]: resp.message || resp.result || 'Workflow completed successfully' }));
       setWorkflows(prev => prev.map(w => w.id === wf.id ? { ...w, status: 'completed', last_run: new Date().toISOString() } : w));
     } catch {

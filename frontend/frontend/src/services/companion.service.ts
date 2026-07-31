@@ -162,4 +162,50 @@ export const CompanionService = {
     if (!resp.ok) throw new Error(`HTTP ${resp.status}`);
     return resp.json();
   },
+
+  // ── Authentication API ──────────────────────────────────────
+  async signup(name: string, email: string, password: string): Promise<{ token: string; user: { id: string; name: string; email: string } }> {
+    const resp = await fetch(`${getBase()}/api/auth/signup`, {
+      method: 'POST',
+      headers: headers(),
+      body: JSON.stringify({ name, email, password }),
+    });
+    if (!resp.ok) {
+      const err = await resp.json().catch(() => ({ detail: 'Signup failed' }));
+      throw new Error(err.detail || `HTTP ${resp.status}`);
+    }
+    return resp.json();
+  },
+
+  async login(email: string, password: string): Promise<{ token: string; user: { id: string; name: string; email: string } }> {
+    const resp = await fetch(`${getBase()}/api/auth/login`, {
+      method: 'POST',
+      headers: headers(),
+      body: JSON.stringify({ email, password }),
+    });
+    if (!resp.ok) {
+      const err = await resp.json().catch(() => ({ detail: 'Invalid email or password' }));
+      throw new Error(err.detail || `HTTP ${resp.status}`);
+    }
+    return resp.json();
+  },
+
+  async getMe(token: string): Promise<{ user: { id: string; name: string; email: string } }> {
+    const resp = await fetch(`${getBase()}/api/auth/me`, {
+      headers: {
+        ...headers(),
+        Authorization: `Bearer ${token}`,
+      },
+    });
+    if (!resp.ok) throw new Error(`HTTP ${resp.status}`);
+    return resp.json();
+  },
+
+  async logout(): Promise<any> {
+    const resp = await fetch(`${getBase()}/api/auth/logout`, {
+      method: 'POST',
+      headers: headers(),
+    });
+    return resp.json().catch(() => ({}));
+  },
 };

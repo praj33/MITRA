@@ -3,9 +3,8 @@ import React, { useState } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { BookOpen, Search, Sparkles, Loader2 } from 'lucide-react';
 import { CompanionService } from '../../services/companion.service';
+import { useCompanionStore } from '../../store/companion.store';
 import FormattedMarkdown from '../primitives/FormattedMarkdown';
-
-const USER_ID = process.env.REACT_APP_USER_ID || 'user_default';
 
 const quickTopics = [
   { label: '🧠 How does AI work?', q: 'Explain how artificial intelligence works' },
@@ -31,7 +30,8 @@ const KnowledgePage: React.FC<{ onChatNavigate: (msg: string) => void }> = ({ on
     if (!q.trim()) return;
     setSearching(true);
     try {
-      const resp = await CompanionService.chat(USER_ID, `explain: ${q}`);
+      const userId = useCompanionStore.getState().userId;
+      const resp = await CompanionService.chat(userId, `explain: ${q}`);
       setResults(prev => [{
         query: q, answer: resp.message, timestamp: new Date().toISOString(),
       }, ...prev]);

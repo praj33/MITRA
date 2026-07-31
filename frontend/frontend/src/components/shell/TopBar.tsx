@@ -1,7 +1,7 @@
 // components/shell/TopBar.tsx — Mitra top navigation bar (responsive)
 import React, { useState } from 'react';
 import { motion } from 'framer-motion';
-import { Search, Bell, PanelRight, Zap, Menu } from 'lucide-react';
+import { Search, Bell, PanelRight, Zap, Menu, User } from 'lucide-react';
 import { cn } from '../../lib/utils';
 import { useCompanionStore } from '../../store/companion.store';
 import CompanionDot from '../primitives/CompanionDot';
@@ -13,7 +13,7 @@ const statusLabel = { active: 'Active', thinking: 'Thinking…', away: 'Away', e
 
 const TopBar: React.FC<Props> = ({ onSearch }) => {
   const {
-    status, userName, notifications,
+    status, userName, isAuthenticated, notifications,
     toggleContextPanel, contextPanel,
     isMobile, toggleMobileMenu,
   } = useCompanionStore();
@@ -95,6 +95,21 @@ const TopBar: React.FC<Props> = ({ onSearch }) => {
         </button>
         <NotificationDropdown open={notifOpen} onClose={() => setNotifOpen(false)} />
       </div>
+
+      {/* Account / Login Trigger */}
+      <button
+        id="topbar-auth-button"
+        onClick={() => useCompanionStore.getState().setAuthModalOpen(true)}
+        className="flex items-center gap-1.5 px-2 py-1 rounded-lg bg-surface-overlay border border-border-subtle hover:border-brand/40 text-text-primary text-xs transition-all"
+        title={isAuthenticated ? `Account: ${userName}` : 'Log In / Sign Up'}
+      >
+        <div className="w-5 h-5 rounded-full bg-brand/20 border border-brand/40 flex items-center justify-center text-brand-light font-bold text-[10px]">
+          {userName ? userName.charAt(0).toUpperCase() : <User size={12} />}
+        </div>
+        <span className="hidden sm:inline text-2xs font-medium">
+          {isAuthenticated ? userName : 'Account'}
+        </span>
+      </button>
 
       {/* Context panel toggle — hidden on mobile (uses bottom nav or swipe) */}
       {!isMobile && (
