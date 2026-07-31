@@ -69,6 +69,7 @@ const InputBar: React.FC<Props> = ({ onSend, disabled }) => {
       setIsListening(false);
       if ((window as any)._activeRecognition) {
         try { (window as any)._activeRecognition.stop(); } catch {}
+        (window as any)._activeRecognition = null;
       }
       if (mediaRecorderRef.current && mediaRecorderRef.current.state === 'recording') {
         try { mediaRecorderRef.current.stop(); } catch {}
@@ -84,32 +85,12 @@ const InputBar: React.FC<Props> = ({ onSend, disabled }) => {
       return;
     }
 
-    // Step 1: Prompt native browser mic permission on both PC and Phone
-    let stream: MediaStream | null = null;
-    if (navigator.mediaDevices && navigator.mediaDevices.getUserMedia) {
-      try {
-        stream = await navigator.mediaDevices.getUserMedia({ audio: true });
-        activeStreamRef.current = stream;
-      } catch (err: any) {
-        console.warn('Microphone permission denied:', err);
-        showToast('error', 'Microphone permission denied. Please allow mic access in your browser settings.');
-        return;
-      }
-    } else {
-      showToast('error', 'Microphone recording is not supported on this browser.');
-      return;
-    }
-
-    // Step 2: Set listening state
-    setIsListening(true);
-    transcriptRef.current = '';
-
-    // Step 3: Try Web Speech API (SpeechRecognition)
     const SR = (window as any).SpeechRecognition || (window as any).webkitSpeechRecognition;
-    let srStarted = false;
 
+    // ── Strategy A: Native Web Speech API (Chrome, Edge, Safari) ─────
     if (SR) {
       try {
+        transcriptRef.current = '';
         const recognition = new SR();
         (window as any)._activeRecognition = recognition;
 
@@ -119,6 +100,7 @@ const InputBar: React.FC<Props> = ({ onSend, disabled }) => {
         recognition.lang = 'en-US';
 
         recognition.onstart = () => {
+          setIsListening(true);
           showToast('info', '🎙️ Listening... Speak into your microphone');
         };
 
@@ -135,9 +117,17 @@ const InputBar: React.FC<Props> = ({ onSend, disabled }) => {
 
         recognition.onerror = (err: any) => {
           console.warn('SpeechRecognition notice:', err.error);
+          if (err.error === 'not-allowed') {
+            setIsListening(false);
+            showToast('error', 'Microphone permission denied. Please allow mic access in your browser settings.');
+          } else if (err.error !== 'no-speech' && err.error !== 'aborted') {
+            setIsListening(false);
+            startMediaRecorderFallback();
+          }
         };
 
         recognition.onend = () => {
+          setIsListening(false);
           const finalSpeech = transcriptRef.current.trim();
           if (finalSpeech) {
             onSend(finalSpeech, true);
@@ -145,58 +135,69 @@ const InputBar: React.FC<Props> = ({ onSend, disabled }) => {
             transcriptRef.current = '';
             if (textareaRef.current) textareaRef.current.style.height = 'auto';
           }
-          setIsListening(false);
-          stopActiveStream();
         };
 
         recognition.start();
-        srStarted = true;
+        return;
       } catch (err) {
-        console.warn('SpeechRecognition start error:', err);
+        console.warn('SpeechRecognition failed, falling back to MediaRecorder:', err);
       }
     }
 
-    // Step 4: MediaRecorder fallback / simultaneous capture
-    if (stream) {
-      try {
-        audioChunksRef.current = [];
-        const mimeType = MediaRecorder.isTypeSupported('audio/webm')
-          ? 'audio/webm'
-          : MediaRecorder.isTypeSupported('audio/mp4')
-          ? 'audio/mp4'
-          : '';
+    // ── Strategy B: MediaRecorder Fallback (Firefox / In-App WebViews) ─────
+    startMediaRecorderFallback();
+  };
 
-        const mediaRecorder = mimeType
-          ? new MediaRecorder(stream, { mimeType })
-          : new MediaRecorder(stream);
+  const startMediaRecorderFallback = async () => {
+    if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
+      showToast('error', 'Microphone recording is not supported on this browser.');
+      return;
+    }
 
-        mediaRecorderRef.current = mediaRecorder;
+    try {
+      const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+      activeStreamRef.current = stream;
+      audioChunksRef.current = [];
 
-        mediaRecorder.ondataavailable = (e) => {
-          if (e.data && e.data.size > 0) audioChunksRef.current.push(e.data);
-        };
+      const mimeType = MediaRecorder.isTypeSupported('audio/webm')
+        ? 'audio/webm'
+        : MediaRecorder.isTypeSupported('audio/mp4')
+        ? 'audio/mp4'
+        : '';
 
-        mediaRecorder.onstop = () => {
-          stopActiveStream();
-          setIsListening(false);
-          if (!srStarted) {
-            const textVal = value.trim();
-            if (textVal) {
-              onSend(textVal, true);
-              setValue('');
-            } else if (audioChunksRef.current.length > 0) {
-              onSend("Voice recording received. Please answer my audio request.", true);
-              setValue('');
-            }
-          }
-        };
+      const mediaRecorder = mimeType
+        ? new MediaRecorder(stream, { mimeType })
+        : new MediaRecorder(stream);
 
-        mediaRecorder.start(250);
-        if (!srStarted) {
-          showToast('info', '🎙️ Recording voice... Tap mic icon to finish.');
+      mediaRecorderRef.current = mediaRecorder;
+
+      mediaRecorder.ondataavailable = (e) => {
+        if (e.data && e.data.size > 0) audioChunksRef.current.push(e.data);
+      };
+
+      mediaRecorder.onstop = () => {
+        stopActiveStream();
+        setIsListening(false);
+        const textVal = value.trim();
+        if (textVal) {
+          onSend(textVal, true);
+          setValue('');
+        } else if (audioChunksRef.current.length > 0) {
+          onSend("Voice recording received. Please answer my audio request.", true);
+          setValue('');
         }
-      } catch (err) {
-        console.warn('MediaRecorder error:', err);
+      };
+
+      mediaRecorder.start(250);
+      setIsListening(true);
+      showToast('info', '🎙️ Recording voice... Tap mic icon to finish.');
+    } catch (err: any) {
+      stopActiveStream();
+      setIsListening(false);
+      if (err.name === 'NotAllowedError' || err.name === 'PermissionDeniedError') {
+        showToast('error', 'Microphone permission denied. Please allow mic access in browser settings.');
+      } else {
+        showToast('error', 'Could not start audio recorder on this device.');
       }
     }
   };
