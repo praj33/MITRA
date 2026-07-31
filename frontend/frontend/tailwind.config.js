@@ -5,31 +5,31 @@ module.exports = {
   theme: {
     extend: {
       colors: {
-        // ── Mitra Design Tokens ──────────────────────────
+        // ── Mitra Design Tokens (CSS Variable Powered) ────
         brand: {
-          DEFAULT: '#7C6FF7',
-          light:   '#9D94FF',
-          dim:     '#3D3775',
-          muted:   'rgba(124,111,247,0.15)',
+          DEFAULT: 'var(--brand)',
+          light:   'var(--brand-light)',
+          dim:     'var(--brand-dim)',
+          muted:   'var(--brand-muted)',
         },
         surface: {
-          base:     '#0A0A0F',
-          raised:   '#111118',
-          elevated: '#18181F',
-          overlay:  '#1F1F28',
-          hover:    '#25252F',
+          base:     'var(--surface-base)',
+          raised:   'var(--surface-raised)',
+          elevated: 'var(--surface-elevated)',
+          overlay:  'var(--surface-overlay)',
+          hover:    'var(--surface-hover)',
         },
         border: {
-          subtle:  'rgba(255,255,255,0.06)',
-          default: 'rgba(255,255,255,0.10)',
-          strong:  'rgba(255,255,255,0.18)',
+          subtle:  'var(--border-subtle)',
+          default: 'var(--border-default)',
+          strong:  'var(--border-strong)',
         },
         text: {
-          primary:   '#F0EFFF',
-          secondary: '#A09DB5',
-          muted:     '#5C5A72',
-          disabled:  '#3A3850',
-          brand:     '#9D94FF',
+          primary:   'var(--text-primary)',
+          secondary: 'var(--text-secondary)',
+          muted:     'var(--text-muted)',
+          disabled:  'var(--text-muted)',
+          brand:     'var(--text-brand)',
         },
         state: {
           success: '#34D399',

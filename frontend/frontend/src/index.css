@@ -59,27 +59,27 @@
 [data-theme="light"] {
   --brand:          #6366F1;
   --brand-light:    #4F46E5;
-  --brand-dim:      #C7D2FE;
+  --brand-dim:      #EEF2FF;
   --brand-muted:    rgba(99,102,241,0.12);
 
-  --surface-base:     #F8FAFC;
+  --surface-base:     #F1F5F9;
   --surface-raised:   #FFFFFF;
-  --surface-elevated: #F1F5F9;
+  --surface-elevated: #FFFFFF;
   --surface-overlay:  #E2E8F0;
   --surface-hover:    #CBD5E1;
 
   --border-subtle:  rgba(0,0,0,0.08);
-  --border-default: rgba(0,0,0,0.14);
-  --border-strong:  rgba(0,0,0,0.22);
+  --border-default: rgba(0,0,0,0.15);
+  --border-strong:  rgba(0,0,0,0.25);
 
   --text-primary:   #0F172A;
-  --text-secondary: #475569;
+  --text-secondary: #334155;
   --text-muted:     #64748B;
   --text-brand:     #4F46E5;
 
-  --shadow-card:  0 1px 3px rgba(0,0,0,0.08), 0 1px 2px rgba(0,0,0,0.06);
-  --shadow-panel: 0 4px 24px rgba(0,0,0,0.12);
-  --shadow-glow:  0 0 20px rgba(99,102,241,0.2);
+  --shadow-card:  0 1px 3px rgba(0,0,0,0.06), 0 1px 2px rgba(0,0,0,0.04);
+  --shadow-panel: 0 4px 20px rgba(0,0,0,0.08);
+  --shadow-glow:  0 0 20px rgba(99,102,241,0.15);
 }
 
 /* ── Base Reset & Global ──────────────────────────────── */
@@ -117,8 +117,8 @@ body {
 /* ── Scrollbar Styling ────────────────────────────────── */
 ::-webkit-scrollbar         { width: 4px; height: 4px; }
 ::-webkit-scrollbar-track   { background: transparent; }
-::-webkit-scrollbar-thumb   { background: rgba(255,255,255,0.10); border-radius: 2px; }
-::-webkit-scrollbar-thumb:hover { background: rgba(255,255,255,0.18); }
+::-webkit-scrollbar-thumb   { background: var(--border-default); border-radius: 2px; }
+::-webkit-scrollbar-thumb:hover { background: var(--border-strong); }
 
 /* ── Shell Grid Layout — Desktop (≥1024px) ───────────── */
 .mitra-shell {
@@ -369,7 +369,7 @@ body {
 }
 
 .glass {
-  background:     rgba(24, 24, 31, 0.8);
+  background:     var(--surface-raised);
   backdrop-filter: blur(16px);
   -webkit-backdrop-filter: blur(16px);
   border-bottom:  1px solid var(--border-subtle);
