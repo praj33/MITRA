@@ -1,8 +1,8 @@
-// components/pages/TasksPage.tsx — Kanban-style task board with inline task creation
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useState, useCallback } from 'react';
 import { motion } from 'framer-motion';
 import { CheckSquare, Plus, Clock, AlertTriangle, CheckCircle2, Circle, Trash2, Send } from 'lucide-react';
 import { CompanionService } from '../../services/companion.service';
+import { useCompanionStore } from '../../store/companion.store';
 
 interface Task {
   id: string; title: string; status: string;
@@ -20,6 +20,7 @@ const statusIcons: Record<string, React.ReactNode> = {
 };
 
 const TasksPage: React.FC<{ onChatNavigate: (msg: string) => void }> = ({ onChatNavigate }) => {
+  const userId = useCompanionStore(s => s.userId);
   const [tasks, setTasks] = useState<Task[]>([]);
   const [loading, setLoading] = useState(true);
   const [filter, setFilter] = useState<string>('all');
@@ -27,17 +28,17 @@ const TasksPage: React.FC<{ onChatNavigate: (msg: string) => void }> = ({ onChat
   const [showAddForm, setShowAddForm] = useState(false);
   const [submitting, setSubmitting] = useState(false);
 
-  const fetchTasks = async () => {
+  const fetchTasks = useCallback(async () => {
     try {
-      const data = await CompanionService.getTasks();
+      const data = await CompanionService.getTasks(userId);
       setTasks(data.tasks || []);
     } catch { setTasks([]); }
     setLoading(false);
-  };
+  }, [userId]);
 
   useEffect(() => {
     fetchTasks();
-  }, []);
+  }, [fetchTasks]);
 
   const handleCreateTask = async (e?: React.FormEvent) => {
     if (e) e.preventDefault();
@@ -45,7 +46,7 @@ const TasksPage: React.FC<{ onChatNavigate: (msg: string) => void }> = ({ onChat
 
     setSubmitting(true);
     try {
-      const res = await CompanionService.createTask(newTaskTitle.trim());
+      const res = await CompanionService.createTask(newTaskTitle.trim(), 'medium', 'general', userId);
       if (res.task) {
         setTasks(prev => [res.task, ...prev]);
       } else {
@@ -62,7 +63,7 @@ const TasksPage: React.FC<{ onChatNavigate: (msg: string) => void }> = ({ onChat
   const toggleStatus = async (task: Task) => {
     const newStatus = task.status === 'completed' ? 'pending' : 'completed';
     setTasks(prev => prev.map(t => t.id === task.id ? { ...t, status: newStatus } : t));
-    try { await CompanionService.updateTask(task.id, newStatus); } catch (err) {
+    try { await CompanionService.updateTask(task.id, newStatus, userId); } catch (err) {
       console.error('Task update failed:', err);
     }
   };
@@ -70,7 +71,7 @@ const TasksPage: React.FC<{ onChatNavigate: (msg: string) => void }> = ({ onChat
   const deleteTask = async (taskId: string) => {
     try {
       setTasks(prev => prev.filter(t => t.id !== taskId));
-      await CompanionService.deleteTask(taskId);
+      await CompanionService.deleteTask(taskId, userId);
     } catch (err) {
       console.error('Task delete failed:', err);
     }

@@ -3,6 +3,7 @@ import React, { useEffect, useState, useCallback } from 'react';
 import { motion } from 'framer-motion';
 import { Calendar, Clock, MapPin, Plus, ChevronLeft, ChevronRight, Trash2 } from 'lucide-react';
 import { CompanionService } from '../../services/companion.service';
+import { useCompanionStore } from '../../store/companion.store';
 
 interface CalendarEvent {
   id: string; title: string; start: string; end: string;
@@ -12,6 +13,7 @@ interface CalendarEvent {
 const DAYS = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
 
 const CalendarPage: React.FC<{ onChatNavigate: (msg: string) => void }> = ({ onChatNavigate }) => {
+  const userId = useCompanionStore(s => s.userId);
   const [events, setEvents] = useState<CalendarEvent[]>([]);
   const [loading, setLoading] = useState(true);
   const [viewDate, setViewDate] = useState(new Date());
@@ -19,18 +21,18 @@ const CalendarPage: React.FC<{ onChatNavigate: (msg: string) => void }> = ({ onC
   const fetchEvents = useCallback(async () => {
     setLoading(true);
     try {
-      const data = await CompanionService.getCalendarEvents();
+      const data = await CompanionService.getCalendarEvents(userId);
       setEvents(data.events || []);
     } catch { setEvents([]); }
     setLoading(false);
-  }, []);
+  }, [userId]);
 
   useEffect(() => { fetchEvents(); }, [fetchEvents]);
 
   const deleteEvent = async (eventId: string) => {
     try {
       setEvents(prev => prev.filter(e => e.id !== eventId));
-      await CompanionService.deleteCalendarEvent(eventId);
+      await CompanionService.deleteCalendarEvent(eventId, userId);
     } catch (err) {
       console.error('Delete failed:', err);
     }

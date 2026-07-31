@@ -1,4 +1,12 @@
-// services/companion.service.ts — Mitra API client (expanded)
+import { useCompanionStore, getUserId as getStoredUserId } from '../store/companion.store';
+
+const getCurrentUserId = () => {
+  try {
+    const storeId = useCompanionStore.getState().userId;
+    if (storeId) return storeId;
+  } catch {}
+  return getStoredUserId();
+};
 
 const getBase = () => {
   if (process.env.REACT_APP_API_URL) return process.env.REACT_APP_API_URL;
@@ -79,7 +87,7 @@ export const CompanionService = {
   },
 
   // ── Page Data Endpoints ────────────────────────────
-  async getCalendarEvents(userId = 'user_default'): Promise<{ events: any[] }> {
+  async getCalendarEvents(userId = getCurrentUserId()): Promise<{ events: any[] }> {
     const resp = await fetch(`${getBase()}/api/pages/calendar/events?user_id=${userId}`, {
       headers: headers(),
     });
@@ -87,7 +95,7 @@ export const CompanionService = {
     return resp.json();
   },
 
-  async deleteCalendarEvent(eventId: string, userId = 'user_default'): Promise<any> {
+  async deleteCalendarEvent(eventId: string, userId = getCurrentUserId()): Promise<any> {
     const resp = await fetch(`${getBase()}/api/pages/calendar/events/${eventId}?user_id=${userId}`, {
       method: 'DELETE',
       headers: headers(),
@@ -96,7 +104,7 @@ export const CompanionService = {
     return resp.json();
   },
 
-  async getTasks(userId = 'user_default'): Promise<{ tasks: any[] }> {
+  async getTasks(userId = getCurrentUserId()): Promise<{ tasks: any[] }> {
     const resp = await fetch(`${getBase()}/api/pages/tasks/list?user_id=${userId}`, {
       headers: headers(),
     });
@@ -104,7 +112,7 @@ export const CompanionService = {
     return resp.json();
   },
 
-  async createTask(title: string, priority = 'medium', category = 'general', userId = 'user_default'): Promise<any> {
+  async createTask(title: string, priority = 'medium', category = 'general', userId = getCurrentUserId()): Promise<any> {
     const resp = await fetch(`${getBase()}/api/pages/tasks/create?user_id=${userId}`, {
       method: 'POST',
       headers: headers(),
@@ -114,7 +122,7 @@ export const CompanionService = {
     return resp.json();
   },
 
-  async updateTask(taskId: string, status: string, userId = 'user_default'): Promise<any> {
+  async updateTask(taskId: string, status: string, userId = getCurrentUserId()): Promise<any> {
     const resp = await fetch(`${getBase()}/api/pages/tasks/update?task_id=${taskId}&status=${status}&user_id=${userId}`, {
       method: 'POST',
       headers: headers(),
@@ -123,7 +131,7 @@ export const CompanionService = {
     return resp.json();
   },
 
-  async deleteTask(taskId: string, userId = 'user_default'): Promise<any> {
+  async deleteTask(taskId: string, userId = getCurrentUserId()): Promise<any> {
     const resp = await fetch(`${getBase()}/api/pages/tasks/${taskId}?user_id=${userId}`, {
       method: 'DELETE',
       headers: headers(),
@@ -132,7 +140,7 @@ export const CompanionService = {
     return resp.json();
   },
 
-  async getReminders(userId = 'user_default'): Promise<{ reminders: any[] }> {
+  async getReminders(userId = getCurrentUserId()): Promise<{ reminders: any[] }> {
     const resp = await fetch(`${getBase()}/api/pages/reminders/list?user_id=${userId}`, {
       headers: headers(),
     });
@@ -140,7 +148,7 @@ export const CompanionService = {
     return resp.json();
   },
 
-  async deleteReminder(reminderId: string, userId = 'user_default'): Promise<any> {
+  async deleteReminder(reminderId: string, userId = getCurrentUserId()): Promise<any> {
     const resp = await fetch(`${getBase()}/api/pages/reminders/${reminderId}?user_id=${userId}`, {
       method: 'DELETE',
       headers: headers(),
@@ -149,7 +157,7 @@ export const CompanionService = {
     return resp.json();
   },
 
-  async getWorkflows(userId = 'user_default'): Promise<{ workflows: any[] }> {
+  async getWorkflows(userId = getCurrentUserId()): Promise<{ workflows: any[] }> {
     const resp = await fetch(`${getBase()}/api/pages/workflows/list?user_id=${userId}`, {
       headers: headers(),
     });

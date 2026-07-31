@@ -3,6 +3,7 @@ import React, { useEffect, useState } from 'react';
 import { motion } from 'framer-motion';
 import { Bell, Plus, Clock, Repeat, Trash2 } from 'lucide-react';
 import { CompanionService } from '../../services/companion.service';
+import { useCompanionStore } from '../../store/companion.store';
 
 interface Reminder {
   id: string; message: string; time: string;
@@ -10,6 +11,7 @@ interface Reminder {
 }
 
 const RemindersPage: React.FC<{ onChatNavigate: (msg: string) => void }> = ({ onChatNavigate }) => {
+  const userId = useCompanionStore(s => s.userId);
   const [reminders, setReminders] = useState<Reminder[]>([]);
   const [loading, setLoading] = useState(true);
   const [now, setNow] = useState(Date.now());
@@ -17,12 +19,12 @@ const RemindersPage: React.FC<{ onChatNavigate: (msg: string) => void }> = ({ on
   useEffect(() => {
     (async () => {
       try {
-        const data = await CompanionService.getReminders();
+        const data = await CompanionService.getReminders(userId);
         setReminders(data.reminders || []);
       } catch { setReminders([]); }
       setLoading(false);
     })();
-  }, []);
+  }, [userId]);
 
   // Tick every minute for countdown
   useEffect(() => {
@@ -44,7 +46,7 @@ const RemindersPage: React.FC<{ onChatNavigate: (msg: string) => void }> = ({ on
   const removeReminder = async (id: string) => {
     try {
       setReminders(prev => prev.filter(r => r.id !== id));
-      await CompanionService.deleteReminder(id);
+      await CompanionService.deleteReminder(id, userId);
     } catch (err) {
       console.error('Failed to delete reminder:', err);
     }
