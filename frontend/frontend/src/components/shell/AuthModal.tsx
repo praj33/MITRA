@@ -86,7 +86,7 @@ const AuthModal: React.FC<Props> = ({ open, onClose }) => {
             animate={{ opacity: 1, scale: 1, y: 0 }}
             exit={{ opacity: 0, scale: 0.94, y: 20 }}
             transition={{ duration: 0.25, ease: 'easeOut' }}
-            className="fixed inset-0 m-auto max-w-md h-fit z-50 p-4 sm:p-6 bg-surface-raised/95 backdrop-blur-xl border border-border-subtle rounded-2xl shadow-2xl overflow-hidden flex flex-col gap-5 text-text-primary"
+            className="fixed inset-0 m-auto max-w-md h-fit z-[201] p-5 sm:p-6 bg-surface-elevated border border-border-subtle rounded-2xl shadow-2xl overflow-hidden flex flex-col gap-5 text-text-primary"
             style={{ width: '92vw', maxHeight: '90vh' }}
           >
             {/* Header Accent Bar */}
