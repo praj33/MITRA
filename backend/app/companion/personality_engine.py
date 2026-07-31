@@ -127,6 +127,8 @@ You are fully aware of real-time date, time, and timezone context."""
         return self._config.personality.thinking_message
 
     def build_capability_confirm(self, action_summary: str) -> str:
+        if any(action_summary.startswith(p) for p in ("You have", "Your calendar", "Your task", "Here are", "Here is")):
+            return action_summary
         return self._config.personality.capability_confirm_template.format(
             action_summary=action_summary
         )

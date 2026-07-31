@@ -92,16 +92,18 @@ class ExecutionService:
 
                 if is_read and db is not None:
                     docs = list(db["calendar_events"].find({"$or": [{"user_id": user_id}, {"user_id": "user_default"}]}).sort("created_at", -1).limit(10))
-                    if docs:
-                        event_titles = ", ".join([f"'{d.get('title')}'" for d in docs[:5]])
-                        summary = f"You have {len(docs)} event(s) on your calendar: {event_titles}."
+                    dummy_exact = {"what is the calendar", "create a calendar event", "new event", "calendar", "check my calendar"}
+                    filtered_docs = [d for d in docs if (d.get("title") or "").lower().strip() not in dummy_exact and not (d.get("title") or "").lower().strip().startswith("what is the calendar")]
+                    if filtered_docs:
+                        event_titles = ", ".join([f"'{d.get('title')}'" for d in filtered_docs[:5]])
+                        summary = f"You have {len(filtered_docs)} event(s) on your calendar: {event_titles}."
                     else:
                         summary = "Your calendar is clear! You have no upcoming events scheduled."
                     return {
                         "status": "success",
                         "action_type": "list_events",
                         "summary": summary,
-                        "events": [{"id": str(d.get("_id")), "title": d.get("title")} for d in docs],
+                        "events": [{"id": str(d.get("_id")), "title": d.get("title")} for d in filtered_docs],
                         "trace_id": trace_id,
                         "timestamp": datetime.utcnow().isoformat(),
                         "service": "execution_service"

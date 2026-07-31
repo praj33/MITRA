@@ -62,7 +62,7 @@ def _save_event_to_db(user_id: str, title: str, date_str: str, time_str: str, tr
 
 
 def _get_user_events_from_db(user_id: str) -> List[Dict[str, Any]]:
-    """Fetch calendar events for user from MongoDB."""
+    """Fetch calendar events for user from MongoDB, filtering out legacy test entries."""
     try:
         from pymongo import MongoClient
         import os
@@ -71,10 +71,16 @@ def _get_user_events_from_db(user_id: str) -> List[Dict[str, Any]]:
         client = MongoClient(uri, serverSelectionTimeoutMS=3000)
         db = client[db_name]
         docs = list(db["calendar_events"].find({"$or": [{"user_id": user_id}, {"user_id": "user_default"}]}).sort("created_at", -1).limit(20))
+        filtered = []
+        dummy_exact = {"what is the calendar", "create a calendar event", "new event", "calendar", "check my calendar"}
         for doc in docs:
+            t_lower = (doc.get("title") or "").lower().strip()
+            if t_lower in dummy_exact or t_lower.startswith("what is the calendar"):
+                continue
             doc["id"] = str(doc.get("_id"))
             doc.pop("_id", None)
-        return docs
+            filtered.append(doc)
+        return filtered
     except Exception as e:
         logger.warning(f"Failed to fetch calendar events from DB: {e}")
         return []
