@@ -46,18 +46,22 @@ const SettingsModal: React.FC<Props> = ({ open, onClose }) => {
   return (
     <AnimatePresence>
       {open && (
-        <>
+        <motion.div
+          initial={{ opacity: 0 }}
+          animate={{ opacity: 1 }}
+          exit={{ opacity: 0 }}
+          className="settings-backdrop"
+          onClick={(e) => {
+            if (e.target === e.currentTarget) onClose();
+          }}
+        >
           <motion.div
-            initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
-            className="settings-backdrop"
-            onClick={onClose}
-          />
-          <motion.div
-            initial={{ opacity: 0, scale: 0.95, y: 20 }}
+            initial={{ opacity: 0, scale: 0.95, y: 16 }}
             animate={{ opacity: 1, scale: 1, y: 0 }}
-            exit={{ opacity: 0, scale: 0.95, y: 20 }}
+            exit={{ opacity: 0, scale: 0.95, y: 16 }}
             transition={{ duration: 0.2 }}
             className="settings-modal"
+            onClick={(e) => e.stopPropagation()}
           >
             {/* Header */}
             <div className="settings-header">
@@ -139,7 +143,7 @@ const SettingsModal: React.FC<Props> = ({ open, onClose }) => {
               <button onClick={handleSaveName} className="settings-btn-save">Save Changes</button>
             </div>
           </motion.div>
-        </>
+        </motion.div>
       )}
     </AnimatePresence>
   );
