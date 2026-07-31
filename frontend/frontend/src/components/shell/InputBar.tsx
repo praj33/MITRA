@@ -159,7 +159,7 @@ const InputBar: React.FC<Props> = ({ onSend, disabled }) => {
         };
 
         recognition.onerror = (err: any) => {
-          console.warn('SpeechRecognition error:', err.error);
+          console.warn('SpeechRecognition notice:', err.error);
           if (err.error !== 'aborted') {
             setIsListening(false);
             try { (window as any)._activeRecognition?.stop(); } catch {}
@@ -184,6 +184,9 @@ const InputBar: React.FC<Props> = ({ onSend, disabled }) => {
                 if (textareaRef.current) textareaRef.current.style.height = 'auto';
               }
             }, 5000);
+          } else {
+            // If Web Speech yielded no text, try MediaRecorder fallback
+            startMediaRecorderFallback();
           }
         };
 
@@ -194,7 +197,7 @@ const InputBar: React.FC<Props> = ({ onSend, disabled }) => {
       }
     }
 
-    // ── Strategy B: MediaRecorder Fallback ─────
+    // ── Strategy B: MediaRecorder + Backend STT Whisper Fallback ─────
     startMediaRecorderFallback();
   };
 
@@ -225,12 +228,51 @@ const InputBar: React.FC<Props> = ({ onSend, disabled }) => {
         if (e.data && e.data.size > 0) audioChunksRef.current.push(e.data);
       };
 
-      mediaRecorder.onstop = () => {
+      mediaRecorder.onstop = async () => {
         stopActiveStream();
         setIsListening(false);
-        const textVal = value.trim();
-        if (textVal) {
+
+        const existingVal = value.trim();
+        if (existingVal) {
           showToast('info', 'Voice captured! Tap check to send or X to cancel.');
+          return;
+        }
+
+        if (audioChunksRef.current.length > 0) {
+          showToast('info', 'Transcribing speech audio...');
+          try {
+            const blob = new Blob(audioChunksRef.current, { type: mimeType || 'audio/webm' });
+            const formData = new FormData();
+            formData.append('file', blob, `voice_${Date.now()}.${mimeType?.includes('mp4') ? 'mp4' : 'webm'}`);
+
+            const response = await fetch('https://ai-assistant-backend-8hur.onrender.com/api/stt', {
+              method: 'POST',
+              body: formData,
+            });
+
+            const data = await response.json();
+            if (data && data.text && data.text.trim()) {
+              const transcribedText = data.text.trim();
+              setValue(transcribedText);
+              transcriptRef.current = transcribedText;
+              showToast('info', 'Voice transcribed! Auto-sending in 5s — tap X to cancel.', 'reminder');
+              clearAutoSendTimer();
+              autoSendTimerRef.current = setTimeout(() => {
+                const currentVal = transcriptRef.current.trim() || value.trim() || transcribedText;
+                if (currentVal) {
+                  onSend(currentVal, true);
+                  setValue('');
+                  transcriptRef.current = '';
+                  if (textareaRef.current) textareaRef.current.style.height = 'auto';
+                }
+              }, 5000);
+            } else {
+              showToast('error', 'Could not transcribe speech. Please speak clearly and try again.');
+            }
+          } catch (err) {
+            console.warn('STT API request failed:', err);
+            showToast('error', 'Speech transcription service unavailable.');
+          }
         }
       };
 
