@@ -80,12 +80,39 @@ class ExecutionService:
                     trace_id=trace_id
                 )
             elif action_type.lower() in ("calendar", "create_event", "update_event", "list_events"):
-                title = action_data.get("title") or action_data.get("event") or action_data.get("raw_message") or "New Event"
+                raw_msg = (action_data.get("raw_message") or action_data.get("title") or action_data.get("message") or "").strip()
+                msg_lower = raw_msg.lower()
+                user_id = action_data.get("user_id", "user_default")
+
+                read_keywords = ("check", "what", "show", "view", "list", "get", "see", "do i have", "my calendar", "my schedule")
+                create_keywords = ("create", "add", "schedule", "book", "set")
+                is_read = (any(k in msg_lower for k in read_keywords) and not any(msg_lower.startswith(k) for k in create_keywords)) or action_type.lower() == "list_events"
+
+                db = _get_db()
+
+                if is_read and db is not None:
+                    docs = list(db["calendar_events"].find({"$or": [{"user_id": user_id}, {"user_id": "user_default"}]}).sort("created_at", -1).limit(10))
+                    if docs:
+                        event_titles = ", ".join([f"'{d.get('title')}'" for d in docs[:5]])
+                        summary = f"You have {len(docs)} event(s) on your calendar: {event_titles}."
+                    else:
+                        summary = "Your calendar is clear! You have no upcoming events scheduled."
+                    return {
+                        "status": "success",
+                        "action_type": "list_events",
+                        "summary": summary,
+                        "events": [{"id": str(d.get("_id")), "title": d.get("title")} for d in docs],
+                        "trace_id": trace_id,
+                        "timestamp": datetime.utcnow().isoformat(),
+                        "service": "execution_service"
+                    }
+
+                # Otherwise CREATE:
+                title = action_data.get("title") or action_data.get("event") or raw_msg or "New Event"
                 ev_id = f"ev_{uuid4().hex[:8]}"
                 now = datetime.utcnow()
                 start_iso = action_data.get("start") or action_data.get("time") or now.isoformat()
                 end_iso = action_data.get("end") or (now + timedelta(hours=1)).isoformat()
-                user_id = action_data.get("user_id", "user_default")
 
                 ev_doc = {
                     "_id": ev_id,
@@ -98,7 +125,6 @@ class ExecutionService:
                     "location": action_data.get("location", ""),
                     "created_at": now.isoformat()
                 }
-                db = _get_db()
                 if db is not None:
                     try:
                         db["calendar_events"].insert_one(ev_doc)
@@ -121,10 +147,37 @@ class ExecutionService:
                     "service": "execution_service"
                 }
             elif action_type.lower() in ("ems", "task", "create_task", "update_task", "list_tasks"):
-                title = action_data.get("title") or action_data.get("task") or action_data.get("raw_message") or "New Task"
+                raw_msg = (action_data.get("raw_message") or action_data.get("title") or action_data.get("task") or "").strip()
+                msg_lower = raw_msg.lower()
+                user_id = action_data.get("user_id", "user_default")
+
+                read_keywords = ("check", "what", "show", "view", "list", "get", "see", "do i have", "my tasks", "any task", "todo", "to-do")
+                create_keywords = ("create task", "add task", "new task", "assign task", "create a task")
+                is_read = (any(k in msg_lower for k in read_keywords) and not any(msg_lower.startswith(k) for k in create_keywords)) or action_type.lower() == "list_tasks"
+
+                db = _get_db()
+
+                if is_read and db is not None:
+                    docs = list(db["user_tasks"].find({"$or": [{"user_id": user_id}, {"user_id": "user_default"}]}).sort("created_at", -1).limit(10))
+                    if docs:
+                        task_titles = ", ".join([f"'{d.get('title', d.get('task', 'Task'))}'" for d in docs[:5]])
+                        summary = f"You have {len(docs)} task(s) on your board: {task_titles}."
+                    else:
+                        summary = "You have no pending tasks on your task board."
+                    return {
+                        "status": "success",
+                        "action_type": "list_tasks",
+                        "summary": summary,
+                        "tasks": [{"id": str(d.get("_id")), "title": d.get("title")} for d in docs],
+                        "trace_id": trace_id,
+                        "timestamp": datetime.utcnow().isoformat(),
+                        "service": "execution_service"
+                    }
+
+                # Otherwise CREATE:
+                title = action_data.get("title") or action_data.get("task") or raw_msg or "New Task"
                 task_id = f"task_{uuid4().hex[:8]}"
                 now_iso = datetime.utcnow().isoformat()
-                user_id = action_data.get("user_id", "user_default")
 
                 task_doc = {
                     "_id": task_id,
@@ -136,7 +189,6 @@ class ExecutionService:
                     "category": action_data.get("category", "general"),
                     "created_at": now_iso
                 }
-                db = _get_db()
                 if db is not None:
                     try:
                         db["user_tasks"].insert_one(task_doc)
@@ -159,11 +211,38 @@ class ExecutionService:
                     "service": "execution_service"
                 }
             elif action_type.lower() in ("reminder", "create_reminder", "list_reminders"):
+                raw_msg = (action_data.get("raw_message") or action_data.get("message") or action_data.get("title") or "").strip()
+                msg_lower = raw_msg.lower()
+                user_id = action_data.get("user_id", "user_default")
+
+                read_keywords = ("check", "what", "show", "view", "list", "get", "see", "do i have", "my reminders", "any reminder")
+                create_keywords = ("remind me", "set a reminder", "set reminder", "create reminder", "add reminder")
+                is_read = (any(k in msg_lower for k in read_keywords) and not any(msg_lower.startswith(k) for k in create_keywords)) or action_type.lower() == "list_reminders"
+
+                db = _get_db()
+
+                if is_read and db is not None:
+                    docs = list(db["reminders"].find({"$or": [{"user_id": user_id}, {"user_id": "user_default"}]}).sort("created_at", -1).limit(10))
+                    if docs:
+                        rem_msgs = ", ".join([f"'{d.get('message')}'" for d in docs[:5]])
+                        summary = f"You have {len(docs)} active reminder(s): {rem_msgs}."
+                    else:
+                        summary = "You have no active reminders at the moment."
+                    return {
+                        "status": "success",
+                        "action_type": "list_reminders",
+                        "summary": summary,
+                        "reminders": [{"id": str(d.get("_id")), "message": d.get("message")} for d in docs],
+                        "trace_id": trace_id,
+                        "timestamp": datetime.utcnow().isoformat(),
+                        "service": "execution_service"
+                    }
+
+                # Otherwise CREATE:
                 msg = action_data.get("message") or action_data.get("raw_message") or action_data.get("title") or "Reminder"
                 rem_id = f"rem_{uuid4().hex[:8]}"
                 now = datetime.utcnow()
                 rem_time = action_data.get("time") or (now + timedelta(hours=1)).isoformat()
-                user_id = action_data.get("user_id", "user_default")
 
                 rem_doc = {
                     "_id": rem_id,
@@ -174,7 +253,6 @@ class ExecutionService:
                     "repeat": action_data.get("repeat"),
                     "created_at": now.isoformat()
                 }
-                db = _get_db()
                 if db is not None:
                     try:
                         db["reminders"].insert_one(rem_doc)

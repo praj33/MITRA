@@ -37,7 +37,14 @@ class IntentFlow:
 
     def classify_intent(self, text: str) -> str:
         """Classify the primary intent from text."""
-        text_lower = text.lower()
+        text_lower = text.lower().strip()
+
+        # Check for definitional/knowledge questions ("what is the calendar", "what is a reminder", "explain tasks")
+        info_prefixes = ("what is ", "what are ", "explain ", "tell me about ", "how does ", "define ")
+        has_personal_context = any(k in text_lower for k in ("my ", "on my", "for me", "i have", "due"))
+
+        if any(text_lower.startswith(p) for p in info_prefixes) and not has_personal_context:
+            return 'general'
 
         for intent, keywords in self.intent_patterns.items():
             if intent == 'general':
