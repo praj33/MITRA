@@ -84,38 +84,23 @@ const InputBar: React.FC<Props> = ({ onSend, disabled }) => {
       return;
     }
 
-    // Step 1: Request microphone stream from browser
-    let stream: MediaStream | null = null;
-    if (navigator.mediaDevices && navigator.mediaDevices.getUserMedia) {
-      try {
-        stream = await navigator.mediaDevices.getUserMedia({ audio: true });
-        activeStreamRef.current = stream;
-      } catch (err: any) {
-        console.warn('Microphone permission denied:', err);
-        showToast('error', 'Microphone permission denied. Please allow mic access in browser settings.');
-        return;
-      }
-    } else {
-      showToast('error', 'Microphone access is not supported on this browser.');
-      return;
-    }
-
-    // Step 2: Try Web Speech API (SpeechRecognition)
     const SR = (window as any).SpeechRecognition || (window as any).webkitSpeechRecognition;
 
+    // ── Strategy A: Web Speech API (iOS Safari & Android Chrome) ─────
     if (SR) {
       try {
         transcriptRef.current = '';
         const recognition = new SR();
         (window as any)._activeRecognition = recognition;
-        recognition.continuous = true;
+
+        recognition.continuous = false;
         recognition.interimResults = true;
         recognition.maxAlternatives = 1;
         recognition.lang = 'en-US';
 
         recognition.onstart = () => {
           setIsListening(true);
-          showToast('info', 'Listening... Speak now into microphone');
+          showToast('info', '🎙️ Listening... Speak now into your mic');
         };
 
         recognition.onresult = (event: any) => {
@@ -130,16 +115,17 @@ const InputBar: React.FC<Props> = ({ onSend, disabled }) => {
         };
 
         recognition.onerror = (err: any) => {
-          console.warn('Speech recognition notice:', err.error);
-          if (err.error !== 'no-speech') {
-            setIsListening(false);
-            stopActiveStream();
+          console.warn('SpeechRecognition notice:', err.error);
+          if (err.error === 'not-allowed' || err.error === 'service-not-allowed') {
+            showToast('error', 'Microphone access denied in browser settings.');
+          } else if (err.error === 'no-speech') {
+            showToast('info', 'No speech heard. Please try speaking again.');
           }
+          setIsListening(false);
         };
 
         recognition.onend = () => {
           setIsListening(false);
-          stopActiveStream();
           const finalSpeech = transcriptRef.current.trim();
           if (finalSpeech) {
             onSend(finalSpeech, true);
@@ -152,47 +138,76 @@ const InputBar: React.FC<Props> = ({ onSend, disabled }) => {
         recognition.start();
         return;
       } catch (err) {
-        console.warn('SpeechRecognition error, using MediaRecorder fallback:', err);
+        console.warn('SpeechRecognition failed, attempting MediaRecorder fallback:', err);
       }
     }
 
-    // Step 3: MediaRecorder Fallback (Mobile Safari / WebViews)
-    if (stream) {
+    // ── Strategy B: MediaRecorder Fallback ──────────────────────────
+    if (navigator.mediaDevices && navigator.mediaDevices.getUserMedia) {
       try {
+        const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+        activeStreamRef.current = stream;
         audioChunksRef.current = [];
-        const mediaRecorder = new MediaRecorder(stream);
+
+        const mimeType = MediaRecorder.isTypeSupported('audio/webm')
+          ? 'audio/webm'
+          : MediaRecorder.isTypeSupported('audio/mp4')
+          ? 'audio/mp4'
+          : '';
+
+        const mediaRecorder = mimeType
+          ? new MediaRecorder(stream, { mimeType })
+          : new MediaRecorder(stream);
+
         mediaRecorderRef.current = mediaRecorder;
 
         mediaRecorder.ondataavailable = (e) => {
-          if (e.data.size > 0) audioChunksRef.current.push(e.data);
+          if (e.data && e.data.size > 0) audioChunksRef.current.push(e.data);
         };
 
         mediaRecorder.onstop = () => {
           stopActiveStream();
           setIsListening(false);
-          const valText = value.trim();
-          if (valText) {
-            onSend(valText, true);
+          const textVal = value.trim();
+          if (textVal) {
+            onSend(textVal, true);
             setValue('');
           } else if (audioChunksRef.current.length > 0) {
-            onSend("Voice recording received. Please summarize my audio request.", true);
+            onSend("Voice recording received. Please answer my audio query.", true);
             setValue('');
           }
         };
 
-        mediaRecorder.start();
+        mediaRecorder.start(250);
         setIsListening(true);
-        showToast('info', 'Recording voice... Tap mic icon to send.');
+        showToast('info', '🎙️ Recording voice... Tap mic icon to finish.');
       } catch (err) {
         stopActiveStream();
         setIsListening(false);
-        showToast('error', 'Could not start audio recorder.');
+        showToast('error', 'Microphone permission denied. Please allow mic in settings.');
       }
+    } else {
+      showToast('error', 'Microphone recording is not supported on this browser.');
     }
   };
 
   return (
     <div className="zone-input bg-surface-raised border-t border-border-subtle px-3 sm:px-4 py-2 sm:py-2.5 flex flex-col gap-1.5 sm:gap-2">
+      {/* Visual Live Recording Banner */}
+      {isListening && (
+        <div className="flex items-center justify-between bg-red-500/10 border border-red-500/30 rounded-lg px-3 py-1.5 text-xs text-red-500 animate-pulse select-none">
+          <div className="flex items-center gap-2">
+            <span className="w-2.5 h-2.5 rounded-full bg-red-500 animate-ping" />
+            <span className="font-medium text-xs">Listening to your voice... Speak now</span>
+          </div>
+          <button
+            onClick={toggleVoiceInput}
+            className="text-2xs bg-red-500 text-white px-2.5 py-1 rounded font-semibold hover:bg-red-600 transition-colors cursor-pointer"
+          >
+            Finish & Send
+          </button>
+        </div>
+      )}
       {/* Quick actions */}
       {showQuick && !value && (
         <motion.div
