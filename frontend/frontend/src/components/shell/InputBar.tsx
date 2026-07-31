@@ -1,7 +1,7 @@
 // components/shell/InputBar.tsx — Message input with send + voice + attach (responsive)
 import React, { useState, useRef, KeyboardEvent } from 'react';
 import { motion } from 'framer-motion';
-import { Send, Mic, MicOff, Paperclip, Zap } from 'lucide-react';
+import { Send, Mic, Paperclip, Zap, X, Check } from 'lucide-react';
 import { cn } from '../../lib/utils';
 import { useCompanionStore } from '../../store/companion.store';
 import { showToast } from './Toast';
@@ -63,45 +63,76 @@ const InputBar: React.FC<Props> = ({ onSend, disabled }) => {
     }
   };
 
-  const toggleVoiceInput = async () => {
-    // If currently recording, stop and process
+  // ── Cancel Voice Input (Stops & Discards) ─────
+  const cancelVoiceInput = () => {
+    setIsListening(false);
+    if ((window as any)._activeRecognition) {
+      try {
+        (window as any)._activeRecognition.onend = null;
+        (window as any)._activeRecognition.abort();
+      } catch {}
+      (window as any)._activeRecognition = null;
+    }
+    if (mediaRecorderRef.current && mediaRecorderRef.current.state === 'recording') {
+      try {
+        mediaRecorderRef.current.onstop = null;
+        mediaRecorderRef.current.stop();
+      } catch {}
+    }
+    stopActiveStream();
+    transcriptRef.current = '';
+    setValue('');
+    showToast('info', 'Voice input cancelled.');
+  };
+
+  // ── Finish & Send Voice Input ─────
+  const stopAndSendVoiceInput = () => {
+    setIsListening(false);
+    if ((window as any)._activeRecognition) {
+      try { (window as any)._activeRecognition.stop(); } catch {}
+      (window as any)._activeRecognition = null;
+    }
+    if (mediaRecorderRef.current && mediaRecorderRef.current.state === 'recording') {
+      try { mediaRecorderRef.current.stop(); } catch {}
+    }
+    stopActiveStream();
+
+    const textToSend = transcriptRef.current.trim() || value.trim();
+    if (textToSend) {
+      onSend(textToSend, true);
+      setValue('');
+      transcriptRef.current = '';
+      if (textareaRef.current) textareaRef.current.style.height = 'auto';
+    } else {
+      showToast('info', 'No speech detected.');
+    }
+  };
+
+  // ── Toggle Voice Input (Start or Finish) ─────
+  const toggleVoiceInput = () => {
     if (isListening) {
-      setIsListening(false);
-      if ((window as any)._activeRecognition) {
-        try { (window as any)._activeRecognition.stop(); } catch {}
-        (window as any)._activeRecognition = null;
-      }
-      if (mediaRecorderRef.current && mediaRecorderRef.current.state === 'recording') {
-        try { mediaRecorderRef.current.stop(); } catch {}
-      }
-      stopActiveStream();
-      const textToSend = transcriptRef.current.trim() || value.trim();
-      if (textToSend) {
-        onSend(textToSend, true);
-        setValue('');
-        transcriptRef.current = '';
-        if (textareaRef.current) textareaRef.current.style.height = 'auto';
-      }
+      stopAndSendVoiceInput();
       return;
     }
 
     const SR = (window as any).SpeechRecognition || (window as any).webkitSpeechRecognition;
 
-    // ── Strategy A: Native Web Speech API (Chrome, Edge, Safari) ─────
+    // ── Strategy A: Native Web Speech API (Chrome, Edge, iOS & Android Safari) ─────
     if (SR) {
       try {
         transcriptRef.current = '';
         const recognition = new SR();
         (window as any)._activeRecognition = recognition;
 
-        recognition.continuous = !isMobile;
+        // Mobile browsers (iOS Safari, Android Chrome) REQUIRE continuous = false
+        recognition.continuous = false;
         recognition.interimResults = true;
         recognition.maxAlternatives = 1;
         recognition.lang = 'en-US';
 
         recognition.onstart = () => {
           setIsListening(true);
-          showToast('info', '🎙️ Listening... Speak into your microphone');
+          showToast('info', '🎙️ Listening... Speak now');
         };
 
         recognition.onresult = (event: any) => {
@@ -116,9 +147,7 @@ const InputBar: React.FC<Props> = ({ onSend, disabled }) => {
         };
 
         recognition.onerror = (err: any) => {
-          console.warn('SpeechRecognition notice:', err.error);
-          // If SpeechRecognition fails for any reason (service-not-allowed, not-allowed, network, etc.),
-          // fallback seamlessly to MediaRecorder audio capture
+          console.warn('SpeechRecognition error:', err.error);
           if (err.error !== 'aborted') {
             setIsListening(false);
             try { (window as any)._activeRecognition?.stop(); } catch {}
@@ -138,20 +167,21 @@ const InputBar: React.FC<Props> = ({ onSend, disabled }) => {
           }
         };
 
+        // Synchronous start for iOS Safari gesture compliance!
         recognition.start();
         return;
       } catch (err) {
-        console.warn('SpeechRecognition failed, falling back to MediaRecorder:', err);
+        console.warn('SpeechRecognition failed to start, falling back to MediaRecorder:', err);
       }
     }
 
-    // ── Strategy B: MediaRecorder Fallback (Firefox / In-App WebViews) ─────
+    // ── Strategy B: MediaRecorder Fallback ─────
     startMediaRecorderFallback();
   };
 
   const startMediaRecorderFallback = async () => {
     if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
-      showToast('error', 'Microphone recording is not supported on this browser.');
+      showToast('error', 'Microphone is not supported on this browser.');
       return;
     }
 
@@ -183,20 +213,17 @@ const InputBar: React.FC<Props> = ({ onSend, disabled }) => {
         if (textVal) {
           onSend(textVal, true);
           setValue('');
-        } else if (audioChunksRef.current.length > 0) {
-          onSend("Voice recording received. Please answer my audio request.", true);
-          setValue('');
         }
       };
 
       mediaRecorder.start(250);
       setIsListening(true);
-      showToast('info', '🎙️ Recording voice... Tap mic icon to finish.');
+      showToast('info', '🎙️ Recording voice... Speak now');
     } catch (err: any) {
       stopActiveStream();
       setIsListening(false);
       if (err.name === 'NotAllowedError' || err.name === 'PermissionDeniedError') {
-        showToast('error', 'Microphone permission denied. Please allow mic access in browser settings.');
+        showToast('error', 'Microphone permission denied in browser settings.');
       } else {
         showToast('error', 'Could not start audio recorder on this device.');
       }
@@ -205,23 +232,8 @@ const InputBar: React.FC<Props> = ({ onSend, disabled }) => {
 
   return (
     <div className="zone-input bg-surface-raised border-t border-border-subtle px-3 sm:px-4 py-2 sm:py-2.5 flex flex-col gap-1.5 sm:gap-2">
-      {/* Visual Live Recording Banner */}
-      {isListening && (
-        <div className="flex items-center justify-between bg-red-500/10 border border-red-500/30 rounded-lg px-3 py-1.5 text-xs text-red-500 animate-pulse select-none">
-          <div className="flex items-center gap-2">
-            <span className="w-2.5 h-2.5 rounded-full bg-red-500 animate-ping" />
-            <span className="font-medium text-xs">Listening to your voice... Speak now</span>
-          </div>
-          <button
-            onClick={toggleVoiceInput}
-            className="text-2xs bg-red-500 text-white px-2.5 py-1 rounded font-semibold hover:bg-red-600 transition-colors cursor-pointer"
-          >
-            Finish & Send
-          </button>
-        </div>
-      )}
       {/* Quick actions */}
-      {showQuick && !value && (
+      {showQuick && !value && !isListening && (
         <motion.div
           initial={{ opacity: 0, y: 4 }}
           animate={{ opacity: 1, y: 0 }}
@@ -241,76 +253,105 @@ const InputBar: React.FC<Props> = ({ onSend, disabled }) => {
       )}
 
       {/* Input container */}
-      <div className="flex items-end gap-1.5 sm:gap-2">
+      <div className="flex items-center gap-1.5 sm:gap-2">
         {/* Quick action toggle */}
-        <button
-          onClick={() => setShowQuick(!showQuick)}
-          className={cn(
-            'flex-shrink-0 w-8 h-8 flex items-center justify-center rounded-lg transition-colors mb-0.5',
-            showQuick ? 'bg-brand-muted text-brand-light' : 'text-text-muted hover:text-text-secondary hover:bg-surface-overlay',
-          )}
-          aria-label="Quick actions"
-          title="Quick prompts"
-        >
-          <Zap size={14} />
-        </button>
+        {!isListening && (
+          <button
+            onClick={() => setShowQuick(!showQuick)}
+            className={cn(
+              'flex-shrink-0 w-8 h-8 flex items-center justify-center rounded-lg transition-colors',
+              showQuick ? 'bg-brand-muted text-brand-light' : 'text-text-muted hover:text-text-secondary hover:bg-surface-overlay',
+            )}
+            aria-label="Quick actions"
+            title="Quick prompts"
+          >
+            <Zap size={14} />
+          </button>
+        )}
 
         {/* Textarea wrapper */}
-        <div className="flex-1 relative min-w-0">
+        <div className="flex-1 relative min-w-0 flex items-center">
           <textarea
             ref={textareaRef}
             rows={1}
             value={value}
             onChange={handleChange}
             onKeyDown={handleKey}
-            placeholder={isListening ? 'Listening to your voice... Speak now!' : disabled ? 'Processing...' : 'Ask Mitra anything...'}
+            placeholder={isListening ? 'Listening... Speak into your mic' : disabled ? 'Processing...' : 'Ask Mitra anything...'}
             disabled={disabled || isThinking}
             className={cn(
-              'w-full bg-surface-overlay text-text-primary text-xs sm:text-sm rounded-lg px-3 py-2 border border-border-subtle focus:outline-none focus:border-brand/50 transition-colors resize-none overflow-y-auto leading-relaxed placeholder:text-text-muted/60',
-              isListening ? 'border-brand text-brand-light animate-pulse' : '',
+              'w-full bg-surface-overlay text-text-primary text-xs sm:text-sm rounded-lg px-3 py-2 border transition-colors resize-none overflow-y-auto leading-relaxed placeholder:text-text-muted/60',
+              isListening ? 'border-red-500/60 bg-red-500/5 text-red-300 animate-pulse' : 'border-border-subtle focus:outline-none focus:border-brand/50',
             )}
             style={{ maxHeight: isMobile ? '100px' : '120px' }}
           />
         </div>
 
-        {/* Attach file */}
-        <button
-          id="inputbar-attach"
-          className="flex-shrink-0 w-8 h-8 items-center justify-center rounded-lg text-text-muted hover:text-text-secondary hover:bg-surface-overlay transition-colors mb-0.5 hidden sm:flex"
-          aria-label="Attach file"
-        >
-          <Paperclip size={14} />
-        </button>
+        {/* Attach file (desktop) */}
+        {!isListening && (
+          <button
+            id="inputbar-attach"
+            className="flex-shrink-0 w-8 h-8 items-center justify-center rounded-lg text-text-muted hover:text-text-secondary hover:bg-surface-overlay transition-colors hidden sm:flex"
+            aria-label="Attach file"
+          >
+            <Paperclip size={14} />
+          </button>
+        )}
 
-        {/* Voice Input — Nilesh Duplex / Web Speech STT */}
-        <button
-          id="inputbar-voice"
-          onClick={toggleVoiceInput}
-          className={cn(
-            'flex-shrink-0 w-8 h-8 flex items-center justify-center rounded-lg transition-colors mb-0.5',
-            isListening ? 'bg-red-500/20 text-red-400 border border-red-500/40 animate-pulse' : 'text-text-muted hover:text-brand-light hover:bg-brand-muted',
-          )}
-          aria-label="Voice input"
-          title={isListening ? 'Listening... click to stop' : 'Click to speak (Voice STT)'}
-        >
-          {isListening ? <MicOff size={14} className="text-red-400" /> : <Mic size={14} />}
-        </button>
+        {/* Listening Mode Controls: Cancel (X) & Finish (Check) */}
+        {isListening ? (
+          <div className="flex items-center gap-1 flex-shrink-0">
+            {/* Cancel Button */}
+            <button
+              type="button"
+              onClick={cancelVoiceInput}
+              className="w-8 h-8 flex items-center justify-center rounded-lg bg-red-500/20 text-red-400 border border-red-500/40 hover:bg-red-500/30 transition-colors cursor-pointer"
+              title="Cancel voice input"
+              aria-label="Cancel voice input"
+            >
+              <X size={14} />
+            </button>
+            {/* Send / Stop Button */}
+            <button
+              type="button"
+              onClick={stopAndSendVoiceInput}
+              className="w-8 h-8 flex items-center justify-center rounded-lg bg-green-500/20 text-green-400 border border-green-500/40 hover:bg-green-500/30 transition-colors cursor-pointer"
+              title="Finish and send voice message"
+              aria-label="Finish and send voice message"
+            >
+              <Check size={14} />
+            </button>
+          </div>
+        ) : (
+          /* Mic Button */
+          <button
+            id="inputbar-voice"
+            onClick={toggleVoiceInput}
+            className="flex-shrink-0 w-8 h-8 flex items-center justify-center rounded-lg text-text-muted hover:text-brand-light hover:bg-brand-muted transition-colors cursor-pointer"
+            aria-label="Voice input"
+            title="Click to speak (Voice STT)"
+          >
+            <Mic size={14} />
+          </button>
+        )}
 
-        {/* Send */}
-        <button
-          id="inputbar-send"
-          onClick={handleSend}
-          disabled={!value.trim() || disabled || isThinking}
-          className={cn(
-            'flex-shrink-0 w-8 h-8 sm:w-8 sm:h-8 flex items-center justify-center rounded-lg transition-all duration-150 active:scale-95 mb-0.5',
-            value.trim() && !disabled && !isThinking
-              ? 'bg-brand text-white hover:bg-brand-light shadow-glow-sm'
-              : 'bg-surface-overlay text-text-muted cursor-not-allowed',
-          )}
-          aria-label="Send message"
-        >
-          <Send size={13} />
-        </button>
+        {/* Send Button */}
+        {!isListening && (
+          <button
+            id="inputbar-send"
+            onClick={handleSend}
+            disabled={!value.trim() || disabled || isThinking}
+            className={cn(
+              'flex-shrink-0 w-8 h-8 flex items-center justify-center rounded-lg transition-all duration-150 active:scale-95',
+              value.trim() && !disabled && !isThinking
+                ? 'bg-brand text-white hover:bg-brand-light shadow-glow-sm cursor-pointer'
+                : 'bg-surface-overlay text-text-muted cursor-not-allowed',
+            )}
+            aria-label="Send message"
+          >
+            <Send size={13} />
+          </button>
+        )}
       </div>
 
       {/* Hint — only on desktop */}
