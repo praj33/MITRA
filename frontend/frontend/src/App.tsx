@@ -151,10 +151,6 @@ const App: React.FC = () => {
       const activeUserId = useCompanionStore.getState().userId;
 
       try {
-        // Greeting
-        const { greeting } = await CompanionService.getGreeting(activeUserId);
-        addMessage({ role: 'assistant', content: greeting });
-
         // Memory
         const { facts } = await CompanionService.getMemory(activeUserId);
         if (facts?.name) setUserName(facts.name);
@@ -178,11 +174,7 @@ const App: React.FC = () => {
         });
         showToast('success', 'Mitra Connected', 'All systems operational');
       } catch {
-        // API not yet available — still show the shell with a fallback greeting
-        addMessage({
-          role: 'assistant',
-          content: "Hey! I'm Mitra, your AI companion. I'm here whenever you need me — just say the word.",
-        });
+        // API fallback - keep messages clean so Welcome Screen renders
       }
     };
     init();
