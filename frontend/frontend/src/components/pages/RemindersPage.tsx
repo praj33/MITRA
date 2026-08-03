@@ -1,9 +1,10 @@
-// components/pages/RemindersPage.tsx — Active reminders with countdown
-import React, { useEffect, useState } from 'react';
-import { motion } from 'framer-motion';
-import { Bell, Plus, Clock, Repeat, Trash2 } from 'lucide-react';
+// components/pages/RemindersPage.tsx — Active reminders with countdown + built-in Add Reminder form
+import React, { useEffect, useState, useCallback } from 'react';
+import { motion, AnimatePresence } from 'framer-motion';
+import { Bell, Plus, Clock, Repeat, Trash2, X, Check } from 'lucide-react';
 import { CompanionService } from '../../services/companion.service';
 import { useCompanionStore } from '../../store/companion.store';
+import { showToast } from '../shell/Toast';
 
 interface Reminder {
   id: string; message: string; time: string;
@@ -16,21 +17,56 @@ const RemindersPage: React.FC<{ onChatNavigate: (msg: string) => void }> = ({ on
   const [loading, setLoading] = useState(true);
   const [now, setNow] = useState(Date.now());
 
-  useEffect(() => {
-    (async () => {
-      try {
-        const data = await CompanionService.getReminders(userId);
-        setReminders(data.reminders || []);
-      } catch { setReminders([]); }
-      setLoading(false);
-    })();
+  // Add Reminder Form state
+  const [showAddForm, setShowAddForm] = useState(false);
+  const [newMessage, setNewMessage] = useState('');
+  const [newDate, setNewDate] = useState(new Date().toISOString().split('T')[0]);
+  const [newTime, setNewTime] = useState('17:00');
+  const [submitting, setSubmitting] = useState(false);
+
+  const fetchReminders = useCallback(async () => {
+    try {
+      const data = await CompanionService.getReminders(userId);
+      setReminders(data.reminders || []);
+    } catch { setReminders([]); }
+    setLoading(false);
   }, [userId]);
+
+  useEffect(() => {
+    fetchReminders();
+  }, [fetchReminders]);
 
   // Tick every minute for countdown
   useEffect(() => {
     const iv = setInterval(() => setNow(Date.now()), 60000);
     return () => clearInterval(iv);
   }, []);
+
+  const handleCreateReminder = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!newMessage.trim() || submitting) return;
+
+    setSubmitting(true);
+    try {
+      const timeIso = `${newDate}T${newTime}:00`;
+      const res = await CompanionService.createReminder(newMessage.trim(), timeIso, undefined, userId);
+
+      if (res && res.reminder) {
+        setReminders(prev => [res.reminder, ...prev]);
+      } else {
+        await fetchReminders();
+      }
+
+      showToast('success', 'Reminder Set', `Reminder set for ${newDate} at ${newTime}`);
+      setNewMessage('');
+      setShowAddForm(false);
+    } catch (err) {
+      console.error('Failed to create reminder:', err);
+      showToast('error', 'Error', 'Failed to create reminder.');
+    } finally {
+      setSubmitting(false);
+    }
+  };
 
   const getCountdown = (time: string) => {
     const diff = new Date(time).getTime() - now;
@@ -47,13 +83,15 @@ const RemindersPage: React.FC<{ onChatNavigate: (msg: string) => void }> = ({ on
     try {
       setReminders(prev => prev.filter(r => r.id !== id));
       await CompanionService.deleteReminder(id, userId);
+      showToast('info', 'Reminder Deleted', 'Reminder removed.');
     } catch (err) {
       console.error('Failed to delete reminder:', err);
+      showToast('error', 'Error', 'Failed to delete reminder.');
     }
   };
 
   return (
-    <motion.div initial={{ opacity: 0, y: 12 }} animate={{ opacity: 1, y: 0 }} className="page-container">
+    <motion.div initial={{ opacity: 0, y: 12 }} animate={{ opacity: 1, y: 0 }} className="page-container pb-20">
       <div className="page-header">
         <div className="flex items-center gap-3">
           <div className="page-icon" style={{ background: 'rgba(245,158,11,0.15)', color: '#f59e0b' }}><Bell size={20} /></div>
@@ -62,8 +100,87 @@ const RemindersPage: React.FC<{ onChatNavigate: (msg: string) => void }> = ({ on
             <p className="page-subtitle">{reminders.filter(r => r.status === 'active').length} active reminders</p>
           </div>
         </div>
-        <button onClick={() => onChatNavigate('Remind me in 30 minutes to check messages')} className="page-btn-primary"><Plus size={14} /> Add Reminder</button>
+        <button onClick={() => setShowAddForm(prev => !prev)} className="page-btn-primary"><Plus size={14} /> Add Reminder</button>
       </div>
+
+      {/* Inline Add Reminder Form */}
+      <AnimatePresence>
+        {showAddForm && (
+          <motion.form
+            initial={{ opacity: 0, height: 0, y: -10 }}
+            animate={{ opacity: 1, height: 'auto', y: 0 }}
+            exit={{ opacity: 0, height: 0, y: -10 }}
+            onSubmit={handleCreateReminder}
+            className="mb-6 p-4 rounded-xl bg-surface-elevated border border-amber-500/30 flex flex-col gap-3 shadow-xl"
+          >
+            <div className="flex items-center justify-between border-b border-border-subtle pb-2">
+              <h3 className="text-sm font-semibold text-text-primary flex items-center gap-2">
+                <Bell size={16} className="text-amber-400" /> Create New Reminder
+              </h3>
+              <button
+                type="button"
+                onClick={() => setShowAddForm(false)}
+                className="text-text-muted hover:text-text-primary"
+              >
+                <X size={16} />
+              </button>
+            </div>
+
+            <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+              <div className="sm:col-span-1">
+                <label className="block text-2xs text-text-muted mb-1 font-medium">Reminder Message *</label>
+                <input
+                  type="text"
+                  required
+                  value={newMessage}
+                  onChange={e => setNewMessage(e.target.value)}
+                  placeholder="e.g. Check messages / Pay electric bill"
+                  className="w-full bg-surface-overlay border border-border-subtle rounded-lg px-3 py-1.5 text-xs text-text-primary focus:outline-none focus:border-amber-400"
+                />
+              </div>
+
+              <div>
+                <label className="block text-2xs text-text-muted mb-1 font-medium">Date *</label>
+                <input
+                  type="date"
+                  required
+                  value={newDate}
+                  onChange={e => setNewDate(e.target.value)}
+                  className="w-full bg-surface-overlay border border-border-subtle rounded-lg px-3 py-1.5 text-xs text-text-primary focus:outline-none focus:border-amber-400"
+                />
+              </div>
+
+              <div>
+                <label className="block text-2xs text-text-muted mb-1 font-medium">Time *</label>
+                <input
+                  type="time"
+                  required
+                  value={newTime}
+                  onChange={e => setNewTime(e.target.value)}
+                  className="w-full bg-surface-overlay border border-border-subtle rounded-lg px-3 py-1.5 text-xs text-text-primary focus:outline-none focus:border-amber-400"
+                />
+              </div>
+            </div>
+
+            <div className="flex justify-end gap-2 pt-2">
+              <button
+                type="button"
+                onClick={() => setShowAddForm(false)}
+                className="px-3 py-1.5 rounded-lg border border-border-subtle text-xs text-text-muted hover:bg-surface-overlay"
+              >
+                Cancel
+              </button>
+              <button
+                type="submit"
+                disabled={submitting || !newMessage.trim()}
+                className="px-4 py-1.5 rounded-lg bg-amber-500 text-black font-medium text-xs hover:bg-amber-400 transition-colors flex items-center gap-1.5"
+              >
+                <Check size={14} /> {submitting ? 'Setting...' : 'Set Reminder'}
+              </button>
+            </div>
+          </motion.form>
+        )}
+      </AnimatePresence>
 
       {loading ? (
         <div className="page-loading">Loading reminders...</div>
@@ -71,7 +188,9 @@ const RemindersPage: React.FC<{ onChatNavigate: (msg: string) => void }> = ({ on
         <div className="page-empty">
           <Bell size={32} className="text-text-muted" />
           <p>No active reminders</p>
-          <button onClick={() => onChatNavigate('Set a reminder for 5pm')} className="page-btn-primary mt-2"><Plus size={14} /> Create Reminder</button>
+          <button onClick={() => setShowAddForm(true)} className="page-btn-primary mt-2">
+            <Plus size={14} /> Create Reminder
+          </button>
         </div>
       ) : (
         <div className="page-card-list">
@@ -99,7 +218,14 @@ const RemindersPage: React.FC<{ onChatNavigate: (msg: string) => void }> = ({ on
                       </div>
                     </div>
                   </div>
-                  <button onClick={() => removeReminder(rem.id)} className="page-btn-icon text-text-muted hover:text-red-400" title="Delete Reminder"><Trash2 size={14} /></button>
+
+                  <button
+                    onClick={() => removeReminder(rem.id)}
+                    className="text-text-muted hover:text-red-400 p-1.5 rounded-lg hover:bg-red-500/10 transition-colors"
+                    title="Delete reminder"
+                  >
+                    <Trash2 size={15} />
+                  </button>
                 </div>
               </motion.div>
             );

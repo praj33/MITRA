@@ -110,11 +110,32 @@ class ExecutionService:
                     }
 
                 # Otherwise CREATE:
-                title = action_data.get("title") or action_data.get("event") or raw_msg or "New Event"
+                import re
+                raw_title = action_data.get("title") or action_data.get("event") or raw_msg or "New Event"
+                clean_title = re.sub(r'(?i)^(create|add)\s+(a\s+)?(calendar\s+)?event\s*(for\s+)?', '', raw_title).strip()
+                clean_title = re.sub(r'(?i)\s+on\s+\d{4}-\d{2}-\d{2}.*$', '', clean_title).strip()
+                if not clean_title or clean_title.lower() in ("calendar event", "event"):
+                    clean_title = "Calendar Event"
+                else:
+                    clean_title = clean_title[0].upper() + clean_title[1:]
+
+                title = clean_title
                 ev_id = f"ev_{uuid4().hex[:8]}"
                 now = datetime.utcnow()
-                start_iso = action_data.get("start") or action_data.get("time") or now.isoformat()
-                end_iso = action_data.get("end") or (now + timedelta(hours=1)).isoformat()
+
+                if "tomorrow" in (raw_msg or "").lower():
+                    event_date = now + timedelta(days=1)
+                    start_iso = event_date.strftime("%Y-%m-%dT09:00:00")
+                else:
+                    start_iso = action_data.get("start") or action_data.get("time") or now.strftime("%Y-%m-%dT%H:%M:00")
+                
+                # Strip microsecond noise if present
+                if "." in start_iso and "T" in start_iso:
+                    start_iso = start_iso.split(".")[0]
+
+                end_iso = action_data.get("end") or (now + timedelta(hours=1)).strftime("%Y-%m-%dT%H:%M:00")
+                if "." in end_iso and "T" in end_iso:
+                    end_iso = end_iso.split(".")[0]
 
                 ev_doc = {
                     "_id": ev_id,
@@ -137,7 +158,7 @@ class ExecutionService:
                 return {
                     "status": "success",
                     "action_type": action_type,
-                    "summary": f"Calendar event created: {title}",
+                    "summary": f"Calendar event created: '{title}' for {start_iso.replace('T', ' at ')}.",
                     "event": {
                         "id": ev_id,
                         "title": title,
@@ -160,7 +181,9 @@ class ExecutionService:
                 db = _get_db()
 
                 if is_read and db is not None:
-                    docs = list(db["user_tasks"].find({"$or": [{"user_id": user_id}, {"user_id": "user_default"}]}).sort("created_at", -1).limit(10))
+                    docs = list(db["user_tasks"].find({"$or": [{"user_id": user_id}, {"user_id": "user_default"}]}).sort("created_at", -1).limit(20))
+                    if not docs:
+                        docs = list(db["tasks"].find({"$or": [{"user_id": user_id}, {"user_id": "user_default"}]}).sort("created_at", -1).limit(20))
                     dummy_exact = {"task", "new task", "create task", "check my tasks", "show my pending tasks", "what are my tasks"}
                     filtered_docs = [d for d in docs if (d.get("title") or d.get("task") or "").lower().strip() not in dummy_exact and not (d.get("title") or d.get("task") or "").lower().strip().startswith("check my task")]
                     if filtered_docs:

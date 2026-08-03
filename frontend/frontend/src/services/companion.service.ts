@@ -104,6 +104,16 @@ export const CompanionService = {
     return resp.json();
   },
 
+  async createCalendarEvent(title: string, start: string, end?: string, location = '', description = '', color = '#7c5cfc', userId = getCurrentUserId()): Promise<any> {
+    const resp = await fetch(`${getBase()}/api/pages/calendar/events?user_id=${userId}`, {
+      method: 'POST',
+      headers: headers(),
+      body: JSON.stringify({ title, start, end, location, description, color }),
+    });
+    if (!resp.ok) throw new Error(`HTTP ${resp.status}`);
+    return resp.json();
+  },
+
   async clearPastCalendarEvents(userId = getCurrentUserId()): Promise<{ deleted_count: number }> {
     const resp = await fetch(`${getBase()}/api/pages/calendar/events/cleanup/past?user_id=${userId}`, {
       method: 'DELETE',
@@ -152,6 +162,16 @@ export const CompanionService = {
   async getReminders(userId = getCurrentUserId()): Promise<{ reminders: any[] }> {
     const resp = await fetch(`${getBase()}/api/pages/reminders/list?user_id=${userId}`, {
       headers: headers(),
+    });
+    if (!resp.ok) throw new Error(`HTTP ${resp.status}`);
+    return resp.json();
+  },
+
+  async createReminder(message: string, time: string, repeat?: string, userId = getCurrentUserId()): Promise<any> {
+    const resp = await fetch(`${getBase()}/api/pages/reminders/create?user_id=${userId}`, {
+      method: 'POST',
+      headers: headers(),
+      body: JSON.stringify({ message, time, repeat }),
     });
     if (!resp.ok) throw new Error(`HTTP ${resp.status}`);
     return resp.json();

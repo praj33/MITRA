@@ -1,6 +1,6 @@
 import React, { useEffect, useState, useCallback } from 'react';
-import { motion } from 'framer-motion';
-import { Calendar, Clock, MapPin, Plus, ChevronLeft, ChevronRight, Trash2, X } from 'lucide-react';
+import { motion, AnimatePresence } from 'framer-motion';
+import { Calendar, Clock, MapPin, Plus, ChevronLeft, ChevronRight, Trash2, X, Check } from 'lucide-react';
 import { CompanionService } from '../../services/companion.service';
 import { useCompanionStore } from '../../store/companion.store';
 import { showToast } from '../shell/Toast';
@@ -19,6 +19,16 @@ const CalendarPage: React.FC<{ onChatNavigate: (msg: string) => void }> = ({ onC
   const [viewDate, setViewDate] = useState(new Date());
   const [eventFilter, setEventFilter] = useState<'upcoming' | 'past' | 'all'>('upcoming');
 
+  // Add Event Form State
+  const [showAddForm, setShowAddForm] = useState(false);
+  const [newTitle, setNewTitle] = useState('');
+  const [newDate, setNewDate] = useState(new Date().toISOString().split('T')[0]);
+  const [newStartTime, setNewStartTime] = useState('09:00');
+  const [newEndTime, setNewEndTime] = useState('10:00');
+  const [newLocation, setNewLocation] = useState('');
+  const [newDescription, setNewDescription] = useState('');
+  const [submitting, setSubmitting] = useState(false);
+
   const fetchEvents = useCallback(async () => {
     setLoading(true);
     try {
@@ -29,6 +39,44 @@ const CalendarPage: React.FC<{ onChatNavigate: (msg: string) => void }> = ({ onC
   }, [userId]);
 
   useEffect(() => { fetchEvents(); }, [fetchEvents]);
+
+  const handleCreateEvent = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!newTitle.trim() || submitting) return;
+
+    setSubmitting(true);
+    try {
+      const startIso = `${newDate}T${newStartTime}:00`;
+      const endIso = `${newDate}T${newEndTime}:00`;
+
+      const res = await CompanionService.createCalendarEvent(
+        newTitle.trim(),
+        startIso,
+        endIso,
+        newLocation.trim(),
+        newDescription.trim(),
+        '#7c5cfc',
+        userId
+      );
+
+      if (res && res.event) {
+        setEvents(prev => [...prev, res.event]);
+      } else {
+        await fetchEvents();
+      }
+
+      showToast('success', 'Event Created', `Added "${newTitle.trim()}" to calendar.`);
+      setNewTitle('');
+      setNewLocation('');
+      setNewDescription('');
+      setShowAddForm(false);
+    } catch (err) {
+      console.error('Failed to create event:', err);
+      showToast('error', 'Error', 'Failed to create calendar event.');
+    } finally {
+      setSubmitting(false);
+    }
+  };
 
   const deleteEvent = async (eventId: string) => {
     try {
@@ -86,7 +134,6 @@ const CalendarPage: React.FC<{ onChatNavigate: (msg: string) => void }> = ({ onC
   const formatTime = (iso: string) =>
     new Date(iso).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
 
-  // Event list filtering logic
   const todayStart = new Date(new Date().setHours(0, 0, 0, 0));
   const filteredEvents = events
     .filter(e => {
@@ -126,9 +173,99 @@ const CalendarPage: React.FC<{ onChatNavigate: (msg: string) => void }> = ({ onC
           <button onClick={goToPrevWeek} className="page-btn-icon" aria-label="Previous week"><ChevronLeft size={16} /></button>
           <button onClick={goToToday} className="page-btn-sm">Today</button>
           <button onClick={goToNextWeek} className="page-btn-icon" aria-label="Next week"><ChevronRight size={16} /></button>
-          <button onClick={() => onChatNavigate('Create a calendar event')} className="page-btn-primary"><Plus size={14} /> Add Event</button>
+          <button onClick={() => setShowAddForm(prev => !prev)} className="page-btn-primary"><Plus size={14} /> Add Event</button>
         </div>
       </div>
+
+      {/* Inline Add Event Form */}
+      <AnimatePresence>
+        {showAddForm && (
+          <motion.form
+            initial={{ opacity: 0, height: 0, y: -10 }}
+            animate={{ opacity: 1, height: 'auto', y: 0 }}
+            exit={{ opacity: 0, height: 0, y: -10 }}
+            onSubmit={handleCreateEvent}
+            className="mb-6 p-4 rounded-xl bg-surface-elevated border border-brand/30 flex flex-col gap-3 shadow-xl"
+          >
+            <div className="flex items-center justify-between border-b border-border-subtle pb-2">
+              <h3 className="text-sm font-semibold text-text-primary flex items-center gap-2">
+                <Calendar size={16} className="text-brand-light" /> Create Calendar Event
+              </h3>
+              <button
+                type="button"
+                onClick={() => setShowAddForm(false)}
+                className="text-text-muted hover:text-text-primary"
+              >
+                <X size={16} />
+              </button>
+            </div>
+
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+              <div>
+                <label className="block text-2xs text-text-muted mb-1 font-medium">Event Title *</label>
+                <input
+                  type="text"
+                  required
+                  value={newTitle}
+                  onChange={e => setNewTitle(e.target.value)}
+                  placeholder="e.g. Ganesh Utsav / Client Meeting"
+                  className="w-full bg-surface-overlay border border-border-subtle rounded-lg px-3 py-1.5 text-xs text-text-primary focus:outline-none focus:border-brand"
+                />
+              </div>
+
+              <div>
+                <label className="block text-2xs text-text-muted mb-1 font-medium">Date *</label>
+                <input
+                  type="date"
+                  required
+                  value={newDate}
+                  onChange={e => setNewDate(e.target.value)}
+                  className="w-full bg-surface-overlay border border-border-subtle rounded-lg px-3 py-1.5 text-xs text-text-primary focus:outline-none focus:border-brand"
+                />
+              </div>
+
+              <div>
+                <label className="block text-2xs text-text-muted mb-1 font-medium">Start Time *</label>
+                <input
+                  type="time"
+                  required
+                  value={newStartTime}
+                  onChange={e => setNewStartTime(e.target.value)}
+                  className="w-full bg-surface-overlay border border-border-subtle rounded-lg px-3 py-1.5 text-xs text-text-primary focus:outline-none focus:border-brand"
+                />
+              </div>
+
+              <div>
+                <label className="block text-2xs text-text-muted mb-1 font-medium">End Time *</label>
+                <input
+                  type="time"
+                  required
+                  value={newEndTime}
+                  onChange={e => setNewEndTime(e.target.value)}
+                  className="w-full bg-surface-overlay border border-border-subtle rounded-lg px-3 py-1.5 text-xs text-text-primary focus:outline-none focus:border-brand"
+                />
+              </div>
+            </div>
+
+            <div className="flex justify-end gap-2 pt-2">
+              <button
+                type="button"
+                onClick={() => setShowAddForm(false)}
+                className="px-3 py-1.5 rounded-lg border border-border-subtle text-xs text-text-muted hover:bg-surface-overlay"
+              >
+                Cancel
+              </button>
+              <button
+                type="submit"
+                disabled={submitting || !newTitle.trim()}
+                className="px-4 py-1.5 rounded-lg bg-brand text-white text-xs font-medium hover:bg-brand-light transition-colors flex items-center gap-1.5"
+              >
+                <Check size={14} /> {submitting ? 'Saving...' : 'Save Event'}
+              </button>
+            </div>
+          </motion.form>
+        )}
+      </AnimatePresence>
 
       {/* Grid view */}
       {loading ? (
@@ -179,75 +316,75 @@ const CalendarPage: React.FC<{ onChatNavigate: (msg: string) => void }> = ({ onC
             })}
           </div>
 
-          {/* Events List & Filter Tabs */}
-          <div className="calendar-upcoming-section">
-            <div className="flex items-center justify-between mb-3 flex-wrap gap-2">
-              <h3 className="section-title capitalize">{eventFilter} Events</h3>
-              <div className="flex items-center gap-1 p-1 rounded-xl bg-surface-raised border border-border-subtle text-xs font-medium">
+          {/* Filter Bar & Event list */}
+          <div className="flex items-center justify-between mb-4 flex-wrap gap-2">
+            <div className="flex items-center gap-1">
+              {(['upcoming', 'past', 'all'] as const).map(f => (
                 <button
-                  onClick={() => setEventFilter('upcoming')}
-                  className={`px-3 py-1 rounded-lg transition-all ${
-                    eventFilter === 'upcoming' ? 'bg-surface-overlay text-text-primary font-semibold' : 'text-text-secondary hover:text-text-primary'
+                  key={f}
+                  onClick={() => setEventFilter(f)}
+                  className={`px-3 py-1 rounded-full text-2xs capitalize transition-colors ${
+                    eventFilter === f
+                      ? 'bg-brand-muted text-brand-light font-semibold border border-brand/30'
+                      : 'text-text-muted hover:text-text-secondary'
                   }`}
                 >
-                  Upcoming
+                  {f} ({
+                    f === 'upcoming' ? events.filter(e => new Date(e.start) >= todayStart).length :
+                    f === 'past' ? events.filter(e => new Date(e.start) < todayStart).length :
+                    events.length
+                  })
                 </button>
-                <button
-                  onClick={() => setEventFilter('past')}
-                  className={`px-3 py-1 rounded-lg transition-all ${
-                    eventFilter === 'past' ? 'bg-surface-overlay text-text-primary font-semibold' : 'text-text-secondary hover:text-text-primary'
-                  }`}
-                >
-                  Past ({pastEventsCount})
-                </button>
-                <button
-                  onClick={() => setEventFilter('all')}
-                  className={`px-3 py-1 rounded-lg transition-all ${
-                    eventFilter === 'all' ? 'bg-surface-overlay text-text-primary font-semibold' : 'text-text-secondary hover:text-text-primary'
-                  }`}
-                >
-                  All ({events.length})
-                </button>
-              </div>
+              ))}
             </div>
+          </div>
 
-            {filteredEvents.length === 0 ? (
-              <div className="page-empty">
-                <Calendar size={28} className="text-text-muted" />
-                <p>No {eventFilter} events found</p>
-              </div>
-            ) : (
-              <div className="page-card-list">
-                {filteredEvents.map(ev => (
-                  <motion.div key={ev.id} className="page-card calendar-event-card" whileHover={{ scale: 1.01 }}>
-                    <div className="event-color-bar" style={{ background: ev.color }} />
-                    <div className="flex-1 min-w-0">
-                      <div className="flex items-center gap-2">
-                        <h4 className="page-card-title">{ev.title}</h4>
-                        {new Date(ev.start) < todayStart && (
-                          <span className="px-2 py-0.5 rounded text-[10px] bg-red-500/10 text-red-400 font-medium border border-red-500/20">
-                            Past
+          {filteredEvents.length === 0 ? (
+            <div className="page-empty">
+              <Calendar size={32} className="text-text-muted" />
+              <p>No {eventFilter} events</p>
+              <button onClick={() => setShowAddForm(true)} className="page-btn-primary mt-2">
+                <Plus size={14} /> Add Event
+              </button>
+            </div>
+          ) : (
+            <div className="page-card-list">
+              {filteredEvents.map(ev => (
+                <motion.div key={ev.id} className="page-card" whileHover={{ scale: 1.005 }}>
+                  <div className="flex items-start justify-between gap-3">
+                    <div className="flex items-start gap-3 min-w-0">
+                      <div
+                        className="w-2.5 h-10 rounded-full flex-shrink-0 mt-0.5"
+                        style={{ backgroundColor: ev.color }}
+                      />
+                      <div className="min-w-0">
+                        <h4 className="page-card-title truncate">{ev.title}</h4>
+                        <div className="flex items-center gap-3 mt-1 text-2xs text-text-muted flex-wrap">
+                          <span className="flex items-center gap-1 font-medium text-text-secondary">
+                            <Clock size={11} className="text-brand-light" />
+                            {new Date(ev.start).toLocaleDateString([], { weekday: 'short', month: 'short', day: 'numeric' })} at {formatTime(ev.start)}
                           </span>
-                        )}
-                      </div>
-                      {ev.description && <p className="page-card-desc">{ev.description}</p>}
-                      <div className="flex items-center gap-3 mt-2 flex-wrap">
-                        <span className="page-card-meta"><Clock size={12} /> {new Date(ev.start).toLocaleDateString([], { month: 'short', day: 'numeric' })} @ {formatTime(ev.start)} – {formatTime(ev.end)}</span>
-                        {ev.location && <span className="page-card-meta"><MapPin size={12} /> {ev.location}</span>}
+                          {ev.location && (
+                            <span className="flex items-center gap-1">
+                              <MapPin size={11} /> {ev.location}
+                            </span>
+                          )}
+                        </div>
                       </div>
                     </div>
+
                     <button
                       onClick={() => deleteEvent(ev.id)}
-                      className="page-btn-icon text-text-muted hover:text-red-400"
-                      title="Delete Event"
+                      className="text-text-muted hover:text-red-400 p-1.5 rounded-lg hover:bg-red-500/10 transition-colors"
+                      title="Delete event"
                     >
-                      <Trash2 size={14} />
+                      <Trash2 size={15} />
                     </button>
-                  </motion.div>
-                ))}
-              </div>
-            )}
-          </div>
+                  </div>
+                </motion.div>
+              ))}
+            </div>
+          )}
         </>
       )}
     </motion.div>
