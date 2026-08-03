@@ -27,7 +27,7 @@ const ThinkingIndicator = () => (
 
 const EmptyState = () => {
   const userName = useCompanionStore(s => s.userName);
-  const displayName = !userName || ['there', 'user_default', 'using', 'anonymous'].includes(userName.toLowerCase()) ? '' : `, ${userName}`;
+  const displayName = !userName || ['there', 'user_default', 'using', 'anonymous'].includes(userName.toLowerCase()) ? 'User' : userName;
 
   return (
     <motion.div
@@ -42,7 +42,7 @@ const EmptyState = () => {
       </div>
       <div>
         <h2 className="text-lg sm:text-xl font-semibold text-text-primary mb-1 sm:mb-1.5">
-          Good to see you{displayName} 👋
+          Good to see you, {displayName} 👋
         </h2>
         <p className="text-xs sm:text-sm text-text-muted max-w-xs leading-relaxed">
           I'm Mitra — your AI companion. Ask me anything, run a workflow, or let me help you get things done.
