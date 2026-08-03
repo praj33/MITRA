@@ -131,8 +131,10 @@ const CalendarPage: React.FC<{ onChatNavigate: (msg: string) => void }> = ({ onC
   const getEventsForDay = (day: Date) =>
     events.filter(e => new Date(e.start).toDateString() === day.toDateString());
 
-  const formatTime = (iso: string) =>
-    new Date(iso).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+  const formatTime = (iso: string, hasTime?: boolean) => {
+    if (hasTime === false || !iso || !iso.includes('T')) return 'No time set';
+    return new Date(iso).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+  };
 
   const todayStart = new Date(new Date().setHours(0, 0, 0, 0));
   const filteredEvents = events
@@ -292,7 +294,7 @@ const CalendarPage: React.FC<{ onChatNavigate: (msg: string) => void }> = ({ onC
                         title={`${ev.title} (${formatTime(ev.start)})`}
                       >
                         <div className="flex flex-col min-w-0 flex-1">
-                          <span className="event-time">{formatTime(ev.start)}</span>
+                          <span className="event-time">{formatTime(ev.start, (ev as any).has_time)}</span>
                           <span className="event-title truncate">{ev.title}</span>
                         </div>
                         <button
@@ -362,7 +364,7 @@ const CalendarPage: React.FC<{ onChatNavigate: (msg: string) => void }> = ({ onC
                         <div className="flex items-center gap-3 mt-1 text-2xs text-text-muted flex-wrap">
                           <span className="flex items-center gap-1 font-medium text-text-secondary">
                             <Clock size={11} className="text-brand-light" />
-                            {new Date(ev.start).toLocaleDateString([], { weekday: 'short', month: 'short', day: 'numeric' })} at {formatTime(ev.start)}
+                            {new Date(ev.start).toLocaleDateString([], { weekday: 'short', month: 'short', day: 'numeric' })} · {formatTime(ev.start, (ev as any).has_time)}
                           </span>
                           {ev.location && (
                             <span className="flex items-center gap-1">

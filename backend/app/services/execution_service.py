@@ -111,9 +111,14 @@ class ExecutionService:
 
                 # Otherwise CREATE:
                 import re
+                raw_msg_lower = (raw_msg or "").lower()
                 raw_title = action_data.get("title") or action_data.get("event") or raw_msg or "New Event"
+
+                # Clean title
                 clean_title = re.sub(r'(?i)^(create|add)\s+(a\s+)?(calendar\s+)?event\s*(for\s+)?', '', raw_title).strip()
                 clean_title = re.sub(r'(?i)\s+on\s+\d{4}-\d{2}-\d{2}.*$', '', clean_title).strip()
+                clean_title = re.sub(r'(?i)\s+at\s+\d{1,2}(:\d{2})?\s*(am|pm)?.*$', '', clean_title).strip()
+                clean_title = re.sub(r'(?i)\s+(tomorrow|today|yesterday).*$', '', clean_title).strip()
                 if not clean_title or clean_title.lower() in ("calendar event", "event"):
                     clean_title = "Calendar Event"
                 else:
@@ -123,19 +128,43 @@ class ExecutionService:
                 ev_id = f"ev_{uuid4().hex[:8]}"
                 now = datetime.utcnow()
 
-                if "tomorrow" in (raw_msg or "").lower():
+                # Determine Date
+                if "tomorrow" in raw_msg_lower:
                     event_date = now + timedelta(days=1)
-                    start_iso = event_date.strftime("%Y-%m-%dT09:00:00")
                 else:
-                    start_iso = action_data.get("start") or action_data.get("time") or now.strftime("%Y-%m-%dT%H:%M:00")
-                
-                # Strip microsecond noise if present
-                if "." in start_iso and "T" in start_iso:
-                    start_iso = start_iso.split(".")[0]
+                    event_date = now
 
-                end_iso = action_data.get("end") or (now + timedelta(hours=1)).strftime("%Y-%m-%dT%H:%M:00")
-                if "." in end_iso and "T" in end_iso:
-                    end_iso = end_iso.split(".")[0]
+                # Determine if user specified an explicit time
+                time_match = re.search(r'\b(at\s+)?(\d{1,2})(:\d{2})?\s*(am|pm)\b', raw_msg_lower)
+                time_match_24 = re.search(r'\bat\s+(\d{1,2}):(\d{2})\b', raw_msg_lower)
+
+                has_explicit_time = False
+                hour, minute = 0, 0
+
+                if time_match:
+                    has_explicit_time = True
+                    h = int(time_match.group(2))
+                    m = int(time_match.group(3)[1:]) if time_match.group(3) else 0
+                    ampm = (time_match.group(4) or "").lower()
+                    if ampm == "pm" and h < 12:
+                        h += 12
+                    elif ampm == "am" and h == 12:
+                        h = 0
+                    hour, minute = h, m
+                elif time_match_24:
+                    has_explicit_time = True
+                    hour = int(time_match_24.group(1))
+                    minute = int(time_match_24.group(2))
+
+                if has_explicit_time:
+                    start_iso = event_date.replace(hour=hour, minute=minute, second=0, microsecond=0).strftime("%Y-%m-%dT%H:%M:00")
+                    end_iso = (event_date.replace(hour=hour, minute=minute, second=0, microsecond=0) + timedelta(hours=1)).strftime("%Y-%m-%dT%H:%M:00")
+                    time_display = f"at {event_date.replace(hour=hour, minute=minute).strftime('%I:%M %p')}"
+                else:
+                    # User did NOT specify time -> Store date only / No time set
+                    start_iso = event_date.strftime("%Y-%m-%d")
+                    end_iso = start_iso
+                    time_display = "(No time set)"
 
                 ev_doc = {
                     "_id": ev_id,
@@ -143,6 +172,7 @@ class ExecutionService:
                     "title": title,
                     "start": start_iso,
                     "end": end_iso,
+                    "has_time": has_explicit_time,
                     "color": action_data.get("color", "#7c5cfc"),
                     "description": action_data.get("description", ""),
                     "location": action_data.get("location", ""),
@@ -155,15 +185,17 @@ class ExecutionService:
                     except Exception as e:
                         logger.warning(f"Failed to persist calendar event: {e}")
 
+                date_label = "Tomorrow" if "tomorrow" in raw_msg_lower else event_date.strftime("%Y-%m-%d")
                 return {
                     "status": "success",
                     "action_type": action_type,
-                    "summary": f"Calendar event created: '{title}' for {start_iso.replace('T', ' at ')}.",
+                    "summary": f"Calendar event created: '{title}' for {date_label} {time_display}.",
                     "event": {
                         "id": ev_id,
                         "title": title,
                         "start": start_iso,
-                        "end": end_iso
+                        "end": end_iso,
+                        "has_time": has_explicit_time
                     },
                     "trace_id": trace_id,
                     "timestamp": now.isoformat(),
