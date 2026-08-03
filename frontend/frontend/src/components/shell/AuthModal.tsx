@@ -90,16 +90,16 @@ const AuthModal: React.FC<Props> = ({ open, onClose }) => {
             style={{ width: '92vw', maxHeight: '90vh' }}
           >
             {/* Header Accent Bar */}
-            <div className="absolute top-0 left-0 right-0 h-1 bg-gradient-to-r from-accent-primary via-indigo-500 to-purple-500" />
+            <div className="absolute top-0 left-0 right-0 h-1 bg-brand" />
 
             {/* Top Row: Brand & Close */}
             <div className="flex items-center justify-between pt-1">
               <div className="flex items-center gap-2">
-                <div className="w-8 h-8 rounded-xl bg-gradient-to-tr from-accent-primary to-purple-600 flex items-center justify-center text-white shadow-md shadow-accent-primary/20">
+                <div className="w-8 h-8 rounded-xl bg-brand flex items-center justify-center text-white shadow-md shadow-brand/20">
                   <Sparkles size={18} />
                 </div>
                 <div>
-                  <h2 className="text-lg font-bold tracking-tight">Mitra Account</h2>
+                  <h2 className="text-lg font-bold tracking-tight text-text-primary">Mitra Account</h2>
                   <p className="text-xs text-text-secondary">Universal AI Companion</p>
                 </div>
               </div>
@@ -116,7 +116,7 @@ const AuthModal: React.FC<Props> = ({ open, onClose }) => {
             {isAuthenticated ? (
               <div className="flex flex-col gap-4 py-2">
                 <div className="p-4 rounded-xl bg-surface-overlay border border-border-subtle flex items-center gap-3">
-                  <div className="w-12 h-12 rounded-full bg-accent-primary/10 border border-accent-primary/30 flex items-center justify-center text-accent-primary font-bold text-lg">
+                  <div className="w-12 h-12 rounded-full bg-brand/10 border border-brand/30 flex items-center justify-center text-brand font-bold text-lg">
                     {userName ? userName.charAt(0).toUpperCase() : 'U'}
                   </div>
                   <div className="flex-1 overflow-hidden">
@@ -134,7 +134,7 @@ const AuthModal: React.FC<Props> = ({ open, onClose }) => {
 
                 <button
                   onClick={handleLogout}
-                  className="w-full py-2.5 px-4 rounded-xl bg-red-500/10 hover:bg-red-500/20 text-red-400 border border-red-500/20 text-xs font-semibold flex items-center justify-center gap-2 transition-colors"
+                  className="w-full py-2.5 px-4 rounded-xl bg-red-500/10 hover:bg-red-500/20 text-red-500 border border-red-500/20 text-xs font-semibold flex items-center justify-center gap-2 transition-colors"
                 >
                   <LogIn size={15} className="rotate-180" />
                   <span>Sign Out of Account</span>
@@ -173,7 +173,7 @@ const AuthModal: React.FC<Props> = ({ open, onClose }) => {
 
                 {/* Inline Error */}
                 {errorMsg && (
-                  <div className="p-2.5 rounded-lg bg-red-500/10 border border-red-500/20 text-red-400 text-xs font-medium">
+                  <div className="p-2.5 rounded-lg bg-red-500/10 border border-red-500/20 text-red-500 text-xs font-medium">
                     {errorMsg}
                   </div>
                 )}
@@ -193,7 +193,7 @@ const AuthModal: React.FC<Props> = ({ open, onClose }) => {
                           value={name}
                           onChange={e => setName(e.target.value)}
                           placeholder="Raj Kumar"
-                          className="w-full pl-9 pr-3 py-2 rounded-xl bg-surface-overlay border border-border-subtle text-xs text-text-primary placeholder:text-text-secondary/50 focus:outline-none focus:border-accent-primary transition-colors"
+                          className="w-full pl-9 pr-3 py-2 rounded-xl bg-surface-overlay border border-border-subtle text-xs text-text-primary placeholder:text-text-secondary/50 focus:outline-none focus:border-brand transition-colors"
                         />
                       </div>
                     </div>
@@ -212,7 +212,7 @@ const AuthModal: React.FC<Props> = ({ open, onClose }) => {
                         value={email}
                         onChange={e => setEmail(e.target.value)}
                         placeholder="raj@example.com"
-                        className="w-full pl-9 pr-3 py-2 rounded-xl bg-surface-overlay border border-border-subtle text-xs text-text-primary placeholder:text-text-secondary/50 focus:outline-none focus:border-accent-primary transition-colors"
+                        className="w-full pl-9 pr-3 py-2 rounded-xl bg-surface-overlay border border-border-subtle text-xs text-text-primary placeholder:text-text-secondary/50 focus:outline-none focus:border-brand transition-colors"
                       />
                     </div>
                   </div>
@@ -231,7 +231,7 @@ const AuthModal: React.FC<Props> = ({ open, onClose }) => {
                         value={password}
                         onChange={e => setPassword(e.target.value)}
                         placeholder="••••••••"
-                        className="w-full pl-9 pr-3 py-2 rounded-xl bg-surface-overlay border border-border-subtle text-xs text-text-primary placeholder:text-text-secondary/50 focus:outline-none focus:border-accent-primary transition-colors"
+                        className="w-full pl-9 pr-3 py-2 rounded-xl bg-surface-overlay border border-border-subtle text-xs text-text-primary placeholder:text-text-secondary/50 focus:outline-none focus:border-brand transition-colors"
                       />
                     </div>
                   </div>
@@ -240,14 +240,15 @@ const AuthModal: React.FC<Props> = ({ open, onClose }) => {
                   <button
                     type="submit"
                     disabled={loading}
-                    className="mt-2 w-full py-2.5 px-4 rounded-xl bg-gradient-to-r from-accent-primary to-purple-600 hover:from-accent-primary/90 hover:to-purple-600/90 text-white font-semibold text-xs flex items-center justify-center gap-2 shadow-lg shadow-accent-primary/20 transition-all disabled:opacity-50"
+                    className="mt-2 w-full py-3 px-4 rounded-xl bg-brand hover:bg-brand-light text-white font-bold text-xs flex items-center justify-center gap-2 shadow-lg shadow-brand/20 transition-all disabled:opacity-50"
+                    style={{ backgroundColor: 'var(--brand)', color: '#ffffff' }}
                   >
                     {loading ? (
-                      <Loader2 size={16} className="animate-spin" />
+                      <Loader2 size={16} className="animate-spin text-white" />
                     ) : (
                       <>
-                        <span>{mode === 'signup' ? 'Create Account' : 'Sign In'}</span>
-                        <ArrowRight size={15} />
+                        <span className="text-white font-bold text-xs tracking-wide">{mode === 'signup' ? 'Create Account' : 'Sign In'}</span>
+                        <ArrowRight size={15} className="text-white" />
                       </>
                     )}
                   </button>
@@ -258,7 +259,7 @@ const AuthModal: React.FC<Props> = ({ open, onClose }) => {
                   <button
                     type="button"
                     onClick={onClose}
-                    className="text-accent-primary font-medium hover:underline"
+                    className="text-brand font-medium hover:underline"
                   >
                     Continue as Guest
                   </button>
