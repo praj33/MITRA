@@ -116,22 +116,22 @@ const RemindersPage: React.FC<{ onChatNavigate: (msg: string) => void }> = ({ on
             animate={{ opacity: 1, height: 'auto', y: 0 }}
             exit={{ opacity: 0, height: 0, y: -10 }}
             onSubmit={handleCreateReminder}
-            className="mb-6 p-4 rounded-xl bg-surface-elevated border border-amber-500/30 flex flex-col gap-3 shadow-xl"
+            className="mb-6 p-3 sm:p-4 rounded-xl bg-surface-elevated border border-amber-500/30 flex flex-col gap-3 shadow-xl w-full max-w-full overflow-hidden"
           >
             <div className="flex items-center justify-between border-b border-border-subtle pb-2">
               <h3 className="text-xs sm:text-sm font-semibold text-text-primary flex items-center gap-2">
-                <Bell size={16} className="text-amber-400" /> Create New Reminder
+                <Bell size={16} className="text-amber-400 flex-shrink-0" /> Create New Reminder
               </h3>
               <button
                 type="button"
                 onClick={() => setShowAddForm(false)}
-                className="text-text-muted hover:text-text-primary p-1"
+                className="text-text-muted hover:text-text-primary p-1 flex-shrink-0"
               >
                 <X size={16} />
               </button>
             </div>
 
-            <div className="flex flex-col gap-3 w-full max-w-full min-w-0">
+            <div className="flex flex-col gap-2.5 w-full max-w-full min-w-0">
               <div className="min-w-0 w-full">
                 <label className="block text-2xs text-text-muted mb-1 font-medium">Reminder Message *</label>
                 <input
@@ -140,11 +140,11 @@ const RemindersPage: React.FC<{ onChatNavigate: (msg: string) => void }> = ({ on
                   value={newMessage}
                   onChange={e => setNewMessage(e.target.value)}
                   placeholder="e.g. Check messages / Pay electric bill"
-                  className="w-full max-w-full min-w-0 box-border bg-surface-overlay border border-border-subtle rounded-lg px-3 py-2 text-xs text-text-primary focus:outline-none focus:border-amber-400"
+                  className="form-input-responsive bg-surface-overlay border border-border-subtle rounded-lg px-3 py-2 text-xs text-text-primary focus:outline-none focus:border-amber-400"
                 />
               </div>
 
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5 sm:gap-3 w-full min-w-0">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 sm:gap-3 w-full min-w-0">
                 <div className="min-w-0 w-full">
                   <label className="block text-2xs text-text-muted mb-1 font-medium">Date *</label>
                   <input
@@ -152,7 +152,7 @@ const RemindersPage: React.FC<{ onChatNavigate: (msg: string) => void }> = ({ on
                     required
                     value={newDate}
                     onChange={e => setNewDate(e.target.value)}
-                    className="w-full max-w-full min-w-0 box-border bg-surface-overlay border border-border-subtle rounded-lg px-2.5 py-2 text-xs text-text-primary focus:outline-none focus:border-amber-400"
+                    className="form-input-responsive bg-surface-overlay border border-border-subtle rounded-lg px-2.5 py-2 text-xs text-text-primary focus:outline-none focus:border-amber-400"
                   />
                 </div>
 
@@ -163,7 +163,7 @@ const RemindersPage: React.FC<{ onChatNavigate: (msg: string) => void }> = ({ on
                     required
                     value={newTime}
                     onChange={e => setNewTime(e.target.value)}
-                    className="w-full max-w-full min-w-0 box-border bg-surface-overlay border border-border-subtle rounded-lg px-2.5 py-2 text-xs text-text-primary focus:outline-none focus:border-amber-400"
+                    className="form-input-responsive bg-surface-overlay border border-border-subtle rounded-lg px-2.5 py-2 text-xs text-text-primary focus:outline-none focus:border-amber-400"
                   />
                 </div>
               </div>

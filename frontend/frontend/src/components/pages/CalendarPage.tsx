@@ -196,22 +196,22 @@ const CalendarPage: React.FC<{ onChatNavigate: (msg: string) => void }> = ({ onC
             animate={{ opacity: 1, height: 'auto', y: 0 }}
             exit={{ opacity: 0, height: 0, y: -10 }}
             onSubmit={handleCreateEvent}
-            className="mb-6 p-4 rounded-xl bg-surface-elevated border border-brand/30 flex flex-col gap-3 shadow-xl max-w-full overflow-hidden"
+            className="mb-6 p-3 sm:p-4 rounded-xl bg-surface-elevated border border-brand/30 flex flex-col gap-3 shadow-xl w-full max-w-full overflow-hidden"
           >
             <div className="flex items-center justify-between border-b border-border-subtle pb-2">
               <h3 className="text-xs sm:text-sm font-semibold text-text-primary flex items-center gap-2">
-                <Calendar size={16} className="text-brand-light" /> Create Calendar Event
+                <Calendar size={16} className="text-brand-light flex-shrink-0" /> Create Calendar Event
               </h3>
               <button
                 type="button"
                 onClick={() => setShowAddForm(false)}
-                className="text-text-muted hover:text-text-primary p-1"
+                className="text-text-muted hover:text-text-primary p-1 flex-shrink-0"
               >
                 <X size={16} />
               </button>
             </div>
 
-            <div className="flex flex-col gap-3 w-full max-w-full min-w-0">
+            <div className="flex flex-col gap-2.5 w-full max-w-full min-w-0">
               <div className="min-w-0 w-full">
                 <label className="block text-2xs text-text-muted mb-1 font-medium">Event Title *</label>
                 <input
@@ -220,7 +220,7 @@ const CalendarPage: React.FC<{ onChatNavigate: (msg: string) => void }> = ({ onC
                   value={newTitle}
                   onChange={e => setNewTitle(e.target.value)}
                   placeholder="e.g. Ganesh Utsav / Client Meeting"
-                  className="w-full max-w-full min-w-0 box-border bg-surface-overlay border border-border-subtle rounded-lg px-3 py-2 text-xs text-text-primary focus:outline-none focus:border-brand"
+                  className="form-input-responsive bg-surface-overlay border border-border-subtle rounded-lg px-3 py-2 text-xs text-text-primary focus:outline-none focus:border-brand"
                 />
               </div>
 
@@ -231,18 +231,18 @@ const CalendarPage: React.FC<{ onChatNavigate: (msg: string) => void }> = ({ onC
                   required
                   value={newDate}
                   onChange={e => setNewDate(e.target.value)}
-                  className="w-full max-w-full min-w-0 box-border bg-surface-overlay border border-border-subtle rounded-lg px-2.5 py-2 text-xs text-text-primary focus:outline-none focus:border-brand"
+                  className="form-input-responsive bg-surface-overlay border border-border-subtle rounded-lg px-2.5 py-2 text-xs text-text-primary focus:outline-none focus:border-brand"
                 />
               </div>
 
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5 sm:gap-3 w-full min-w-0">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 sm:gap-3 w-full min-w-0">
                 <div className="min-w-0 w-full">
                   <label className="block text-2xs text-text-muted mb-1 font-medium">Start Time</label>
                   <input
                     type="time"
                     value={newStartTime}
                     onChange={e => setNewStartTime(e.target.value)}
-                    className="w-full max-w-full min-w-0 box-border bg-surface-overlay border border-border-subtle rounded-lg px-2 py-2 text-xs text-text-primary focus:outline-none focus:border-brand"
+                    className="form-input-responsive bg-surface-overlay border border-border-subtle rounded-lg px-2 py-2 text-xs text-text-primary focus:outline-none focus:border-brand"
                   />
                 </div>
 
@@ -252,7 +252,7 @@ const CalendarPage: React.FC<{ onChatNavigate: (msg: string) => void }> = ({ onC
                     type="time"
                     value={newEndTime}
                     onChange={e => setNewEndTime(e.target.value)}
-                    className="w-full max-w-full min-w-0 box-border bg-surface-overlay border border-border-subtle rounded-lg px-2 py-2 text-xs text-text-primary focus:outline-none focus:border-brand"
+                    className="form-input-responsive bg-surface-overlay border border-border-subtle rounded-lg px-2 py-2 text-xs text-text-primary focus:outline-none focus:border-brand"
                   />
                 </div>
               </div>
