@@ -131,8 +131,8 @@ const RemindersPage: React.FC<{ onChatNavigate: (msg: string) => void }> = ({ on
               </button>
             </div>
 
-            <div className="flex flex-col gap-3">
-              <div>
+            <div className="flex flex-col gap-3 w-full max-w-full min-w-0">
+              <div className="min-w-0 w-full">
                 <label className="block text-2xs text-text-muted mb-1 font-medium">Reminder Message *</label>
                 <input
                   type="text"
@@ -140,30 +140,30 @@ const RemindersPage: React.FC<{ onChatNavigate: (msg: string) => void }> = ({ on
                   value={newMessage}
                   onChange={e => setNewMessage(e.target.value)}
                   placeholder="e.g. Check messages / Pay electric bill"
-                  className="w-full bg-surface-overlay border border-border-subtle rounded-lg px-3 py-2 text-xs text-text-primary focus:outline-none focus:border-amber-400"
+                  className="w-full max-w-full min-w-0 box-border bg-surface-overlay border border-border-subtle rounded-lg px-3 py-2 text-xs text-text-primary focus:outline-none focus:border-amber-400"
                 />
               </div>
 
-              <div className="grid grid-cols-2 gap-2 sm:gap-3">
-                <div>
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5 sm:gap-3 w-full min-w-0">
+                <div className="min-w-0 w-full">
                   <label className="block text-2xs text-text-muted mb-1 font-medium">Date *</label>
                   <input
                     type="date"
                     required
                     value={newDate}
                     onChange={e => setNewDate(e.target.value)}
-                    className="w-full bg-surface-overlay border border-border-subtle rounded-lg px-2.5 py-2 text-xs text-text-primary focus:outline-none focus:border-amber-400"
+                    className="w-full max-w-full min-w-0 box-border bg-surface-overlay border border-border-subtle rounded-lg px-2.5 py-2 text-xs text-text-primary focus:outline-none focus:border-amber-400"
                   />
                 </div>
 
-                <div>
+                <div className="min-w-0 w-full">
                   <label className="block text-2xs text-text-muted mb-1 font-medium">Time *</label>
                   <input
                     type="time"
                     required
                     value={newTime}
                     onChange={e => setNewTime(e.target.value)}
-                    className="w-full bg-surface-overlay border border-border-subtle rounded-lg px-2.5 py-2 text-xs text-text-primary focus:outline-none focus:border-amber-400"
+                    className="w-full max-w-full min-w-0 box-border bg-surface-overlay border border-border-subtle rounded-lg px-2.5 py-2 text-xs text-text-primary focus:outline-none focus:border-amber-400"
                   />
                 </div>
               </div>

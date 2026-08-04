@@ -1281,3 +1281,15 @@ body {
   }
   .toast-item { min-width: unset; max-width: unset; }
 }
+
+/* ── Mobile Form Input Boundary Fix ───────────────────────── */
+input[type="date"],
+input[type="time"],
+input[type="datetime-local"],
+input[type="text"],
+input[type="email"],
+input[type="password"] {
+  max-width: 100% !important;
+  box-sizing: border-box !important;
+  min-width: 0 !important;
+}

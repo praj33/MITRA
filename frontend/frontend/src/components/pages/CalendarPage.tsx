@@ -211,8 +211,8 @@ const CalendarPage: React.FC<{ onChatNavigate: (msg: string) => void }> = ({ onC
               </button>
             </div>
 
-            <div className="flex flex-col gap-3">
-              <div>
+            <div className="flex flex-col gap-3 w-full max-w-full min-w-0">
+              <div className="min-w-0 w-full">
                 <label className="block text-2xs text-text-muted mb-1 font-medium">Event Title *</label>
                 <input
                   type="text"
@@ -220,39 +220,39 @@ const CalendarPage: React.FC<{ onChatNavigate: (msg: string) => void }> = ({ onC
                   value={newTitle}
                   onChange={e => setNewTitle(e.target.value)}
                   placeholder="e.g. Ganesh Utsav / Client Meeting"
-                  className="w-full bg-surface-overlay border border-border-subtle rounded-lg px-3 py-2 text-xs text-text-primary focus:outline-none focus:border-brand"
+                  className="w-full max-w-full min-w-0 box-border bg-surface-overlay border border-border-subtle rounded-lg px-3 py-2 text-xs text-text-primary focus:outline-none focus:border-brand"
                 />
               </div>
 
-              <div>
+              <div className="min-w-0 w-full">
                 <label className="block text-2xs text-text-muted mb-1 font-medium">Date *</label>
                 <input
                   type="date"
                   required
                   value={newDate}
                   onChange={e => setNewDate(e.target.value)}
-                  className="w-full bg-surface-overlay border border-border-subtle rounded-lg px-3 py-2 text-xs text-text-primary focus:outline-none focus:border-brand"
+                  className="w-full max-w-full min-w-0 box-border bg-surface-overlay border border-border-subtle rounded-lg px-2.5 py-2 text-xs text-text-primary focus:outline-none focus:border-brand"
                 />
               </div>
 
-              <div className="grid grid-cols-2 gap-2 sm:gap-3">
-                <div>
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5 sm:gap-3 w-full min-w-0">
+                <div className="min-w-0 w-full">
                   <label className="block text-2xs text-text-muted mb-1 font-medium">Start Time</label>
                   <input
                     type="time"
                     value={newStartTime}
                     onChange={e => setNewStartTime(e.target.value)}
-                    className="w-full bg-surface-overlay border border-border-subtle rounded-lg px-2.5 py-2 text-xs text-text-primary focus:outline-none focus:border-brand"
+                    className="w-full max-w-full min-w-0 box-border bg-surface-overlay border border-border-subtle rounded-lg px-2 py-2 text-xs text-text-primary focus:outline-none focus:border-brand"
                   />
                 </div>
 
-                <div>
+                <div className="min-w-0 w-full">
                   <label className="block text-2xs text-text-muted mb-1 font-medium">End Time</label>
                   <input
                     type="time"
                     value={newEndTime}
                     onChange={e => setNewEndTime(e.target.value)}
-                    className="w-full bg-surface-overlay border border-border-subtle rounded-lg px-2.5 py-2 text-xs text-text-primary focus:outline-none focus:border-brand"
+                    className="w-full max-w-full min-w-0 box-border bg-surface-overlay border border-border-subtle rounded-lg px-2 py-2 text-xs text-text-primary focus:outline-none focus:border-brand"
                   />
                 </div>
               </div>
