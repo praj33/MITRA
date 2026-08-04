@@ -212,14 +212,16 @@ const InputBar: React.FC<Props> = ({ onSend, disabled }) => {
       activeStreamRef.current = stream;
       audioChunksRef.current = [];
 
-      const mimeType = MediaRecorder.isTypeSupported('audio/webm')
-        ? 'audio/webm'
-        : MediaRecorder.isTypeSupported('audio/mp4')
-        ? 'audio/mp4'
-        : '';
+      const supportedMime = [
+        'audio/webm;codecs=opus',
+        'audio/webm',
+        'audio/mp4',
+        'audio/aac',
+        'audio/ogg'
+      ].find(type => typeof MediaRecorder !== 'undefined' && MediaRecorder.isTypeSupported && MediaRecorder.isTypeSupported(type)) || '';
 
-      const mediaRecorder = mimeType
-        ? new MediaRecorder(stream, { mimeType })
+      const mediaRecorder = supportedMime
+        ? new MediaRecorder(stream, { mimeType: supportedMime })
         : new MediaRecorder(stream);
 
       mediaRecorderRef.current = mediaRecorder;
@@ -241,17 +243,39 @@ const InputBar: React.FC<Props> = ({ onSend, disabled }) => {
         if (audioChunksRef.current.length > 0) {
           showToast('info', 'Transcribing speech audio...');
           try {
-            const blob = new Blob(audioChunksRef.current, { type: mimeType || 'audio/webm' });
+            const actualType = mediaRecorder.mimeType || supportedMime || 'audio/mp4';
+            const ext = actualType.includes('webm') ? 'webm' : actualType.includes('mp4') ? 'mp4' : actualType.includes('aac') ? 'aac' : 'm4a';
+            const blob = new Blob(audioChunksRef.current, { type: actualType });
             const formData = new FormData();
-            formData.append('file', blob, `voice_${Date.now()}.${mimeType?.includes('mp4') ? 'mp4' : 'webm'}`);
+            formData.append('file', blob, `voice_${Date.now()}.${ext}`);
 
-            const response = await fetch('https://ai-assistant-backend-8hur.onrender.com/api/stt', {
-              method: 'POST',
-              body: formData,
-            });
+            // Primary active backend endpoint & relative fallback
+            const sttEndpoints = [
+              '/api/stt',
+              'https://mitra-backend-q1f3.onrender.com/api/stt',
+              'https://ai-assistant-backend-8hur.onrender.com/api/stt'
+            ];
 
-            const data = await response.json();
-            if (data && data.text && data.text.trim()) {
+            let data: any = null;
+            let success = false;
+
+            for (const endpoint of sttEndpoints) {
+              try {
+                const response = await fetch(endpoint, {
+                  method: 'POST',
+                  body: formData,
+                });
+                if (response.ok) {
+                  data = await response.json();
+                  success = true;
+                  break;
+                }
+              } catch (e) {
+                console.warn(`STT endpoint ${endpoint} failed, trying next fallback...`);
+              }
+            }
+
+            if (success && data && data.text && data.text.trim()) {
               const transcribedText = data.text.trim();
               setValue(transcribedText);
               transcriptRef.current = transcribedText;

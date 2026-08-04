@@ -1,4 +1,4 @@
-// components/pages/RemindersPage.tsx — Active reminders with countdown + built-in Add Reminder form
+// components/pages/RemindersPage.tsx — Active reminders with mobile responsive design
 import React, { useEffect, useState, useCallback } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { Bell, Plus, Clock, Repeat, Trash2, X, Check } from 'lucide-react';
@@ -36,7 +36,6 @@ const RemindersPage: React.FC<{ onChatNavigate: (msg: string) => void }> = ({ on
     fetchReminders();
   }, [fetchReminders]);
 
-  // Tick every minute for countdown
   useEffect(() => {
     const iv = setInterval(() => setNow(Date.now()), 60000);
     return () => clearInterval(iv);
@@ -91,19 +90,25 @@ const RemindersPage: React.FC<{ onChatNavigate: (msg: string) => void }> = ({ on
   };
 
   return (
-    <motion.div initial={{ opacity: 0, y: 12 }} animate={{ opacity: 1, y: 0 }} className="page-container pb-20">
-      <div className="page-header">
+    <motion.div initial={{ opacity: 0, y: 12 }} animate={{ opacity: 1, y: 0 }} className="page-container pb-24 px-3 sm:px-6">
+      {/* Responsive Header */}
+      <div className="flex flex-col sm:flex-row gap-3 sm:items-center justify-between mb-4 border-b border-border-subtle pb-4">
         <div className="flex items-center gap-3">
           <div className="page-icon" style={{ background: 'rgba(245,158,11,0.15)', color: '#f59e0b' }}><Bell size={20} /></div>
           <div>
-            <h1 className="page-title">Reminders</h1>
-            <p className="page-subtitle">{reminders.filter(r => r.status === 'active').length} active reminders</p>
+            <h1 className="page-title text-base sm:text-xl font-bold">Reminders</h1>
+            <p className="page-subtitle text-xs text-text-muted">{reminders.filter(r => r.status === 'active').length} active reminders</p>
           </div>
         </div>
-        <button onClick={() => setShowAddForm(prev => !prev)} className="page-btn-primary"><Plus size={14} /> Add Reminder</button>
+        <button
+          onClick={() => setShowAddForm(prev => !prev)}
+          className="page-btn-primary text-xs py-1.5 px-3 flex items-center gap-1 self-start sm:self-auto"
+        >
+          <Plus size={14} /> Add Reminder
+        </button>
       </div>
 
-      {/* Inline Add Reminder Form */}
+      {/* Mobile-Optimized Inline Add Reminder Form */}
       <AnimatePresence>
         {showAddForm && (
           <motion.form
@@ -114,20 +119,20 @@ const RemindersPage: React.FC<{ onChatNavigate: (msg: string) => void }> = ({ on
             className="mb-6 p-4 rounded-xl bg-surface-elevated border border-amber-500/30 flex flex-col gap-3 shadow-xl"
           >
             <div className="flex items-center justify-between border-b border-border-subtle pb-2">
-              <h3 className="text-sm font-semibold text-text-primary flex items-center gap-2">
+              <h3 className="text-xs sm:text-sm font-semibold text-text-primary flex items-center gap-2">
                 <Bell size={16} className="text-amber-400" /> Create New Reminder
               </h3>
               <button
                 type="button"
                 onClick={() => setShowAddForm(false)}
-                className="text-text-muted hover:text-text-primary"
+                className="text-text-muted hover:text-text-primary p-1"
               >
                 <X size={16} />
               </button>
             </div>
 
-            <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
-              <div className="sm:col-span-1">
+            <div className="flex flex-col gap-3">
+              <div>
                 <label className="block text-2xs text-text-muted mb-1 font-medium">Reminder Message *</label>
                 <input
                   type="text"
@@ -135,30 +140,32 @@ const RemindersPage: React.FC<{ onChatNavigate: (msg: string) => void }> = ({ on
                   value={newMessage}
                   onChange={e => setNewMessage(e.target.value)}
                   placeholder="e.g. Check messages / Pay electric bill"
-                  className="w-full bg-surface-overlay border border-border-subtle rounded-lg px-3 py-1.5 text-xs text-text-primary focus:outline-none focus:border-amber-400"
+                  className="w-full bg-surface-overlay border border-border-subtle rounded-lg px-3 py-2 text-xs text-text-primary focus:outline-none focus:border-amber-400"
                 />
               </div>
 
-              <div>
-                <label className="block text-2xs text-text-muted mb-1 font-medium">Date *</label>
-                <input
-                  type="date"
-                  required
-                  value={newDate}
-                  onChange={e => setNewDate(e.target.value)}
-                  className="w-full bg-surface-overlay border border-border-subtle rounded-lg px-3 py-1.5 text-xs text-text-primary focus:outline-none focus:border-amber-400"
-                />
-              </div>
+              <div className="grid grid-cols-2 gap-2 sm:gap-3">
+                <div>
+                  <label className="block text-2xs text-text-muted mb-1 font-medium">Date *</label>
+                  <input
+                    type="date"
+                    required
+                    value={newDate}
+                    onChange={e => setNewDate(e.target.value)}
+                    className="w-full bg-surface-overlay border border-border-subtle rounded-lg px-2.5 py-2 text-xs text-text-primary focus:outline-none focus:border-amber-400"
+                  />
+                </div>
 
-              <div>
-                <label className="block text-2xs text-text-muted mb-1 font-medium">Time *</label>
-                <input
-                  type="time"
-                  required
-                  value={newTime}
-                  onChange={e => setNewTime(e.target.value)}
-                  className="w-full bg-surface-overlay border border-border-subtle rounded-lg px-3 py-1.5 text-xs text-text-primary focus:outline-none focus:border-amber-400"
-                />
+                <div>
+                  <label className="block text-2xs text-text-muted mb-1 font-medium">Time *</label>
+                  <input
+                    type="time"
+                    required
+                    value={newTime}
+                    onChange={e => setNewTime(e.target.value)}
+                    className="w-full bg-surface-overlay border border-border-subtle rounded-lg px-2.5 py-2 text-xs text-text-primary focus:outline-none focus:border-amber-400"
+                  />
+                </div>
               </div>
             </div>
 
@@ -173,7 +180,7 @@ const RemindersPage: React.FC<{ onChatNavigate: (msg: string) => void }> = ({ on
               <button
                 type="submit"
                 disabled={submitting || !newMessage.trim()}
-                className="px-4 py-1.5 rounded-lg bg-amber-500 text-black font-medium text-xs hover:bg-amber-400 transition-colors flex items-center gap-1.5"
+                className="px-4 py-1.5 rounded-lg bg-amber-500 text-black font-semibold text-xs hover:bg-amber-400 transition-colors flex items-center gap-1.5"
               >
                 <Check size={14} /> {submitting ? 'Setting...' : 'Set Reminder'}
               </button>
@@ -183,37 +190,37 @@ const RemindersPage: React.FC<{ onChatNavigate: (msg: string) => void }> = ({ on
       </AnimatePresence>
 
       {loading ? (
-        <div className="page-loading">Loading reminders...</div>
+        <div className="page-loading py-8 text-center text-xs text-text-muted">Loading reminders...</div>
       ) : reminders.length === 0 ? (
-        <div className="page-empty">
+        <div className="page-empty py-10 flex flex-col items-center gap-2">
           <Bell size={32} className="text-text-muted" />
-          <p>No active reminders</p>
-          <button onClick={() => setShowAddForm(true)} className="page-btn-primary mt-2">
+          <p className="text-xs text-text-muted">No active reminders</p>
+          <button onClick={() => setShowAddForm(true)} className="page-btn-primary mt-1 text-xs py-1.5 px-3">
             <Plus size={14} /> Create Reminder
           </button>
         </div>
       ) : (
-        <div className="page-card-list">
+        <div className="page-card-list flex flex-col gap-2.5">
           {reminders.map(rem => {
             const isPast = new Date(rem.time).getTime() <= now;
             return (
-              <motion.div key={rem.id} className={`page-card reminder-card ${isPast ? 'reminder-due' : ''}`} whileHover={{ scale: 1.01 }}>
-                <div className="flex items-start justify-between gap-3">
-                  <div className="flex items-start gap-3 flex-1 min-w-0">
-                    <div className={`reminder-icon ${isPast ? 'pulsing' : ''}`}>
-                      <Bell size={16} />
+              <motion.div key={rem.id} className={`page-card p-3 rounded-xl bg-surface-elevated border border-border-subtle ${isPast ? 'border-amber-500/40 bg-amber-500/5' : ''}`} whileHover={{ scale: 1.005 }}>
+                <div className="flex items-start justify-between gap-2">
+                  <div className="flex items-start gap-2.5 flex-1 min-w-0">
+                    <div className={`p-2 rounded-lg flex-shrink-0 mt-0.5 ${isPast ? 'bg-amber-500/20 text-amber-400 animate-pulse' : 'bg-surface-overlay text-text-secondary'}`}>
+                      <Bell size={15} />
                     </div>
                     <div className="flex-1 min-w-0">
-                      <h4 className="page-card-title">{rem.message}</h4>
-                      <div className="flex items-center gap-3 mt-1 flex-wrap">
-                        <span className={`page-card-badge ${isPast ? 'badge-urgent' : ''}`}>
+                      <h4 className="page-card-title text-xs font-semibold text-text-primary break-words">{rem.message}</h4>
+                      <div className="flex items-center gap-2 mt-1 flex-wrap">
+                        <span className={`text-2xs font-semibold px-2 py-0.5 rounded-full flex items-center gap-1 ${isPast ? 'bg-red-500/20 text-red-400' : 'bg-amber-500/10 text-amber-400'}`}>
                           <Clock size={10} /> {getCountdown(rem.time)}
                         </span>
-                        <span className="page-card-meta">
+                        <span className="text-2xs text-text-muted">
                           {new Date(rem.time).toLocaleString([], { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' })}
                         </span>
                         {rem.repeat && (
-                          <span className="page-card-badge"><Repeat size={10} /> {rem.repeat}</span>
+                          <span className="text-2xs text-text-muted flex items-center gap-1"><Repeat size={10} /> {rem.repeat}</span>
                         )}
                       </div>
                     </div>
@@ -221,10 +228,10 @@ const RemindersPage: React.FC<{ onChatNavigate: (msg: string) => void }> = ({ on
 
                   <button
                     onClick={() => removeReminder(rem.id)}
-                    className="text-text-muted hover:text-red-400 p-1.5 rounded-lg hover:bg-red-500/10 transition-colors"
+                    className="text-text-muted hover:text-red-400 p-1.5 rounded-lg hover:bg-red-500/10 transition-colors flex-shrink-0"
                     title="Delete reminder"
                   >
-                    <Trash2 size={15} />
+                    <Trash2 size={14} />
                   </button>
                 </div>
               </motion.div>
