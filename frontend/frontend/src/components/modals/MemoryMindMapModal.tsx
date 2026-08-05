@@ -1,7 +1,7 @@
 // components/modals/MemoryMindMapModal.tsx — Interactive Canvas/SVG Node Graph for User Memory & Tasks
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { X, Network, Brain, Calendar, CheckSquare, Sparkles, RefreshCw } from 'lucide-react';
+import { X, Network, RefreshCw } from 'lucide-react';
 import { useCompanionStore } from '../../store/companion.store';
 import { CompanionService } from '../../services/companion.service';
 
@@ -20,7 +20,7 @@ export const MemoryMindMapModal: React.FC<{ isOpen: boolean; onClose: () => void
   const [selectedNode, setSelectedNode] = useState<NodeItem | null>(null);
   const [loading, setLoading] = useState(false);
 
-  const generateGraph = async () => {
+  const generateGraph = useCallback(async () => {
     setLoading(true);
     const newNodes: NodeItem[] = [
       {
@@ -66,13 +66,13 @@ export const MemoryMindMapModal: React.FC<{ isOpen: boolean; onClose: () => void
 
     setNodes(newNodes);
     setLoading(false);
-  };
+  }, [memory, userId, userName]);
 
   useEffect(() => {
     if (isOpen) {
       generateGraph();
     }
-  }, [isOpen]);
+  }, [isOpen, generateGraph]);
 
   if (!isOpen) return null;
 
