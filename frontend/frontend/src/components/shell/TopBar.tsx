@@ -96,6 +96,20 @@ const TopBar: React.FC<Props> = ({ onSearch }) => {
         <NotificationDropdown open={notifOpen} onClose={() => setNotifOpen(false)} />
       </div>
 
+      {/* Focus Mode Launcher */}
+      <button
+        id="topbar-focus-button"
+        onClick={() => {
+          const fn = (window as any).__MITRA_FOCUS__;
+          if (fn) fn();
+        }}
+        className="w-8 h-8 flex items-center justify-center rounded-lg hover:bg-brand/20 text-text-secondary hover:text-brand-light transition-all active:scale-95"
+        aria-label="Focus Session & Soundscapes"
+        title="Focus Session & Ambient Soundscapes"
+      >
+        <span className="text-sm">⏱️</span>
+      </button>
+
       {/* Settings Trigger */}
       <button
         id="topbar-settings-button"

@@ -280,3 +280,97 @@ async def tantra_cancel_execution_proxy(trace_id: str, reason: str = "user_reque
     return await tantra_client.cancel_execution(trace_id=trace_id, reason=reason)
 
 
+# ── Smart Proactive Daily Briefing Endpoint ──────────────────────────────────
+
+@router.get("/api/companion/briefing/{user_id}")
+async def get_daily_briefing(user_id: str):
+    """
+    Generate a smart, proactive daily briefing aggregating:
+    - Today's calendar events
+    - Active pending tasks & high priority items
+    - Active reminders
+    - User profile details & contextual time-of-day greeting
+    """
+    from datetime import datetime, timezone
+    from app.capabilities.task_capability import task_capability
+    from app.capabilities.calendar_capability import calendar_capability
+    from app.capabilities.reminder_capability import reminder_capability
+
+    try:
+        facts = await companion_memory.get_user_facts(user_id)
+        user_name = facts.get("user_name") or facts.get("name") or "Friend"
+
+        now = datetime.now(timezone.utc)
+        hour = now.hour
+        if 5 <= hour < 12:
+            greeting = f"Good morning, {user_name}!"
+            period = "morning"
+        elif 12 <= hour < 18:
+            greeting = f"Good afternoon, {user_name}!"
+            period = "afternoon"
+        else:
+            greeting = f"Good evening, {user_name}!"
+            period = "evening"
+
+        tasks_res = await task_capability.execute("get_tasks", {"user_id": user_id})
+        events_res = await calendar_capability.execute("get_events", {"user_id": user_id})
+        reminders_res = await reminder_capability.execute("get_reminders", {"user_id": user_id})
+
+        all_tasks = tasks_res.get("tasks", []) if isinstance(tasks_res, dict) else []
+        all_events = events_res.get("events", []) if isinstance(events_res, dict) else []
+        all_reminders = reminders_res.get("reminders", []) if isinstance(reminders_res, dict) else []
+
+        pending_tasks = [t for t in all_tasks if t.get("status") in ("pending", "in_progress")]
+        high_priority_tasks = [t for t in pending_tasks if t.get("priority") == "high"]
+
+        today_str = now.strftime("%Y-%m-%d")
+        today_events = [e for e in all_events if str(e.get("start", "")).startswith(today_str)]
+
+        active_reminders = [r for r in all_reminders if r.get("status") == "active"]
+
+        insights = []
+        if today_events:
+            insights.append(f"You have {len(today_events)} event(s) on your schedule today.")
+        else:
+            insights.append("Your calendar is clear for today.")
+
+        if pending_tasks:
+            insights.append(f"{len(pending_tasks)} pending task(s) awaiting your attention.")
+        else:
+            insights.append("All tasks are up to date!")
+
+        if active_reminders:
+            insights.append(f"{len(active_reminders)} active reminder(s) scheduled.")
+
+        return {
+            "user_id": user_id,
+            "user_name": user_name,
+            "greeting": greeting,
+            "period": period,
+            "date_display": now.strftime("%A, %B %d, %Y"),
+            "today_events_count": len(today_events),
+            "today_events": today_events[:3],
+            "pending_tasks_count": len(pending_tasks),
+            "high_priority_count": len(high_priority_tasks),
+            "active_reminders_count": len(active_reminders),
+            "summary_text": " ".join(insights),
+            "quick_actions": [
+                {"id": "schedule", "label": "📅 Plan Today", "prompt": "Help me plan my schedule for today"},
+                {"id": "tasks", "label": "⚡ Review Tasks", "prompt": "Show me my pending tasks"},
+                {"id": "focus", "label": "⏱️ Focus Mode", "prompt": "Let's start a 25-minute focus session"}
+            ]
+        }
+    except Exception as e:
+        logger.error(f"Error generating briefing for {user_id}: {e}")
+        return {
+            "user_id": user_id,
+            "greeting": "Hello!",
+            "date_display": datetime.now().strftime("%A, %B %d"),
+            "summary_text": "Mitra is ready to assist you today.",
+            "today_events_count": 0,
+            "pending_tasks_count": 0,
+            "active_reminders_count": 0,
+            "quick_actions": []
+        }
+
+

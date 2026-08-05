@@ -56,6 +56,27 @@ export const CompanionService = {
     return resp.json();
   },
 
+  async getDailyBriefing(userId = getCurrentUserId()): Promise<{
+    user_id: string;
+    user_name: string;
+    greeting: string;
+    period: string;
+    date_display: string;
+    today_events_count: number;
+    today_events: any[];
+    pending_tasks_count: number;
+    high_priority_count: number;
+    active_reminders_count: number;
+    summary_text: string;
+    quick_actions: Array<{ id: string; label: string; prompt: string }>;
+  }> {
+    const resp = await fetch(`${getBase()}/api/companion/briefing/${userId}`, {
+      headers: headers(),
+    });
+    if (!resp.ok) throw new Error(`HTTP ${resp.status}`);
+    return resp.json();
+  },
+
   async getMemory(userId: string): Promise<{ facts: Record<string, any> }> {
     const resp = await fetch(`${getBase()}/api/companion/memory/${userId}`, {
       headers: headers(),

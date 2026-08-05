@@ -6,6 +6,7 @@ import ContextPanel from './components/shell/ContextPanel';
 import InputBar from './components/shell/InputBar';
 import SettingsModal from './components/shell/SettingsModal';
 import AuthModal from './components/shell/AuthModal';
+import { FocusTimerModal } from './components/modals/FocusTimerModal';
 import Toast, { showToast } from './components/shell/Toast';
 import CalendarPage from './components/pages/CalendarPage';
 import TasksPage from './components/pages/TasksPage';
@@ -121,6 +122,7 @@ const App: React.FC = () => {
 
   const [activeSection, setActiveSection] = useState('chat');
   const [settingsOpen, setSettingsOpen] = useState(false);
+  const [focusOpen, setFocusOpen] = useState(false);
 
   useEffect(() => {
     (window as any).__MITRA_SETTINGS__ = () => setSettingsOpen(true);
@@ -235,6 +237,8 @@ const App: React.FC = () => {
   useEffect(() => { (window as any).__MITRA_SEND__ = handleSend; }, [handleSend]);
   // Expose settings toggle for Sidebar
   useEffect(() => { (window as any).__MITRA_SETTINGS__ = () => setSettingsOpen(true); }, []);
+  // Expose focus toggle
+  useEffect(() => { (window as any).__MITRA_FOCUS__ = () => setFocusOpen(prev => !prev); }, []);
   // Expose page navigation for action buttons
   useEffect(() => { (window as any).__MITRA_NAV__ = setActiveSection; }, [setActiveSection]);
 
@@ -276,6 +280,9 @@ const App: React.FC = () => {
       {isMobile && (
         <MobileBottomNav active={activeSection} onSelect={setActiveSection} />
       )}
+
+      {/* Focus Session & Soundscape Modal */}
+      <FocusTimerModal isOpen={focusOpen} onClose={() => setFocusOpen(false)} />
 
       {/* Settings Modal */}
       <SettingsModal open={settingsOpen} onClose={() => setSettingsOpen(false)} />

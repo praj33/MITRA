@@ -1,8 +1,8 @@
-// components/shell/ConversationCenter.tsx — Main chat thread panel (responsive)
 import React, { useEffect, useRef, useCallback } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { useCompanionStore } from '../../store/companion.store';
 import ConversationCard from '../cards/ConversationCard';
+import { DailyBriefingCard } from '../cards/DailyBriefingCard';
 import { Zap } from 'lucide-react';
 
 const ThinkingIndicator = () => (
@@ -25,45 +25,49 @@ const ThinkingIndicator = () => (
   </motion.div>
 );
 
-const EmptyState = () => {
+const EmptyState: React.FC<{ onBriefingAction: (prompt: string) => void }> = ({ onBriefingAction }) => {
   const userName = useCompanionStore(s => s.userName);
   const displayName = !userName || ['there', 'user_default', 'using', 'anonymous'].includes(userName.toLowerCase()) ? 'User' : userName;
 
   return (
-    <motion.div
-      initial={{ opacity: 0, y: 12 }}
-      animate={{ opacity: 1, y: 0 }}
-      transition={{ delay: 0.1 }}
-      className="flex flex-col items-center justify-center h-full gap-4 sm:gap-5 text-center px-5 sm:px-8 select-none"
-    >
-      <div className="w-14 h-14 sm:w-16 sm:h-16 rounded-2xl bg-brand-muted border border-brand/30 flex items-center justify-center">
-        <Zap size={24} className="text-brand-light sm:hidden" />
-        <Zap size={28} className="text-brand-light hidden sm:block" />
-      </div>
-      <div>
-        <h2 className="text-lg sm:text-xl font-semibold text-text-primary mb-1 sm:mb-1.5">
-          Good to see you, {displayName} 👋
-        </h2>
-        <p className="text-xs sm:text-sm text-text-muted max-w-xs leading-relaxed">
-          I'm Mitra — your AI companion. Ask me anything, run a workflow, or let me help you get things done.
-        </p>
-      </div>
-      <div className="flex flex-wrap justify-center gap-1.5 sm:gap-2">
-        {[
-          'What\'s on my calendar today?',
-          'Summarize my emails',
-          'Create a reminder',
-          'Run morning briefing',
-        ].map(s => (
-          <button key={s} onClick={() => {
-            const store = (window as any).__MITRA_SEND__;
-            if (store) store(s);
-          }} className="text-2xs px-2.5 sm:px-3 py-1 sm:py-1.5 rounded-full border border-border-subtle text-text-muted bg-surface-overlay hover:border-brand/40 hover:text-brand-light transition-all cursor-pointer active:scale-95">
-            {s}
-          </button>
-        ))}
-      </div>
-    </motion.div>
+    <div className="flex flex-col gap-4">
+      <DailyBriefingCard onActionClick={onBriefingAction} />
+      
+      <motion.div
+        initial={{ opacity: 0, y: 12 }}
+        animate={{ opacity: 1, y: 0 }}
+        transition={{ delay: 0.1 }}
+        className="flex flex-col items-center justify-center py-6 gap-4 sm:gap-5 text-center px-5 sm:px-8 select-none"
+      >
+        <div className="w-14 h-14 sm:w-16 sm:h-16 rounded-2xl bg-brand-muted border border-brand/30 flex items-center justify-center">
+          <Zap size={24} className="text-brand-light sm:hidden" />
+          <Zap size={28} className="text-brand-light hidden sm:block" />
+        </div>
+        <div>
+          <h2 className="text-lg sm:text-xl font-semibold text-text-primary mb-1 sm:mb-1.5">
+            Good to see you, {displayName} 👋
+          </h2>
+          <p className="text-xs sm:text-sm text-text-muted max-w-xs leading-relaxed">
+            I'm Mitra — your AI companion. Ask me anything, run a workflow, or let me help you get things done.
+          </p>
+        </div>
+        <div className="flex flex-wrap justify-center gap-1.5 sm:gap-2">
+          {[
+            'What\'s on my calendar today?',
+            'Summarize my tasks',
+            'Create a reminder',
+            'Run morning briefing',
+          ].map(s => (
+            <button key={s} onClick={() => {
+              const store = (window as any).__MITRA_SEND__;
+              if (store) store(s);
+            }} className="text-2xs px-2.5 sm:px-3 py-1 sm:py-1.5 rounded-full border border-border-subtle text-text-muted bg-surface-overlay hover:border-brand/40 hover:text-brand-light transition-all cursor-pointer active:scale-95">
+              {s}
+            </button>
+          ))}
+        </div>
+      </motion.div>
+    </div>
   );
 };
 
@@ -76,7 +80,12 @@ const ConversationCenter: React.FC = () => {
     bottomRef.current?.scrollIntoView({ behavior: 'smooth' });
   }, [messages, isThinking]);
 
-  // Handle action button clicks from capability result cards
+  // Handle action button clicks
+  const handleBriefingAction = useCallback((prompt: string) => {
+    const send = (window as any).__MITRA_SEND__;
+    if (send) send(prompt);
+  }, []);
+
   const handleActionConfirm = useCallback((action: string, _messageId: string) => {
     const nav = (window as any).__MITRA_NAV__;
     const send = (window as any).__MITRA_SEND__;
@@ -91,7 +100,6 @@ const ConversationCenter: React.FC = () => {
     } else if (actionLower.includes('workflow')) {
       if (nav) nav('workflows');
     } else if (send) {
-      // For any other action, send it as a chat message
       send(action);
     }
   }, []);
@@ -100,9 +108,10 @@ const ConversationCenter: React.FC = () => {
     <main className="zone-center flex flex-col overflow-hidden bg-surface-base">
       <div className="flex-1 overflow-y-auto px-3 py-4 sm:px-6 sm:py-6 space-y-3 sm:space-y-4 overscroll-contain">
         {messages.length === 0 ? (
-          <EmptyState />
+          <EmptyState onBriefingAction={handleBriefingAction} />
         ) : (
           <AnimatePresence initial={false}>
+            <DailyBriefingCard onActionClick={handleBriefingAction} />
             {messages.map(msg => (
               <ConversationCard key={msg.id} message={msg} onActionConfirm={handleActionConfirm} />
             ))}
