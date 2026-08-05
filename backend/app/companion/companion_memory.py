@@ -113,6 +113,13 @@ class CompanionMemory:
         mem.set_fact(key, value, source)
         await self._save(mem)
 
+    async def delete_fact(self, user_id: str, key: str) -> None:
+        """Remove a stored fact for the user."""
+        mem = await self.get(user_id)
+        if key in mem.facts:
+            del mem.facts[key]
+            await self._save(mem)
+
     async def add_conversation_summary(
         self,
         user_id: str,

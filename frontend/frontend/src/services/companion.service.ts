@@ -85,6 +85,25 @@ export const CompanionService = {
     return resp.json();
   },
 
+  async setMemoryFact(userId: string, key: string, value: string): Promise<any> {
+    const resp = await fetch(`${getBase()}/api/companion/memory/${userId}`, {
+      method: 'POST',
+      headers: headers(),
+      body: JSON.stringify({ key, value, source: 'user' }),
+    });
+    if (!resp.ok) throw new Error(`HTTP ${resp.status}`);
+    return resp.json();
+  },
+
+  async deleteMemoryFact(userId: string, key: string): Promise<any> {
+    const resp = await fetch(`${getBase()}/api/companion/memory/${userId}/${encodeURIComponent(key)}`, {
+      method: 'DELETE',
+      headers: headers(),
+    });
+    if (!resp.ok) throw new Error(`HTTP ${resp.status}`);
+    return resp.json();
+  },
+
   async listCapabilities(): Promise<{ capabilities: any[] }> {
     const resp = await fetch(`${getBase()}/api/companion/capabilities`, {
       headers: headers(),

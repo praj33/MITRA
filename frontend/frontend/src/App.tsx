@@ -8,6 +8,7 @@ import SettingsModal from './components/shell/SettingsModal';
 import AuthModal from './components/shell/AuthModal';
 import { FocusTimerModal } from './components/modals/FocusTimerModal';
 import { CommandPaletteModal } from './components/modals/CommandPaletteModal';
+import { MemoryDashboardModal } from './components/modals/MemoryDashboardModal';
 import Toast, { showToast } from './components/shell/Toast';
 import CalendarPage from './components/pages/CalendarPage';
 import TasksPage from './components/pages/TasksPage';
@@ -125,6 +126,7 @@ const App: React.FC = () => {
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [focusOpen, setFocusOpen] = useState(false);
   const [cmdOpen, setCmdOpen] = useState(false);
+  const [memoryOpen, setMemoryOpen] = useState(false);
 
   useEffect(() => {
     (window as any).__MITRA_SETTINGS__ = () => setSettingsOpen(true);
@@ -255,6 +257,8 @@ const App: React.FC = () => {
   useEffect(() => { (window as any).__MITRA_FOCUS__ = () => setFocusOpen(prev => !prev); }, []);
   // Expose search / command palette toggle
   useEffect(() => { (window as any).__MITRA_SEARCH__ = () => setCmdOpen(true); }, []);
+  // Expose memory dashboard toggle
+  useEffect(() => { (window as any).__MITRA_MEMORY__ = () => setMemoryOpen(prev => !prev); }, []);
   // Expose page navigation for action buttons
   useEffect(() => { (window as any).__MITRA_NAV__ = setActiveSection; }, [setActiveSection]);
 
@@ -299,6 +303,9 @@ const App: React.FC = () => {
 
       {/* Spotlight Command Palette (Ctrl + K) */}
       <CommandPaletteModal isOpen={cmdOpen} onClose={() => setCmdOpen(false)} />
+
+      {/* Companion Memory Dashboard Modal */}
+      <MemoryDashboardModal isOpen={memoryOpen} onClose={() => setMemoryOpen(false)} />
 
       {/* Focus Session & Soundscape Modal */}
       <FocusTimerModal isOpen={focusOpen} onClose={() => setFocusOpen(false)} />

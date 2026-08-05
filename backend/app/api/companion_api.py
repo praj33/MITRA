@@ -129,6 +129,18 @@ async def update_memory(
     return {"user_id": user_id, "key": request.key, "status": "updated"}
 
 
+@router.delete("/api/companion/memory/{user_id}/{key}")
+async def delete_memory_fact(
+    user_id: str,
+    key: str,
+    x_api_key: Optional[str] = Header(None, alias="X-API-Key"),
+):
+    """Delete a specific user memory fact for transparency and privacy."""
+    _ = x_api_key
+    await companion_memory.delete_fact(user_id, key)
+    return {"user_id": user_id, "key": key, "status": "deleted"}
+
+
 @router.delete("/api/companion/session/{user_id}")
 async def clear_session(
     user_id: str,

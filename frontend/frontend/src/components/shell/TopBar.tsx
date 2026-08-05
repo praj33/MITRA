@@ -114,6 +114,20 @@ const TopBar: React.FC<Props> = ({ onSearch }) => {
         <span className="text-sm">⏱️</span>
       </button>
 
+      {/* Companion Memory Dashboard Launcher */}
+      <button
+        id="topbar-memory-button"
+        onClick={() => {
+          const fn = (window as any).__MITRA_MEMORY__;
+          if (fn) fn();
+        }}
+        className="w-8 h-8 flex items-center justify-center rounded-lg hover:bg-brand/20 text-text-secondary hover:text-brand-light transition-all active:scale-95"
+        aria-label="Companion Memory Dashboard"
+        title="Companion Memory Dashboard"
+      >
+        <span className="text-sm">🧠</span>
+      </button>
+
       {/* Settings Trigger */}
       <button
         id="topbar-settings-button"
