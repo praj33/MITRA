@@ -114,6 +114,34 @@ const TopBar: React.FC<Props> = ({ onSearch }) => {
         <span className="text-sm">⏱️</span>
       </button>
 
+      {/* Hands-Free Voice Talk Launcher */}
+      <button
+        id="topbar-voice-talk-button"
+        onClick={() => {
+          const fn = (window as any).__MITRA_VOICE_TALK__;
+          if (fn) fn();
+        }}
+        className="w-8 h-8 flex items-center justify-center rounded-lg hover:bg-emerald-500/20 text-text-secondary hover:text-emerald-400 transition-all active:scale-95"
+        aria-label="Full-Screen Voice Talk Mode"
+        title="Full-Screen Hands-Free Voice Talk Mode"
+      >
+        <span className="text-sm">🎙️</span>
+      </button>
+
+      {/* Brain Graph Visualizer Launcher */}
+      <button
+        id="topbar-mindmap-button"
+        onClick={() => {
+          const fn = (window as any).__MITRA_MINDMAP__;
+          if (fn) fn();
+        }}
+        className="w-8 h-8 flex items-center justify-center rounded-lg hover:bg-purple-500/20 text-text-secondary hover:text-purple-400 transition-all active:scale-95"
+        aria-label="Brain Mind Map Visualizer"
+        title="Brain Mind Map Visualizer"
+      >
+        <span className="text-sm">🕸️</span>
+      </button>
+
       {/* Companion Memory Dashboard Launcher */}
       <button
         id="topbar-memory-button"

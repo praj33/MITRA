@@ -3,7 +3,7 @@ import React from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import {
   MessageCircle, Calendar, CheckSquare, Bell, BookOpen,
-  Settings, ChevronLeft, ChevronRight, Play, X, User,
+  Settings, ChevronLeft, ChevronRight, Play, X, User, TrendingUp,
 } from 'lucide-react';
 import { cn } from '../../lib/utils';
 import { useCompanionStore } from '../../store/companion.store';
@@ -17,6 +17,7 @@ interface NavItem {
 
 const navItems: NavItem[] = [
   { id: 'chat',        icon: <MessageCircle size={15} />, label: 'Companion' },
+  { id: 'analytics',   icon: <TrendingUp    size={15} />, label: 'Analytics & Habits' },
   { id: 'calendar',    icon: <Calendar      size={15} />, label: 'Calendar' },
   { id: 'tasks',       icon: <CheckSquare   size={15} />, label: 'Tasks' },
   { id: 'reminders',   icon: <Bell          size={15} />, label: 'Reminders' },

@@ -9,16 +9,19 @@ import AuthModal from './components/shell/AuthModal';
 import { FocusTimerModal } from './components/modals/FocusTimerModal';
 import { CommandPaletteModal } from './components/modals/CommandPaletteModal';
 import { MemoryDashboardModal } from './components/modals/MemoryDashboardModal';
+import { VoiceTalkModal } from './components/modals/VoiceTalkModal';
+import { MemoryMindMapModal } from './components/modals/MemoryMindMapModal';
 import Toast, { showToast } from './components/shell/Toast';
 import CalendarPage from './components/pages/CalendarPage';
 import TasksPage from './components/pages/TasksPage';
 import RemindersPage from './components/pages/RemindersPage';
 import WorkflowsPage from './components/pages/WorkflowsPage';
 import KnowledgePage from './components/pages/KnowledgePage';
+import AnalyticsPage from './components/pages/AnalyticsPage';
 import { useCompanionStore } from './store/companion.store';
 import { CompanionService } from './services/companion.service';
 import { cn } from './lib/utils';
-import { LayoutDashboard, Calendar, CheckSquare, BookOpen, PlayCircle, PanelRight } from 'lucide-react';
+import { LayoutDashboard, Calendar, CheckSquare, BookOpen, PlayCircle, PanelRight, TrendingUp } from 'lucide-react';
 
 /* Helper hook to keep isMobile store value in sync */
 const useIsMobile = () => {
@@ -70,6 +73,7 @@ const speakAudioResponse = async (text: string) => {
 /* Mobile bottom nav items */
 const mobileNavItems = [
   { id: 'chat',      label: 'Chat',      icon: LayoutDashboard },
+  { id: 'analytics', label: 'Analytics', icon: TrendingUp },
   { id: 'calendar',  label: 'Calendar',  icon: Calendar },
   { id: 'tasks',     label: 'Tasks',     icon: CheckSquare },
   { id: 'knowledge', label: 'Knowledge', icon: BookOpen },
@@ -127,6 +131,8 @@ const App: React.FC = () => {
   const [focusOpen, setFocusOpen] = useState(false);
   const [cmdOpen, setCmdOpen] = useState(false);
   const [memoryOpen, setMemoryOpen] = useState(false);
+  const [voiceTalkOpen, setVoiceTalkOpen] = useState(false);
+  const [mindMapOpen, setMindMapOpen] = useState(false);
 
   useEffect(() => {
     (window as any).__MITRA_SETTINGS__ = () => setSettingsOpen(true);
@@ -259,6 +265,10 @@ const App: React.FC = () => {
   useEffect(() => { (window as any).__MITRA_SEARCH__ = () => setCmdOpen(true); }, []);
   // Expose memory dashboard toggle
   useEffect(() => { (window as any).__MITRA_MEMORY__ = () => setMemoryOpen(prev => !prev); }, []);
+  // Expose full-screen voice talk mode
+  useEffect(() => { (window as any).__MITRA_VOICE_TALK__ = () => setVoiceTalkOpen(prev => !prev); }, []);
+  // Expose brain mind map visualizer
+  useEffect(() => { (window as any).__MITRA_MINDMAP__ = () => setMindMapOpen(prev => !prev); }, []);
   // Expose page navigation for action buttons
   useEffect(() => { (window as any).__MITRA_NAV__ = setActiveSection; }, [setActiveSection]);
 
@@ -283,6 +293,7 @@ const App: React.FC = () => {
       {/* Center Zone — Main Workspace (Chat or Full Page) */}
       <div className={cn("zone-center flex flex-col flex-1 min-w-0 h-full", activeSection === 'chat' ? 'overflow-hidden' : 'overflow-y-auto pb-24 sm:pb-20')}>
         {activeSection === 'chat' && <ConversationCenter />}
+        {activeSection === 'analytics' && <AnalyticsPage onChatNavigate={handleChatNavigate} />}
         {activeSection === 'calendar' && <CalendarPage onChatNavigate={handleChatNavigate} />}
         {activeSection === 'tasks' && <TasksPage onChatNavigate={handleChatNavigate} />}
         {activeSection === 'reminders' && <RemindersPage onChatNavigate={handleChatNavigate} />}
@@ -306,6 +317,12 @@ const App: React.FC = () => {
 
       {/* Companion Memory Dashboard Modal */}
       <MemoryDashboardModal isOpen={memoryOpen} onClose={() => setMemoryOpen(false)} />
+
+      {/* Full-Screen Hands-Free Voice Talk Mode */}
+      <VoiceTalkModal isOpen={voiceTalkOpen} onClose={() => setVoiceTalkOpen(false)} />
+
+      {/* Interactive Brain Mind Map Visualizer */}
+      <MemoryMindMapModal isOpen={mindMapOpen} onClose={() => setMindMapOpen(false)} />
 
       {/* Focus Session & Soundscape Modal */}
       <FocusTimerModal isOpen={focusOpen} onClose={() => setFocusOpen(false)} />
