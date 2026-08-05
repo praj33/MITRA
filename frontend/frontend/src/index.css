@@ -1295,6 +1295,17 @@ input[type="password"] {
   min-width: 0 !important;
   box-sizing: border-box !important;
   display: block !important;
+  font-size: 14px !important;
+  line-height: 1.4 !important;
+}
+
+@media (max-width: 640px) {
+  .form-input-responsive,
+  input[type="date"],
+  input[type="time"] {
+    font-size: 13px !important;
+    padding: 8px 10px !important;
+  }
 }
 
 /* Prevent WebKit shadow DOM intrinsic min-width expansion on iOS & Android */
@@ -1314,4 +1325,120 @@ input[type="datetime-local"]::-webkit-calendar-picker-indicator {
   flex-shrink: 0 !important;
   padding: 0 !important;
   margin: 0 !important;
+}
+
+/* ── Calendar Week Strip & Day Columns Styles ──────────────── */
+.calendar-week-strip {
+  display: grid;
+  grid-template-columns: repeat(7, minmax(0, 1fr));
+  gap: 6px;
+  width: 100%;
+  max-width: 100%;
+  box-sizing: border-box;
+}
+
+@media (max-width: 640px) {
+  .calendar-week-strip {
+    display: flex;
+    overflow-x: auto;
+    scroll-snap-type: x mandatory;
+    -webkit-overflow-scrolling: touch;
+    padding-bottom: 8px;
+    margin-left: -4px;
+    margin-right: -4px;
+    padding-left: 4px;
+    padding-right: 4px;
+  }
+}
+
+.calendar-day-col {
+  background: var(--surface-elevated);
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-md);
+  padding: 8px 6px;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+@media (max-width: 640px) {
+  .calendar-day-col {
+    min-width: 76px;
+    max-width: 84px;
+    flex-shrink: 0;
+    scroll-snap-align: start;
+  }
+}
+
+.calendar-day-col.is-today {
+  border-color: var(--brand-light);
+  background: var(--brand-muted);
+}
+
+.calendar-day-header {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 2px;
+  text-align: center;
+}
+
+.calendar-day-header .day-name {
+  font-size: 10px;
+  color: var(--text-muted);
+  text-transform: uppercase;
+  font-weight: 600;
+}
+
+.calendar-day-header .day-number {
+  font-size: 13px;
+  font-weight: 700;
+  color: var(--text-primary);
+}
+
+.calendar-day-header .today-pill {
+  background: var(--brand);
+  color: #fff;
+  border-radius: 9999px;
+  width: 22px;
+  height: 22px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.calendar-day-events {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  min-height: 40px;
+}
+
+.calendar-event-chip {
+  background: var(--surface-overlay);
+  border-left: 3px solid var(--brand);
+  border-radius: 4px;
+  padding: 3px 4px;
+  font-size: 10px;
+}
+
+.event-time {
+  font-size: 9px;
+  color: var(--brand-light);
+  font-weight: 600;
+}
+
+.event-title {
+  font-size: 10px;
+  color: var(--text-primary);
+  font-weight: 500;
+}
+
+.no-events-text {
+  font-size: 9px;
+  color: var(--text-muted);
+  text-align: center;
+  padding: 8px 0;
+  opacity: 0.6;
 }

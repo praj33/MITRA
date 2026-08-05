@@ -131,39 +131,39 @@ const RemindersPage: React.FC<{ onChatNavigate: (msg: string) => void }> = ({ on
               </button>
             </div>
 
-            <div className="flex flex-col gap-2.5 w-full max-w-full min-w-0">
-              <div className="min-w-0 w-full">
-                <label className="block text-2xs text-text-muted mb-1 font-medium">Reminder Message *</label>
+            <div className="flex flex-col gap-2.5 w-full max-w-full min-w-0 overflow-hidden">
+              <div className="min-w-0 w-full overflow-hidden">
+                <label className="block text-2xs text-text-muted mb-1 font-medium truncate">Reminder Message *</label>
                 <input
                   type="text"
                   required
                   value={newMessage}
                   onChange={e => setNewMessage(e.target.value)}
                   placeholder="e.g. Check messages / Pay electric bill"
-                  className="form-input-responsive bg-surface-overlay border border-border-subtle rounded-lg px-3 py-2 text-xs text-text-primary focus:outline-none focus:border-amber-400"
+                  className="form-input-responsive bg-surface-overlay border border-border-subtle rounded-lg px-3 py-2 text-xs text-text-primary focus:outline-none focus:border-amber-400 w-full max-w-full min-w-0"
                 />
               </div>
 
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 sm:gap-3 w-full min-w-0">
-                <div className="min-w-0 w-full">
-                  <label className="block text-2xs text-text-muted mb-1 font-medium">Date *</label>
+              <div className="grid grid-cols-2 gap-2 sm:gap-3 w-full max-w-full min-w-0 overflow-hidden">
+                <div className="min-w-0 w-full overflow-hidden">
+                  <label className="block text-2xs text-text-muted mb-1 font-medium truncate">Date *</label>
                   <input
                     type="date"
                     required
                     value={newDate}
                     onChange={e => setNewDate(e.target.value)}
-                    className="form-input-responsive bg-surface-overlay border border-border-subtle rounded-lg px-2.5 py-2 text-xs text-text-primary focus:outline-none focus:border-amber-400"
+                    className="form-input-responsive bg-surface-overlay border border-border-subtle rounded-lg px-2.5 py-2 text-xs text-text-primary focus:outline-none focus:border-amber-400 w-full max-w-full min-w-0"
                   />
                 </div>
 
-                <div className="min-w-0 w-full">
-                  <label className="block text-2xs text-text-muted mb-1 font-medium">Time *</label>
+                <div className="min-w-0 w-full overflow-hidden">
+                  <label className="block text-2xs text-text-muted mb-1 font-medium truncate">Time *</label>
                   <input
                     type="time"
                     required
                     value={newTime}
                     onChange={e => setNewTime(e.target.value)}
-                    className="form-input-responsive bg-surface-overlay border border-border-subtle rounded-lg px-2.5 py-2 text-xs text-text-primary focus:outline-none focus:border-amber-400"
+                    className="form-input-responsive bg-surface-overlay border border-border-subtle rounded-lg px-2.5 py-2 text-xs text-text-primary focus:outline-none focus:border-amber-400 w-full max-w-full min-w-0"
                   />
                 </div>
               </div>
