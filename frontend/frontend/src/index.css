@@ -856,7 +856,7 @@ body {
 /* ── Responsive for pages & small screens ──────────────── */
 @media (max-width: 767px) {
   .page-container {
-    padding: 12px 12px 180px 12px;
+    padding: 72px 14px 180px 14px;
     max-width: 100%;
     box-sizing: border-box;
     overflow-x: hidden;
