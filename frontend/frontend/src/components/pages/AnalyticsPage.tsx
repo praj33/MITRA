@@ -13,17 +13,31 @@ interface Habit {
 }
 
 const defaultHabits: Habit[] = [
-  { id: 'h1', name: '🎯 25m Focus Session', streak: 4, completedToday: true },
+  { id: 'h1', name: '🎯 25m Focus Session', streak: 4, completedToday: false },
   { id: 'h2', name: '📖 Read Tech Article / Docs', streak: 7, completedToday: false },
-  { id: 'h3', name: '💧 Drink 2L Water', streak: 3, completedToday: true },
-  { id: 'h4', name: '🌅 Morning Briefing Check', streak: 12, completedToday: true },
+  { id: 'h3', name: '💧 Drink 2L Water', streak: 3, completedToday: false },
+  { id: 'h4', name: '🌅 Morning Briefing Check', streak: 12, completedToday: false },
 ];
+
+const getTodayKey = () => `mitra_habits_${new Date().toISOString().split('T')[0]}`;
 
 const AnalyticsPage: React.FC<{ onChatNavigate: (msg: string) => void }> = ({ onChatNavigate }) => {
   const userId = useCompanionStore(s => s.userId);
   const [data, setData] = useState<any>(null);
   const [loading, setLoading] = useState(true);
-  const [habits, setHabits] = useState<Habit[]>(defaultHabits);
+  const [habits, setHabits] = useState<Habit[]>(() => {
+    try {
+      const saved = localStorage.getItem(getTodayKey());
+      if (saved) {
+        const completedIds: string[] = JSON.parse(saved);
+        return defaultHabits.map(h => ({
+          ...h,
+          completedToday: completedIds.includes(h.id),
+        }));
+      }
+    } catch {}
+    return defaultHabits;
+  });
   const [newHabitName, setNewHabitName] = useState('');
   const [showAddHabit, setShowAddHabit] = useState(false);
 
@@ -41,9 +55,16 @@ const AnalyticsPage: React.FC<{ onChatNavigate: (msg: string) => void }> = ({ on
     loadAnalytics();
   }, [loadAnalytics]);
 
+  const saveHabitsState = (updated: Habit[]) => {
+    try {
+      const completedIds = updated.filter(h => h.completedToday).map(h => h.id);
+      localStorage.setItem(getTodayKey(), JSON.stringify(completedIds));
+    } catch {}
+  };
+
   const toggleHabit = (id: string) => {
-    setHabits(prev =>
-      prev.map(h => {
+    setHabits(prev => {
+      const updated = prev.map(h => {
         if (h.id === id) {
           const nextState = !h.completedToday;
           return {
@@ -53,17 +74,23 @@ const AnalyticsPage: React.FC<{ onChatNavigate: (msg: string) => void }> = ({ on
           };
         }
         return h;
-      })
-    );
+      });
+      saveHabitsState(updated);
+      return updated;
+    });
   };
 
   const addHabit = (e: React.FormEvent) => {
     e.preventDefault();
     if (!newHabitName.trim()) return;
-    setHabits(prev => [
-      ...prev,
-      { id: 'h_' + Date.now(), name: newHabitName.trim(), streak: 1, completedToday: true },
-    ]);
+    setHabits(prev => {
+      const updated = [
+        ...prev,
+        { id: 'h_' + Date.now(), name: newHabitName.trim(), streak: 1, completedToday: true },
+      ];
+      saveHabitsState(updated);
+      return updated;
+    });
     setNewHabitName('');
     setShowAddHabit(false);
   };

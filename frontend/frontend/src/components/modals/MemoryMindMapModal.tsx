@@ -1,7 +1,7 @@
 // components/modals/MemoryMindMapModal.tsx — Interactive Canvas/SVG Node Graph for User Memory & Tasks
 import React, { useState, useEffect, useCallback } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { X, Network, RefreshCw } from 'lucide-react';
+import { X, Network, RefreshCw, MessageSquare, ZoomIn, ZoomOut, RotateCcw } from 'lucide-react';
 import { useCompanionStore } from '../../store/companion.store';
 import { CompanionService } from '../../services/companion.service';
 
@@ -19,6 +19,8 @@ export const MemoryMindMapModal: React.FC<{ isOpen: boolean; onClose: () => void
   const [nodes, setNodes] = useState<NodeItem[]>([]);
   const [selectedNode, setSelectedNode] = useState<NodeItem | null>(null);
   const [loading, setLoading] = useState(false);
+  const [filterCategory, setFilterCategory] = useState<'all' | 'memory' | 'task' | 'event'>('all');
+  const [zoomScale, setZoomScale] = useState(1);
 
   const generateGraph = useCallback(async () => {
     setLoading(true);
@@ -27,7 +29,7 @@ export const MemoryMindMapModal: React.FC<{ isOpen: boolean; onClose: () => void
         id: 'core',
         label: userName || 'User Core',
         category: 'core',
-        x: 200,
+        x: 220,
         y: 180,
         detail: `Central node for ${userName || 'User'}'s Mitra AI companion context.`,
       },
@@ -36,14 +38,14 @@ export const MemoryMindMapModal: React.FC<{ isOpen: boolean; onClose: () => void
     // Add memory facts
     const facts: any = memory || {};
     const keys = Object.keys(facts);
-    keys.slice(0, 5).forEach((key, idx) => {
+    keys.slice(0, 6).forEach((key, idx) => {
       const angle = (idx / Math.max(1, keys.length)) * 2 * Math.PI;
-      const radius = 110;
+      const radius = 120;
       newNodes.push({
         id: `mem_${key}`,
         label: `🧠 ${key}: ${facts[key]}`,
         category: 'memory',
-        x: 200 + Math.cos(angle) * radius,
+        x: 220 + Math.cos(angle) * radius,
         y: 180 + Math.sin(angle) * radius,
         detail: `Learned Fact: ${key} = ${facts[key]}`,
       });
@@ -52,14 +54,27 @@ export const MemoryMindMapModal: React.FC<{ isOpen: boolean; onClose: () => void
     try {
       const tasksRes = await CompanionService.getTasks(userId);
       const tasks = tasksRes.tasks || [];
-      tasks.slice(0, 3).forEach((t: any, idx: number) => {
+      tasks.slice(0, 4).forEach((t: any, idx: number) => {
         newNodes.push({
           id: `task_${t.id}`,
           label: `⚡ ${t.title}`,
           category: 'task',
-          x: 90 + idx * 110,
-          y: 70,
+          x: 70 + idx * 100,
+          y: 60,
           detail: `Task (${t.status}): ${t.title}`,
+        });
+      });
+
+      const calRes = await CompanionService.getCalendarEvents(userId);
+      const events = calRes.events || [];
+      events.slice(0, 3).forEach((e: any, idx: number) => {
+        newNodes.push({
+          id: `cal_${e.id}`,
+          label: `📅 ${e.title}`,
+          category: 'event',
+          x: 90 + idx * 120,
+          y: 300,
+          detail: `Calendar Event: ${e.title} (${e.start_time || 'Today'})`,
         });
       });
     } catch {}
@@ -71,16 +86,27 @@ export const MemoryMindMapModal: React.FC<{ isOpen: boolean; onClose: () => void
   useEffect(() => {
     if (isOpen) {
       generateGraph();
+      setZoomScale(1);
     }
   }, [isOpen, generateGraph]);
 
   if (!isOpen) return null;
 
-  const coreNode = nodes.find(n => n.category === 'core') || { x: 200, y: 180 };
+  const coreNode = nodes.find(n => n.category === 'core') || { x: 220, y: 180 };
+
+  const filteredNodes = nodes.filter(n => filterCategory === 'all' || n.category === 'core' || n.category === filterCategory);
+
+  const handleAskMitra = (node: NodeItem) => {
+    onClose();
+    const sendFn = (window as any).__MITRA_SEND__;
+    const navFn = (window as any).__MITRA_NAV__;
+    if (navFn) navFn('chat');
+    if (sendFn) sendFn(`Tell me more about ${node.label} and help me optimize it.`);
+  };
 
   return (
     <AnimatePresence>
-      <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/70 backdrop-blur-md">
+      <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/75 backdrop-blur-md select-none">
         <motion.div
           initial={{ opacity: 0, scale: 0.95 }}
           animate={{ opacity: 1, scale: 1 }}
@@ -116,11 +142,54 @@ export const MemoryMindMapModal: React.FC<{ isOpen: boolean; onClose: () => void
             </div>
           </div>
 
+          {/* Filter Bar & Zoom Controls */}
+          <div className="px-4 py-2 bg-surface-elevated border-b border-border-subtle flex items-center justify-between gap-2 overflow-x-auto">
+            <div className="flex items-center gap-1.5">
+              {(['all', 'memory', 'task', 'event'] as const).map(cat => (
+                <button
+                  key={cat}
+                  onClick={() => setFilterCategory(cat)}
+                  className={`px-2.5 py-1 rounded-full text-2xs font-semibold capitalize transition-all ${
+                    filterCategory === cat
+                      ? 'bg-brand text-white'
+                      : 'bg-surface-overlay text-text-muted hover:text-text-primary'
+                  }`}
+                >
+                  {cat === 'all' ? '🌐 All' : cat === 'memory' ? '🧠 Memory' : cat === 'task' ? '⚡ Tasks' : '📅 Events'}
+                </button>
+              ))}
+            </div>
+
+            <div className="flex items-center gap-1">
+              <button
+                onClick={() => setZoomScale(prev => Math.min(1.5, prev + 0.15))}
+                className="p-1 rounded bg-surface-overlay text-text-muted hover:text-text-primary"
+                title="Zoom In"
+              >
+                <ZoomIn size={14} />
+              </button>
+              <button
+                onClick={() => setZoomScale(prev => Math.max(0.7, prev - 0.15))}
+                className="p-1 rounded bg-surface-overlay text-text-muted hover:text-text-primary"
+                title="Zoom Out"
+              >
+                <ZoomOut size={14} />
+              </button>
+              <button
+                onClick={() => setZoomScale(1)}
+                className="p-1 rounded bg-surface-overlay text-text-muted hover:text-text-primary"
+                title="Reset Zoom"
+              >
+                <RotateCcw size={13} />
+              </button>
+            </div>
+          </div>
+
           {/* SVG Canvas Area */}
-          <div className="relative flex-1 bg-surface-base p-4 min-h-[320px] flex items-center justify-center overflow-hidden">
-            <svg className="w-full h-80">
+          <div className="relative flex-1 bg-surface-base p-4 min-h-[340px] flex items-center justify-center overflow-hidden">
+            <svg className="w-full h-88 transition-transform duration-300" style={{ transform: `scale(${zoomScale})` }}>
               {/* Lines linking nodes to Core */}
-              {nodes.map(
+              {filteredNodes.map(
                 n =>
                   n.category !== 'core' && (
                     <line
@@ -129,8 +198,10 @@ export const MemoryMindMapModal: React.FC<{ isOpen: boolean; onClose: () => void
                       y1={coreNode.y}
                       x2={n.x}
                       y2={n.y}
-                      stroke="var(--brand)"
-                      strokeOpacity="0.3"
+                      stroke={
+                        n.category === 'memory' ? '#7c6ff7' : n.category === 'task' ? '#10b981' : '#f59e0b'
+                      }
+                      strokeOpacity="0.4"
                       strokeWidth="2"
                       strokeDasharray="4 4"
                     />
@@ -138,7 +209,7 @@ export const MemoryMindMapModal: React.FC<{ isOpen: boolean; onClose: () => void
               )}
 
               {/* Render Nodes */}
-              {nodes.map(n => {
+              {filteredNodes.map(n => {
                 const isSelected = selectedNode?.id === n.id;
                 const isCore = n.category === 'core';
 
@@ -157,11 +228,13 @@ export const MemoryMindMapModal: React.FC<{ isOpen: boolean; onClose: () => void
                           ? 'var(--brand)'
                           : n.category === 'memory'
                           ? '#7c6ff7'
-                          : '#10b981'
+                          : n.category === 'task'
+                          ? '#10b981'
+                          : '#f59e0b'
                       }
                       fillOpacity={isSelected ? 1 : 0.85}
                       stroke="#ffffff"
-                      strokeWidth={isSelected ? 3 : 1}
+                      strokeWidth={isSelected ? 3 : 1.5}
                     />
                     <text
                       x={n.x}
@@ -180,19 +253,27 @@ export const MemoryMindMapModal: React.FC<{ isOpen: boolean; onClose: () => void
             </svg>
           </div>
 
-          {/* Selected Node Details Drawer */}
+          {/* Selected Node Details Drawer with Chat Action */}
           {selectedNode && (
-            <div className="p-4 bg-surface-elevated border-t border-border-subtle flex items-center justify-between">
-              <div>
+            <div className="p-4 bg-surface-elevated border-t border-border-subtle flex items-center justify-between gap-3">
+              <div className="min-w-0 flex-1">
                 <span className="text-2xs font-semibold uppercase text-brand-light">Node Detail</span>
-                <p className="text-xs text-text-primary font-medium">{selectedNode.detail}</p>
+                <p className="text-xs text-text-primary font-medium truncate">{selectedNode.detail}</p>
               </div>
-              <button
-                onClick={() => setSelectedNode(null)}
-                className="text-2xs text-text-muted hover:text-text-primary underline"
-              >
-                Dismiss
-              </button>
+              <div className="flex items-center gap-2">
+                <button
+                  onClick={() => handleAskMitra(selectedNode)}
+                  className="page-btn-primary text-xs py-1.5 flex items-center gap-1.5"
+                >
+                  <MessageSquare size={12} /> Ask Mitra
+                </button>
+                <button
+                  onClick={() => setSelectedNode(null)}
+                  className="text-2xs text-text-muted hover:text-text-primary underline px-1"
+                >
+                  Dismiss
+                </button>
+              </div>
             </div>
           )}
         </motion.div>
