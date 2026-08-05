@@ -7,6 +7,7 @@ import InputBar from './components/shell/InputBar';
 import SettingsModal from './components/shell/SettingsModal';
 import AuthModal from './components/shell/AuthModal';
 import { FocusTimerModal } from './components/modals/FocusTimerModal';
+import { CommandPaletteModal } from './components/modals/CommandPaletteModal';
 import Toast, { showToast } from './components/shell/Toast';
 import CalendarPage from './components/pages/CalendarPage';
 import TasksPage from './components/pages/TasksPage';
@@ -123,9 +124,22 @@ const App: React.FC = () => {
   const [activeSection, setActiveSection] = useState('chat');
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [focusOpen, setFocusOpen] = useState(false);
+  const [cmdOpen, setCmdOpen] = useState(false);
 
   useEffect(() => {
     (window as any).__MITRA_SETTINGS__ = () => setSettingsOpen(true);
+  }, []);
+
+  // Global Ctrl+K / Cmd+K listener
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'k') {
+        e.preventDefault();
+        setCmdOpen(prev => !prev);
+      }
+    };
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
   }, []);
 
   // Sync isMobile with window size
@@ -239,6 +253,8 @@ const App: React.FC = () => {
   useEffect(() => { (window as any).__MITRA_SETTINGS__ = () => setSettingsOpen(true); }, []);
   // Expose focus toggle
   useEffect(() => { (window as any).__MITRA_FOCUS__ = () => setFocusOpen(prev => !prev); }, []);
+  // Expose search / command palette toggle
+  useEffect(() => { (window as any).__MITRA_SEARCH__ = () => setCmdOpen(true); }, []);
   // Expose page navigation for action buttons
   useEffect(() => { (window as any).__MITRA_NAV__ = setActiveSection; }, [setActiveSection]);
 
@@ -280,6 +296,9 @@ const App: React.FC = () => {
       {isMobile && (
         <MobileBottomNav active={activeSection} onSelect={setActiveSection} />
       )}
+
+      {/* Spotlight Command Palette (Ctrl + K) */}
+      <CommandPaletteModal isOpen={cmdOpen} onClose={() => setCmdOpen(false)} />
 
       {/* Focus Session & Soundscape Modal */}
       <FocusTimerModal isOpen={focusOpen} onClose={() => setFocusOpen(false)} />

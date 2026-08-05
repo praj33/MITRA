@@ -70,7 +70,11 @@ const TopBar: React.FC<Props> = ({ onSearch }) => {
       {/* Search — compact on mobile */}
       <button
         id="topbar-search"
-        onClick={onSearch}
+        onClick={() => {
+          if (onSearch) onSearch();
+          const searchFn = (window as any).__MITRA_SEARCH__;
+          if (searchFn) searchFn();
+        }}
         className="flex items-center gap-2 px-2 sm:px-3 py-1.5 rounded-lg bg-surface-overlay border border-border-subtle text-text-muted hover:border-border-default hover:text-text-secondary transition-all duration-150 text-xs"
       >
         <Search size={12} />

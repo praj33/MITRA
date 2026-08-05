@@ -382,6 +382,17 @@ const InputBar: React.FC<Props> = ({ onSend, disabled }) => {
           </button>
         )}
 
+        {/* Live Audio Waveform Animation when recording */}
+        {isListening && (
+          <div className="flex items-center gap-1 px-2.5 py-1.5 rounded-lg bg-red-500/15 border border-red-500/30 flex-shrink-0">
+            <span className="w-1 h-3 bg-red-400 rounded-full animate-bounce [animation-delay:-0.3s]" />
+            <span className="w-1 h-4 bg-red-500 rounded-full animate-bounce [animation-delay:-0.15s]" />
+            <span className="w-1 h-5 bg-red-400 rounded-full animate-bounce" />
+            <span className="w-1 h-3 bg-red-500 rounded-full animate-bounce [animation-delay:-0.2s]" />
+            <span className="w-1 h-4 bg-red-400 rounded-full animate-bounce [animation-delay:-0.4s]" />
+          </div>
+        )}
+
         {/* Listening / Recorded Controls: Cancel (X) & Finish (Check) */}
         {isListening || value.trim() ? (
           <div className="flex items-center gap-1 flex-shrink-0">
@@ -439,9 +450,16 @@ const InputBar: React.FC<Props> = ({ onSend, disabled }) => {
       </div>
 
       {/* Hint — only on desktop */}
-      <p className="text-2xs text-text-muted text-center hidden md:block">
-        Press <kbd className="px-1 py-0.5 bg-surface-overlay border border-border-subtle rounded text-2xs">Enter</kbd> to send · <kbd className="px-1 py-0.5 bg-surface-overlay border border-border-subtle rounded text-2xs">Shift+Enter</kbd> for new line
-      </p>
+      <div className="flex items-center justify-between text-2xs text-text-muted hidden md:flex px-1">
+        <span>
+          Press <kbd className="px-1 py-0.5 bg-surface-overlay border border-border-subtle rounded text-2xs">Enter</kbd> to send · <kbd className="px-1 py-0.5 bg-surface-overlay border border-border-subtle rounded text-2xs">Shift+Enter</kbd> for line break
+        </span>
+        <span className="flex items-center gap-1 opacity-70">
+          <span>Press</span>
+          <kbd className="px-1 py-0.5 bg-surface-overlay border border-border-subtle rounded text-2xs">Ctrl + K</kbd>
+          <span>for Command Palette</span>
+        </span>
+      </div>
     </div>
   );
 };
