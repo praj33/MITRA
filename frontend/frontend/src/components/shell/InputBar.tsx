@@ -393,8 +393,8 @@ const InputBar: React.FC<Props> = ({ onSend, disabled }) => {
           </div>
         )}
 
-        {/* Listening / Recorded Controls: Cancel (X) & Finish (Check) */}
-        {isListening || value.trim() ? (
+        {/* Listening / Recorded Voice Controls: Cancel (X) & Finish (Check) */}
+        {isListening ? (
           <div className="flex items-center gap-1 flex-shrink-0">
             {/* Cancel Button */}
             <button

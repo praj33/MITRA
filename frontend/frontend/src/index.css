@@ -151,34 +151,8 @@ body {
   grid-template-columns: var(--sidebar-collapsed) 1fr;
 }
 
-/* ── Tablet (768–1023px) ─────────────────────────────── */
-@media (min-width: 768px) and (max-width: 1023px) {
-  .mitra-shell {
-    grid-template-areas:
-      "topbar  topbar"
-      "sidebar center"
-      "sidebar input";
-    grid-template-columns: var(--sidebar-collapsed) 1fr;
-  }
-
-  .mitra-shell.context-hidden {
-    grid-template-columns: var(--sidebar-collapsed) 1fr;
-  }
-
-  /* Context panel is an overlay on tablet */
-  .zone-context {
-    position: fixed;
-    top: 0;
-    right: 0;
-    bottom: 0;
-    width: min(320px, 85vw);
-    z-index: 60;
-    box-shadow: var(--shadow-panel);
-  }
-}
-
-/* ── Mobile (<768px) ─────────────────────────────────── */
-@media (max-width: 767px) {
+/* ── Mobile & Tablet Screens (<1024px) ─────────────────────────── */
+@media (max-width: 1023px) {
   :root {
     --topbar-height:  48px;
     --inputbar-height: auto;
@@ -452,6 +426,15 @@ body {
   max-width: 960px;
   margin: 0 auto;
   width: 100%;
+}
+
+@media (max-width: 1023px) {
+  .page-container {
+    padding: 12px 14px 96px 14px;
+  }
+  .page-header {
+    margin-bottom: 16px;
+  }
 }
 
 .page-header {
