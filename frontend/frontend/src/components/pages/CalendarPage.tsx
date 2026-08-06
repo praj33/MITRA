@@ -225,51 +225,51 @@ const CalendarPage: React.FC<{ onChatNavigate: (msg: string) => void }> = ({ onC
               </div>
 
               <div className="min-w-0 w-full overflow-hidden">
-                <label className="block text-2xs text-text-muted mb-1 font-medium truncate">Date *</label>
+                <label className="block text-2xs text-text-muted mb-1 font-medium truncate text-center">Date *</label>
                 <input
                   type="date"
                   required
                   value={newDate}
                   onChange={e => setNewDate(e.target.value)}
-                  className="form-input-responsive bg-surface-overlay border border-border-subtle rounded-lg px-2.5 py-2 text-xs text-text-primary focus:outline-none focus:border-brand w-full max-w-full min-w-0"
+                  className="form-input-responsive bg-surface-overlay border border-border-subtle rounded-lg px-2.5 py-2 text-xs text-text-primary focus:outline-none focus:border-brand w-full max-w-full min-w-0 text-center font-medium"
                 />
               </div>
 
               <div className="grid grid-cols-2 gap-2 sm:gap-3 w-full max-w-full min-w-0 overflow-hidden">
                 <div className="min-w-0 w-full overflow-hidden">
-                  <label className="block text-2xs text-text-muted mb-1 font-medium truncate">Start Time</label>
+                  <label className="block text-2xs text-text-muted mb-1 font-medium truncate text-center">Start Time</label>
                   <input
                     type="time"
                     value={newStartTime}
                     onChange={e => setNewStartTime(e.target.value)}
-                    className="form-input-responsive bg-surface-overlay border border-border-subtle rounded-lg px-2 py-2 text-xs text-text-primary focus:outline-none focus:border-brand w-full max-w-full min-w-0"
+                    className="form-input-responsive bg-surface-overlay border border-border-subtle rounded-lg px-2 py-2 text-xs text-text-primary focus:outline-none focus:border-brand w-full max-w-full min-w-0 text-center font-medium"
                   />
                 </div>
 
                 <div className="min-w-0 w-full overflow-hidden">
-                  <label className="block text-2xs text-text-muted mb-1 font-medium truncate">End Time</label>
+                  <label className="block text-2xs text-text-muted mb-1 font-medium truncate text-center">End Time</label>
                   <input
                     type="time"
                     value={newEndTime}
                     onChange={e => setNewEndTime(e.target.value)}
-                    className="form-input-responsive bg-surface-overlay border border-border-subtle rounded-lg px-2 py-2 text-xs text-text-primary focus:outline-none focus:border-brand w-full max-w-full min-w-0"
+                    className="form-input-responsive bg-surface-overlay border border-border-subtle rounded-lg px-2 py-2 text-xs text-text-primary focus:outline-none focus:border-brand w-full max-w-full min-w-0 text-center font-medium"
                   />
                 </div>
               </div>
             </div>
 
-            <div className="flex justify-end gap-2 pt-2">
+            <div className="grid grid-cols-2 gap-3 w-full pt-3 border-t border-border-subtle/50">
               <button
                 type="button"
                 onClick={() => setShowAddForm(false)}
-                className="px-3 py-1.5 rounded-lg border border-border-subtle text-xs text-text-muted hover:bg-surface-overlay"
+                className="w-full py-2 rounded-xl border border-border-subtle text-xs text-text-muted hover:bg-surface-overlay font-medium transition-all text-center cursor-pointer active:scale-95"
               >
                 Cancel
               </button>
               <button
                 type="submit"
                 disabled={submitting || !newTitle.trim()}
-                className="px-4 py-1.5 rounded-lg bg-brand text-white text-xs font-semibold hover:bg-brand-light transition-colors flex items-center gap-1.5"
+                className="w-full py-2 rounded-xl bg-brand text-white text-xs font-semibold hover:bg-brand-light transition-all flex items-center justify-center gap-1.5 shadow-md cursor-pointer active:scale-95 disabled:opacity-50"
               >
                 <Check size={14} /> {submitting ? 'Saving...' : 'Save Event'}
               </button>
