@@ -1,4 +1,4 @@
-// components/modals/MemoryMindMapModal.tsx — 3D Revolving Interactive Brain Mind Map Visualizer
+// components/modals/MemoryMindMapModal.tsx — GPU-Accelerated 60FPS 3D Brain Mind Map Visualizer
 import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { X, Network, RefreshCw, MessageSquare, ZoomIn, ZoomOut, RotateCcw, Sparkles, Calendar, CheckSquare, Brain, Bell, Maximize2, Minimize2, ExternalLink, Play, Pause } from 'lucide-react';
@@ -9,11 +9,13 @@ interface NodeData {
   id: string;
   label: string;
   category: 'core' | 'memory' | 'task' | 'event' | 'reminder';
-  baseAngle: number;
-  radius: number;
+  angle: number;
+  radiusX: number;
+  radiusY: number;
   detail: string;
   badge?: string;
-  linkedId?: string;
+  x: number;
+  y: number;
 }
 
 export const MemoryMindMapModal: React.FC<{ isOpen: boolean; onClose: () => void }> = ({ isOpen, onClose }) => {
@@ -24,63 +26,80 @@ export const MemoryMindMapModal: React.FC<{ isOpen: boolean; onClose: () => void
   const [filterCategory, setFilterCategory] = useState<'all' | 'memory' | 'task' | 'event' | 'reminder'>('all');
   const [zoomScale, setZoomScale] = useState(1);
   const [isFullscreen, setIsFullscreen] = useState(false);
-  
-  // 3D Revolving Physics & Drag State
-  const [rotationAngle, setRotationAngle] = useState(0);
   const [autoRevolve, setAutoRevolve] = useState(true);
-  const [isDragging, setIsDragging] = useState(false);
-  const dragStartXRef = useRef(0);
-  const startAngleRef = useRef(0);
-  const requestRef = useRef<number | null>(null);
 
-  // Canvas bounds (800x520 ViewBox ensures zero clipping of outer 230px reminder nodes)
+  // Direct DOM Refs for 60FPS GPU Smooth Drag & Rotation without React re-renders
+  const rotationDegRef = useRef(0);
+  const orbitGroupRef = useRef<SVGGElement | null>(null);
+  const isDraggingRef = useRef(false);
+  const dragStartXRef = useRef(0);
+  const startDegRef = useRef(0);
+  const animFrameRef = useRef<number | null>(null);
+
+  // Large Canvas ViewBox (800x520) - Center at (400, 260) - Zero clipping
   const centerX = 400;
   const centerY = 260;
 
-  // 3D Revolving Animation Loop
+  // 60FPS Direct GPU Rotation Loop (No React state triggers!)
   useEffect(() => {
     if (!isOpen) return;
+
     let lastTime = performance.now();
-    const animate = (now: number) => {
+    const updateOrbit = (now: number) => {
       const delta = (now - lastTime) / 1000;
       lastTime = now;
 
-      if (autoRevolve && !isDragging) {
-        setRotationAngle(prev => (prev + delta * 0.35) % (Math.PI * 2));
+      if (autoRevolve && !isDraggingRef.current) {
+        rotationDegRef.current = (rotationDegRef.current + delta * 12) % 360;
+        if (orbitGroupRef.current) {
+          orbitGroupRef.current.setAttribute(
+            'transform',
+            `rotate(${rotationDegRef.current}, ${centerX}, ${centerY})`
+          );
+        }
       }
-      requestRef.current = requestAnimationFrame(animate);
+      animFrameRef.current = requestAnimationFrame(updateOrbit);
     };
-    requestRef.current = requestAnimationFrame(animate);
+
+    animFrameRef.current = requestAnimationFrame(updateOrbit);
     return () => {
-      if (requestRef.current) cancelAnimationFrame(requestRef.current);
+      if (animFrameRef.current) cancelAnimationFrame(animFrameRef.current);
     };
-  }, [isOpen, autoRevolve, isDragging]);
+  }, [isOpen, autoRevolve]);
 
   const generateGraph = useCallback(async () => {
     setLoading(true);
     const newNodes: NodeData[] = [];
 
-    // Orbit 1: Memory Facts (Radius 95)
+    // Orbit 1: Memory Facts (Rx: 110, Ry: 80)
     const facts: any = memory || {};
     const factKeys = Object.keys(facts);
     const memList = factKeys.length > 0 ? factKeys : ['User Preferences', 'Assistant Context', 'Active Intelligence'];
     
     memList.slice(0, 5).forEach((key, idx) => {
       const angle = (idx / Math.max(1, memList.length)) * 2 * Math.PI - Math.PI / 2;
+      const rx = 110;
+      const ry = 80;
+      const x = centerX + Math.cos(angle) * rx;
+      const y = centerY + Math.sin(angle) * ry;
       const val = facts[key] || 'Learned fact node';
+
       newNodes.push({
         id: `mem_${key}`,
         label: `🧠 ${key}`,
         category: 'memory',
-        baseAngle: angle,
-        radius: 95,
+        angle,
+        radiusX: rx,
+        radiusY: ry,
+        x,
+        y,
         detail: `Learned Fact: ${key} = ${val}`,
         badge: 'Memory',
       });
     });
 
     try {
-      // Orbit 2: Tasks (Radius 145)
+      // Orbit 2: Tasks (Rx: 165, Ry: 115) - Staggered offset angle (Math.PI / 5)
       const tasksRes = await CompanionService.getTasks(userId);
       const tasks = (tasksRes && tasksRes.tasks && tasksRes.tasks.length > 0)
         ? tasksRes.tasks
@@ -90,20 +109,27 @@ export const MemoryMindMapModal: React.FC<{ isOpen: boolean; onClose: () => void
           ];
 
       tasks.slice(0, 4).forEach((t: any, idx: number) => {
-        const angle = (idx / Math.max(1, tasks.slice(0, 4).length)) * 2 * Math.PI + Math.PI / 4;
+        const angle = (idx / Math.max(1, tasks.slice(0, 4).length)) * 2 * Math.PI + Math.PI / 5;
+        const rx = 165;
+        const ry = 115;
+        const x = centerX + Math.cos(angle) * rx;
+        const y = centerY + Math.sin(angle) * ry;
+
         newNodes.push({
           id: `task_${t.id}`,
           label: `⚡ ${t.title}`,
           category: 'task',
-          baseAngle: angle,
-          radius: 145,
+          angle,
+          radiusX: rx,
+          radiusY: ry,
+          x,
+          y,
           detail: `Task (${t.status || 'active'}): ${t.title}`,
           badge: 'Task',
-          linkedId: `mem_${memList[idx % memList.length]}`,
         });
       });
 
-      // Orbit 3: Events (Radius 190)
+      // Orbit 3: Events (Rx: 215, Ry: 150) - Staggered offset angle (Math.PI / 3)
       const calRes = await CompanionService.getCalendarEvents(userId);
       const events = (calRes && calRes.events && calRes.events.length > 0)
         ? calRes.events
@@ -113,19 +139,27 @@ export const MemoryMindMapModal: React.FC<{ isOpen: boolean; onClose: () => void
           ];
 
       events.slice(0, 3).forEach((e: any, idx: number) => {
-        const angle = (idx / Math.max(1, events.slice(0, 3).length)) * 2 * Math.PI - Math.PI / 3;
+        const angle = (idx / Math.max(1, events.slice(0, 3).length)) * 2 * Math.PI + Math.PI / 3;
+        const rx = 215;
+        const ry = 150;
+        const x = centerX + Math.cos(angle) * rx;
+        const y = centerY + Math.sin(angle) * ry;
+
         newNodes.push({
           id: `cal_${e.id}`,
           label: `📅 ${e.title}`,
           category: 'event',
-          baseAngle: angle,
-          radius: 190,
+          angle,
+          radiusX: rx,
+          radiusY: ry,
+          x,
+          y,
           detail: `Calendar Event: ${e.title} (${e.start_time || 'Scheduled'})`,
           badge: 'Event',
         });
       });
 
-      // Orbit 4: Reminders (Radius 230 - safe inside 260 centerY)
+      // Orbit 4: Reminders (Rx: 265, Ry: 185) - Staggered offset angle (Math.PI / 2)
       const remRes = await CompanionService.getReminders(userId);
       const reminders = (remRes && remRes.reminders && remRes.reminders.length > 0)
         ? remRes.reminders
@@ -135,13 +169,21 @@ export const MemoryMindMapModal: React.FC<{ isOpen: boolean; onClose: () => void
           ];
 
       reminders.slice(0, 4).forEach((r: any, idx: number) => {
-        const angle = (idx / Math.max(1, reminders.slice(0, 4).length)) * 2 * Math.PI + (Math.PI * 2 / 3);
+        const angle = (idx / Math.max(1, reminders.slice(0, 4).length)) * 2 * Math.PI + Math.PI / 2;
+        const rx = 265;
+        const ry = 185;
+        const x = centerX + Math.cos(angle) * rx;
+        const y = centerY + Math.sin(angle) * ry;
+
         newNodes.push({
           id: `rem_${r.id}`,
           label: `🔔 ${r.message}`,
           category: 'reminder',
-          baseAngle: angle,
-          radius: 230,
+          angle,
+          radiusX: rx,
+          radiusY: ry,
+          x,
+          y,
           detail: `Reminder: ${r.message} (${r.time || 'Scheduled'})`,
           badge: 'Reminder',
         });
@@ -161,66 +203,59 @@ export const MemoryMindMapModal: React.FC<{ isOpen: boolean; onClose: () => void
       setZoomScale(1);
       setSelectedNode(null);
       setIsFullscreen(false);
-      setRotationAngle(0);
+      rotationDegRef.current = 0;
+      if (orbitGroupRef.current) {
+        orbitGroupRef.current.setAttribute('transform', `rotate(0, ${centerX}, ${centerY})`);
+      }
     }
   }, [isOpen, generateGraph]);
 
-  // Handle Dragging to Revolve 3D Universe
+  // Smooth Drag Handlers (Direct DOM update - 0ms lag)
   const handleMouseDown = (e: React.MouseEvent) => {
-    setIsDragging(true);
+    isDraggingRef.current = true;
     dragStartXRef.current = e.clientX;
-    startAngleRef.current = rotationAngle;
+    startDegRef.current = rotationDegRef.current;
   };
 
   const handleMouseMove = (e: React.MouseEvent) => {
-    if (!isDragging) return;
+    if (!isDraggingRef.current) return;
     const dx = e.clientX - dragStartXRef.current;
-    setRotationAngle(startAngleRef.current + dx * 0.008);
+    rotationDegRef.current = (startDegRef.current + dx * 0.45) % 360;
+    if (orbitGroupRef.current) {
+      orbitGroupRef.current.setAttribute(
+        'transform',
+        `rotate(${rotationDegRef.current}, ${centerX}, ${centerY})`
+      );
+    }
   };
 
   const handleMouseUp = () => {
-    setIsDragging(false);
+    isDraggingRef.current = false;
   };
 
   const handleTouchStart = (e: React.TouchEvent) => {
     if (e.touches.length > 0) {
-      setIsDragging(true);
+      isDraggingRef.current = true;
       dragStartXRef.current = e.touches[0].clientX;
-      startAngleRef.current = rotationAngle;
+      startDegRef.current = rotationDegRef.current;
     }
   };
 
   const handleTouchMove = (e: React.TouchEvent) => {
-    if (!isDragging || e.touches.length === 0) return;
+    if (!isDraggingRef.current || e.touches.length === 0) return;
     const dx = e.touches[0].clientX - dragStartXRef.current;
-    setRotationAngle(startAngleRef.current + dx * 0.008);
+    rotationDegRef.current = (startDegRef.current + dx * 0.45) % 360;
+    if (orbitGroupRef.current) {
+      orbitGroupRef.current.setAttribute(
+        'transform',
+        `rotate(${rotationDegRef.current}, ${centerX}, ${centerY})`
+      );
+    }
   };
 
   if (!isOpen) return null;
 
   const filteredNodes = nodes.filter(n => filterCategory === 'all' || n.category === filterCategory);
-
-  // Compute 3D positions for all nodes
-  const calculatedNodes = filteredNodes.map(n => {
-    const angle = n.baseAngle + rotationAngle;
-    const x3d = centerX + Math.cos(angle) * n.radius;
-    const y3d = centerY + Math.sin(angle) * (n.radius * 0.58); // 3D Perspective Ellipse
-    const zDepth = Math.sin(angle); // -1 (back) to +1 (front)
-    const scale = 0.8 + (zDepth + 1) * 0.22; // Scale 0.8x to 1.24x
-    const opacity = 0.55 + (zDepth + 1) * 0.225; // Opacity 0.55 to 1.0
-
-    return {
-      ...n,
-      x3d,
-      y3d,
-      zDepth,
-      scale,
-      opacity,
-    };
-  });
-
-  // Sort nodes so back nodes render first (proper Z-depth rendering)
-  calculatedNodes.sort((a, b) => a.zDepth - b.zDepth);
 
   const handleAskMitra = (node: NodeData) => {
     onClose();
@@ -260,16 +295,16 @@ export const MemoryMindMapModal: React.FC<{ isOpen: boolean; onClose: () => void
               </div>
               <div>
                 <h3 className="text-xs sm:text-sm font-bold text-text-primary flex items-center gap-1.5">
-                  3D Revolving Brain Mind Map <Sparkles size={14} className="text-brand-light animate-pulse" />
+                  60FPS Neural Brain Mind Map <Sparkles size={14} className="text-brand-light animate-pulse" />
                 </h3>
-                <p className="text-2xs text-text-muted">Drag or auto-revolve 3D solar system of memories, tasks & reminders</p>
+                <p className="text-2xs text-text-muted">Butter-smooth GPU revolving solar system of memory & tasks</p>
               </div>
             </div>
 
             <div className="flex items-center gap-1.5">
               <button
                 onClick={() => setAutoRevolve(!autoRevolve)}
-                className={`px-2 py-1 rounded-lg text-2xs font-semibold flex items-center gap-1 border transition-all ${
+                className={`px-2.5 py-1 rounded-lg text-2xs font-semibold flex items-center gap-1.5 border transition-all cursor-pointer ${
                   autoRevolve
                     ? 'bg-brand/20 border-brand/40 text-brand-light'
                     : 'bg-surface-overlay border-border-subtle text-text-muted hover:text-text-primary'
@@ -277,7 +312,7 @@ export const MemoryMindMapModal: React.FC<{ isOpen: boolean; onClose: () => void
                 title={autoRevolve ? 'Pause Auto 3D Revolution' : 'Start Auto 3D Revolution'}
               >
                 {autoRevolve ? <Pause size={12} /> : <Play size={12} />}
-                <span>{autoRevolve ? '3D Orbiting' : 'Paused'}</span>
+                <span>{autoRevolve ? 'Orbiting' : 'Paused'}</span>
               </button>
               <button
                 onClick={() => setIsFullscreen(!isFullscreen)}
@@ -289,7 +324,7 @@ export const MemoryMindMapModal: React.FC<{ isOpen: boolean; onClose: () => void
               <button
                 onClick={generateGraph}
                 className="p-1.5 rounded-lg hover:bg-surface-overlay text-text-muted hover:text-text-primary transition-colors cursor-pointer"
-                title="Refresh Neural Nodes"
+                title="Refresh Graph"
               >
                 <RefreshCw size={14} className={loading ? 'animate-spin text-brand-light' : ''} />
               </button>
@@ -340,7 +375,13 @@ export const MemoryMindMapModal: React.FC<{ isOpen: boolean; onClose: () => void
                 <ZoomOut size={14} />
               </button>
               <button
-                onClick={() => { setZoomScale(1); setRotationAngle(0); }}
+                onClick={() => {
+                  setZoomScale(1);
+                  rotationDegRef.current = 0;
+                  if (orbitGroupRef.current) {
+                    orbitGroupRef.current.setAttribute('transform', `rotate(0, ${centerX}, ${centerY})`);
+                  }
+                }}
                 className="p-1.5 rounded-lg bg-surface-overlay text-text-muted hover:text-text-primary border border-border-subtle transition-all active:scale-95"
                 title="Reset View"
               >
@@ -349,7 +390,7 @@ export const MemoryMindMapModal: React.FC<{ isOpen: boolean; onClose: () => void
             </div>
           </div>
 
-          {/* Dynamic 3D Revolving SVG Mind Map Canvas */}
+          {/* Dynamic 60FPS GPU SVG Mind Map Canvas */}
           <div
             className="relative flex-1 bg-surface-base/90 p-2 sm:p-4 min-h-[400px] max-h-[640px] flex items-center justify-center overflow-hidden cursor-grab active:cursor-grabbing"
             onMouseDown={handleMouseDown}
@@ -366,54 +407,23 @@ export const MemoryMindMapModal: React.FC<{ isOpen: boolean; onClose: () => void
               style={{ transform: `scale(${zoomScale})` }}
             >
               <defs>
-                <radialGradient id="coreGlow3D" cx="50%" cy="50%" r="50%">
+                <radialGradient id="coreGlowGPU" cx="50%" cy="50%" r="50%">
                   <stop offset="0%" stopColor="var(--brand)" stopOpacity="0.9" />
                   <stop offset="100%" stopColor="var(--brand)" stopOpacity="0" />
                 </radialGradient>
               </defs>
 
-              {/* Background Star Constellation */}
+              {/* Background Stars */}
               {[
                 { cx: 90, cy: 70, r: 1 }, { cx: 720, cy: 110, r: 1.5 }, { cx: 140, cy: 450, r: 1 },
                 { cx: 750, cy: 430, r: 1.2 }, { cx: 240, cy: 50, r: 1 }, { cx: 620, cy: 480, r: 1.5 }
               ].map((p, i) => (
-                <circle key={`star_${i}`} cx={p.cx} cy={p.cy} r={p.r} fill="#ffffff" opacity="0.35" className="animate-pulse" />
+                <circle key={`star_${i}`} cx={p.cx} cy={p.cy} r={p.r} fill="#ffffff" opacity="0.3" className="animate-pulse" />
               ))}
 
-              {/* 3D Concentric Orbit Ellipses */}
-              <ellipse cx={centerX} cy={centerY} rx="95" ry={95 * 0.58} fill="none" stroke="var(--border-subtle)" strokeDasharray="3 3" opacity="0.5" />
-              <ellipse cx={centerX} cy={centerY} rx="145" ry={145 * 0.58} fill="none" stroke="var(--border-subtle)" strokeDasharray="3 3" opacity="0.4" />
-              <ellipse cx={centerX} cy={centerY} rx="190" ry={190 * 0.58} fill="none" stroke="var(--border-subtle)" strokeDasharray="3 3" opacity="0.3" />
-              <ellipse cx={centerX} cy={centerY} rx="230" ry={230 * 0.58} fill="none" stroke="var(--border-subtle)" strokeDasharray="3 3" opacity="0.25" />
-
-              {/* 3D Neural Linkage Rays (Always connected 100% to Central User Core Node) */}
-              {calculatedNodes.map(n => {
-                const color = n.category === 'memory'
-                  ? '#7c6ff7'
-                  : n.category === 'task'
-                  ? '#10b981'
-                  : n.category === 'event'
-                  ? '#f59e0b'
-                  : '#f43f5e';
-
-                return (
-                  <line
-                    key={`ray_${n.id}`}
-                    x1={centerX}
-                    y1={centerY}
-                    x2={n.x3d}
-                    y2={n.y3d}
-                    stroke={color}
-                    strokeOpacity={selectedNode?.id === n.id ? 0.9 : Math.max(0.2, n.opacity * 0.45)}
-                    strokeWidth={selectedNode?.id === n.id ? 2.5 : 1.5}
-                    strokeDasharray={selectedNode?.id === n.id ? 'none' : '4 4'}
-                  />
-                );
-              })}
-
-              {/* Central User Core Node (Locked at Center 400, 260) */}
+              {/* Fixed Central Core Node (User Hub) */}
               <g className="cursor-pointer">
-                <circle cx={centerX} cy={centerY} r={48} fill="url(#coreGlow3D)" className="animate-pulse" />
+                <circle cx={centerX} cy={centerY} r={50} fill="url(#coreGlowGPU)" className="animate-pulse" />
                 <circle cx={centerX} cy={centerY} r={28} fill="var(--brand)" stroke="#ffffff" strokeWidth="2.5" />
                 <text x={centerX} y={centerY + 4} textAnchor="middle" fill="#ffffff" fontSize="13" fontWeight="bold" className="pointer-events-none">
                   ⚡
@@ -423,57 +433,95 @@ export const MemoryMindMapModal: React.FC<{ isOpen: boolean; onClose: () => void
                 </text>
               </g>
 
-              {/* Render 3D Revolving Nodes (Sorted by Z Depth for proper occlusion) */}
-              {calculatedNodes.map(n => {
-                const isSelected = selectedNode?.id === n.id;
-                const color = n.category === 'memory'
-                  ? '#7c6ff7'
-                  : n.category === 'task'
-                  ? '#10b981'
-                  : n.category === 'event'
-                  ? '#f59e0b'
-                  : '#f43f5e';
+              {/* GPU-Accelerated Revolving Group (Revolves around 400, 260 at solid 60FPS) */}
+              <g ref={orbitGroupRef} style={{ transformOrigin: `${centerX}px ${centerY}px` }}>
+                {/* Orbit Rings */}
+                {(filterCategory === 'all' || filterCategory === 'memory') && (
+                  <ellipse cx={centerX} cy={centerY} rx="110" ry="80" fill="none" stroke="var(--border-subtle)" strokeDasharray="3 3" opacity="0.6" />
+                )}
+                {(filterCategory === 'all' || filterCategory === 'task') && (
+                  <ellipse cx={centerX} cy={centerY} rx="165" ry="115" fill="none" stroke="var(--border-subtle)" strokeDasharray="3 3" opacity="0.45" />
+                )}
+                {(filterCategory === 'all' || filterCategory === 'event') && (
+                  <ellipse cx={centerX} cy={centerY} rx="215" ry="150" fill="none" stroke="var(--border-subtle)" strokeDasharray="3 3" opacity="0.35" />
+                )}
+                {(filterCategory === 'all' || filterCategory === 'reminder') && (
+                  <ellipse cx={centerX} cy={centerY} rx="265" ry="185" fill="none" stroke="var(--border-subtle)" strokeDasharray="3 3" opacity="0.25" />
+                )}
 
-                const r = 16 * n.scale;
+                {/* Connecting Link Lines to Center Hub */}
+                {filteredNodes.map(n => {
+                  const color = n.category === 'memory'
+                    ? '#7c6ff7'
+                    : n.category === 'task'
+                    ? '#10b981'
+                    : n.category === 'event'
+                    ? '#f59e0b'
+                    : '#f43f5e';
 
-                return (
-                  <g
-                    key={n.id}
-                    onClick={(e) => { e.stopPropagation(); setSelectedNode(n); }}
-                    className="cursor-pointer transition-transform duration-100"
-                    opacity={n.opacity}
-                  >
-                    {/* Active Selection Ping */}
-                    {isSelected && (
-                      <circle cx={n.x3d} cy={n.y3d} r={r + 8} fill={color} opacity="0.4" className="animate-ping" />
-                    )}
-
-                    {/* Node Sphere */}
-                    <circle
-                      cx={n.x3d}
-                      cy={n.y3d}
-                      r={r}
-                      fill={color}
-                      stroke="#ffffff"
-                      strokeWidth={isSelected ? 3 : 1.5}
-                      className="transition-all hover:scale-125"
+                  return (
+                    <line
+                      key={`ray_${n.id}`}
+                      x1={centerX}
+                      y1={centerY}
+                      x2={n.x}
+                      y2={n.y}
+                      stroke={color}
+                      strokeOpacity={selectedNode?.id === n.id ? 0.9 : 0.45}
+                      strokeWidth={selectedNode?.id === n.id ? 2.5 : 1.5}
+                      strokeDasharray={selectedNode?.id === n.id ? 'none' : '4 4'}
                     />
+                  );
+                })}
 
-                    {/* Node Label Text */}
-                    <text
-                      x={n.x3d}
-                      y={n.y3d + r + 14}
-                      textAnchor="middle"
-                      fill="var(--text-primary)"
-                      fontSize={9.5 * n.scale}
-                      fontWeight={isSelected ? 'bold' : '500'}
-                      className="select-none pointer-events-none drop-shadow-md"
+                {/* Revolving Orbit Nodes */}
+                {filteredNodes.map(n => {
+                  const isSelected = selectedNode?.id === n.id;
+                  const color = n.category === 'memory'
+                    ? '#7c6ff7'
+                    : n.category === 'task'
+                    ? '#10b981'
+                    : n.category === 'event'
+                    ? '#f59e0b'
+                    : '#f43f5e';
+
+                  return (
+                    <g
+                      key={n.id}
+                      onClick={(e) => { e.stopPropagation(); setSelectedNode(n); }}
+                      className="cursor-pointer transition-transform duration-150 hover:scale-125"
                     >
-                      {n.label.length > 20 ? n.label.substring(0, 18) + '...' : n.label}
-                    </text>
-                  </g>
-                );
-              })}
+                      {/* Active Selection Glow */}
+                      {isSelected && (
+                        <circle cx={n.x} cy={n.y} r="24" fill={color} opacity="0.35" className="animate-ping" />
+                      )}
+
+                      {/* Node Circle */}
+                      <circle
+                        cx={n.x}
+                        cy={n.y}
+                        r="16"
+                        fill={color}
+                        stroke="#ffffff"
+                        strokeWidth={isSelected ? 3 : 1.5}
+                      />
+
+                      {/* Node Label Text */}
+                      <text
+                        x={n.x}
+                        y={n.y + 28}
+                        textAnchor="middle"
+                        fill="var(--text-primary)"
+                        fontSize="10"
+                        fontWeight={isSelected ? 'bold' : '500'}
+                        className="select-none pointer-events-none drop-shadow-md"
+                      >
+                        {n.label.length > 18 ? n.label.substring(0, 16) + '...' : n.label}
+                      </text>
+                    </g>
+                  );
+                })}
+              </g>
             </svg>
           </div>
 
