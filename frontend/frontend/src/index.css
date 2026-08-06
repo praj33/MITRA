@@ -437,6 +437,19 @@ body {
   }
 }
 
+@media (max-width: 640px) {
+  .page-header {
+    flex-direction: column;
+    align-items: stretch;
+    gap: 10px;
+  }
+  .page-header .page-btn-primary,
+  .page-header button {
+    width: 100%;
+    justify-content: center;
+  }
+}
+
 .page-header {
   display: flex;
   align-items: center;

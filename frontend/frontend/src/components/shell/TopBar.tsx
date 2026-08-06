@@ -75,7 +75,7 @@ const TopBar: React.FC<Props> = ({ onSearch }) => {
           const searchFn = (window as any).__MITRA_SEARCH__;
           if (searchFn) searchFn();
         }}
-        className="flex items-center gap-2 px-2 sm:px-3 py-1.5 rounded-lg bg-surface-overlay border border-border-subtle text-text-muted hover:border-border-default hover:text-text-secondary transition-all duration-150 text-xs"
+        className="hidden md:flex items-center gap-2 px-2 sm:px-3 py-1.5 rounded-lg bg-surface-overlay border border-border-subtle text-text-muted hover:border-border-default hover:text-text-secondary transition-all duration-150 text-xs"
       >
         <Search size={12} />
         <span className="hidden lg:inline">Search…</span>
@@ -107,14 +107,14 @@ const TopBar: React.FC<Props> = ({ onSearch }) => {
           const fn = (window as any).__MITRA_FOCUS__;
           if (fn) fn();
         }}
-        className="w-8 h-8 flex items-center justify-center rounded-lg hover:bg-brand/20 text-text-secondary hover:text-brand-light transition-all active:scale-95"
+        className="w-8 h-8 hidden sm:flex items-center justify-center rounded-lg hover:bg-brand/20 text-text-secondary hover:text-brand-light transition-all active:scale-95"
         aria-label="Focus Session & Soundscapes"
         title="Focus Session & Ambient Soundscapes"
       >
         <span className="text-sm">⏱️</span>
       </button>
 
-      {/* Hands-Free Voice Talk Launcher */}
+      {/* Hands-Free Voice Talk Launcher (Always Visible for quick access) */}
       <button
         id="topbar-voice-talk-button"
         onClick={() => {
@@ -135,7 +135,7 @@ const TopBar: React.FC<Props> = ({ onSearch }) => {
           const fn = (window as any).__MITRA_MINDMAP__;
           if (fn) fn();
         }}
-        className="w-8 h-8 flex items-center justify-center rounded-lg hover:bg-purple-500/20 text-text-secondary hover:text-purple-400 transition-all active:scale-95"
+        className="w-8 h-8 hidden sm:flex items-center justify-center rounded-lg hover:bg-purple-500/20 text-text-secondary hover:text-purple-400 transition-all active:scale-95"
         aria-label="Brain Mind Map Visualizer"
         title="Brain Mind Map Visualizer"
       >
@@ -149,7 +149,7 @@ const TopBar: React.FC<Props> = ({ onSearch }) => {
           const fn = (window as any).__MITRA_MEMORY__;
           if (fn) fn();
         }}
-        className="w-8 h-8 flex items-center justify-center rounded-lg hover:bg-brand/20 text-text-secondary hover:text-brand-light transition-all active:scale-95"
+        className="w-8 h-8 hidden md:flex items-center justify-center rounded-lg hover:bg-brand/20 text-text-secondary hover:text-brand-light transition-all active:scale-95"
         aria-label="Companion Memory Dashboard"
         title="Companion Memory Dashboard"
       >
