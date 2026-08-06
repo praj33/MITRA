@@ -1,4 +1,5 @@
 import React, { useEffect, useState, useCallback } from 'react';
+import { motion } from 'framer-motion';
 import Sidebar from './components/shell/Sidebar';
 import TopBar from './components/shell/TopBar';
 import ConversationCenter from './components/shell/ConversationCenter';
@@ -85,7 +86,7 @@ const MobileBottomNav: React.FC<{
   onSelect: (id: string) => void;
 }> = ({ active, onSelect }) => {
   return (
-    <nav className="zone-bottomnav mobile-bottom-nav bottom-nav flex flex-row items-center justify-between w-full bg-surface-raised border-t border-border-subtle py-1.5 px-1">
+    <nav className="zone-bottomnav mobile-bottom-nav bottom-nav grid grid-cols-5 items-center w-full bg-surface-raised border-t border-border-subtle py-1.5 px-0.5 select-none">
       {mobileNavItems.map(item => {
         const Icon = item.icon;
         const isActive = active === item.id;
@@ -93,11 +94,20 @@ const MobileBottomNav: React.FC<{
           <button
             key={item.id}
             onClick={() => onSelect(item.id)}
-            className={`bottom-nav-item flex-1 flex flex-col items-center justify-center min-w-0 ${isActive ? 'active' : ''}`}
+            className={cn(
+              "flex flex-col items-center justify-center py-1 px-1 transition-all relative cursor-pointer min-h-[44px]",
+              isActive ? "text-brand-light font-semibold" : "text-text-muted hover:text-text-secondary"
+            )}
             aria-label={item.label}
           >
-            <Icon size={18} className="bottom-nav-icon" />
-            <span className="truncate w-full text-center text-[10px]">{item.label}</span>
+            <Icon size={18} className={cn("transition-transform mb-0.5", isActive && "scale-110 text-brand-light")} />
+            <span className="text-[10px] tracking-tight truncate w-full text-center">{item.label}</span>
+            {isActive && (
+              <motion.div
+                layoutId="activeTabIndicator"
+                className="absolute bottom-0 w-5 h-0.5 bg-brand-light rounded-full shadow-glow"
+              />
+            )}
           </button>
         );
       })}

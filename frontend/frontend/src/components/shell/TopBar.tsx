@@ -67,108 +67,112 @@ const TopBar: React.FC<Props> = ({ onSearch }) => {
         Hey, {!userName || ['there', 'user_default', 'using', 'anonymous'].includes(userName.toLowerCase()) ? 'User' : userName} 👋
       </span>
 
-      {/* Search — compact on mobile */}
-      <button
-        id="topbar-search"
-        onClick={() => {
-          if (onSearch) onSearch();
-          const searchFn = (window as any).__MITRA_SEARCH__;
-          if (searchFn) searchFn();
-        }}
-        className="hidden md:flex items-center gap-2 px-2 sm:px-3 py-1.5 rounded-lg bg-surface-overlay border border-border-subtle text-text-muted hover:border-border-default hover:text-text-secondary transition-all duration-150 text-xs"
-      >
-        <Search size={12} />
-        <span className="hidden lg:inline">Search…</span>
-        <span className="hidden lg:inline text-2xs opacity-60 ml-1">⌘K</span>
-      </button>
-
-      {/* Notifications */}
-      <div className="relative">
+      {/* Action Icons Container — Fits cleanly across all mobile phone screens */}
+      <div className="flex items-center gap-1 sm:gap-1.5 flex-shrink-0">
+        {/* Search */}
         <button
-          id="topbar-notifications"
-          onClick={() => setNotifOpen(!notifOpen)}
-          className="relative w-8 h-8 flex items-center justify-center rounded-lg hover:bg-surface-overlay transition-colors"
-          aria-label={`${unread} unread notifications`}
+          id="topbar-search"
+          onClick={() => {
+            if (onSearch) onSearch();
+            const searchFn = (window as any).__MITRA_SEARCH__;
+            if (searchFn) searchFn();
+          }}
+          className="w-7 h-7 sm:w-8 sm:h-8 flex items-center justify-center rounded-lg bg-surface-overlay border border-border-subtle text-text-muted hover:border-border-default hover:text-text-secondary transition-all text-xs"
+          aria-label="Search"
+          title="Search (⌘K)"
         >
-          <Bell size={15} className="text-text-secondary" />
-          {unread > 0 && (
-            <span className="absolute -top-0.5 -right-0.5 w-4 h-4 bg-brand rounded-full flex items-center justify-center text-2xs text-white font-semibold">
-              {unread > 9 ? '9+' : unread}
-            </span>
-          )}
+          <Search size={13} />
         </button>
-        <NotificationDropdown open={notifOpen} onClose={() => setNotifOpen(false)} />
+
+        {/* Notifications */}
+        <div className="relative">
+          <button
+            id="topbar-notifications"
+            onClick={() => setNotifOpen(!notifOpen)}
+            className="relative w-7 h-7 sm:w-8 sm:h-8 flex items-center justify-center rounded-lg hover:bg-surface-overlay transition-colors"
+            aria-label={`${unread} unread notifications`}
+            title="Notifications"
+          >
+            <Bell size={14} className="text-text-secondary" />
+            {unread > 0 && (
+              <span className="absolute -top-0.5 -right-0.5 w-3.5 h-3.5 bg-brand rounded-full flex items-center justify-center text-[9px] text-white font-semibold">
+                {unread > 9 ? '9+' : unread}
+              </span>
+            )}
+          </button>
+          <NotificationDropdown open={notifOpen} onClose={() => setNotifOpen(false)} />
+        </div>
+
+        {/* Focus Mode Launcher */}
+        <button
+          id="topbar-focus-button"
+          onClick={() => {
+            const fn = (window as any).__MITRA_FOCUS__;
+            if (fn) fn();
+          }}
+          className="w-7 h-7 sm:w-8 sm:h-8 flex items-center justify-center rounded-lg hover:bg-brand/20 text-text-secondary hover:text-brand-light transition-all active:scale-95 text-xs"
+          aria-label="Focus Session & Soundscapes"
+          title="Focus Session & Ambient Soundscapes"
+        >
+          <span>⏱️</span>
+        </button>
+
+        {/* Hands-Free Voice Talk Launcher */}
+        <button
+          id="topbar-voice-talk-button"
+          onClick={() => {
+            const fn = (window as any).__MITRA_VOICE_TALK__;
+            if (fn) fn();
+          }}
+          className="w-7 h-7 sm:w-8 sm:h-8 flex items-center justify-center rounded-lg hover:bg-emerald-500/20 text-text-secondary hover:text-emerald-400 transition-all active:scale-95 text-xs"
+          aria-label="Full-Screen Voice Talk Mode"
+          title="Full-Screen Hands-Free Voice Talk Mode"
+        >
+          <span>🎙️</span>
+        </button>
+
+        {/* Brain Graph Visualizer Launcher */}
+        <button
+          id="topbar-mindmap-button"
+          onClick={() => {
+            const fn = (window as any).__MITRA_MINDMAP__;
+            if (fn) fn();
+          }}
+          className="w-7 h-7 sm:w-8 sm:h-8 flex items-center justify-center rounded-lg hover:bg-purple-500/20 text-text-secondary hover:text-purple-400 transition-all active:scale-95 text-xs"
+          aria-label="Brain Mind Map Visualizer"
+          title="Brain Mind Map Visualizer"
+        >
+          <span>🕸️</span>
+        </button>
+
+        {/* Companion Memory Dashboard Launcher */}
+        <button
+          id="topbar-memory-button"
+          onClick={() => {
+            const fn = (window as any).__MITRA_MEMORY__;
+            if (fn) fn();
+          }}
+          className="w-7 h-7 sm:w-8 sm:h-8 flex items-center justify-center rounded-lg hover:bg-brand/20 text-text-secondary hover:text-brand-light transition-all active:scale-95 text-xs"
+          aria-label="Companion Memory Dashboard"
+          title="Companion Memory Dashboard"
+        >
+          <span>🧠</span>
+        </button>
+
+        {/* Settings Trigger */}
+        <button
+          id="topbar-settings-button"
+          onClick={() => {
+            const fn = (window as any).__MITRA_SETTINGS__;
+            if (fn) fn();
+          }}
+          className="w-7 h-7 sm:w-8 sm:h-8 flex items-center justify-center rounded-lg hover:bg-surface-overlay text-text-secondary hover:text-text-primary transition-colors"
+          aria-label="Settings"
+          title="Settings"
+        >
+          <Settings size={14} />
+        </button>
       </div>
-
-      {/* Focus Mode Launcher */}
-      <button
-        id="topbar-focus-button"
-        onClick={() => {
-          const fn = (window as any).__MITRA_FOCUS__;
-          if (fn) fn();
-        }}
-        className="w-8 h-8 hidden sm:flex items-center justify-center rounded-lg hover:bg-brand/20 text-text-secondary hover:text-brand-light transition-all active:scale-95"
-        aria-label="Focus Session & Soundscapes"
-        title="Focus Session & Ambient Soundscapes"
-      >
-        <span className="text-sm">⏱️</span>
-      </button>
-
-      {/* Hands-Free Voice Talk Launcher (Always Visible for quick access) */}
-      <button
-        id="topbar-voice-talk-button"
-        onClick={() => {
-          const fn = (window as any).__MITRA_VOICE_TALK__;
-          if (fn) fn();
-        }}
-        className="w-8 h-8 flex items-center justify-center rounded-lg hover:bg-emerald-500/20 text-text-secondary hover:text-emerald-400 transition-all active:scale-95"
-        aria-label="Full-Screen Voice Talk Mode"
-        title="Full-Screen Hands-Free Voice Talk Mode"
-      >
-        <span className="text-sm">🎙️</span>
-      </button>
-
-      {/* Brain Graph Visualizer Launcher */}
-      <button
-        id="topbar-mindmap-button"
-        onClick={() => {
-          const fn = (window as any).__MITRA_MINDMAP__;
-          if (fn) fn();
-        }}
-        className="w-8 h-8 hidden sm:flex items-center justify-center rounded-lg hover:bg-purple-500/20 text-text-secondary hover:text-purple-400 transition-all active:scale-95"
-        aria-label="Brain Mind Map Visualizer"
-        title="Brain Mind Map Visualizer"
-      >
-        <span className="text-sm">🕸️</span>
-      </button>
-
-      {/* Companion Memory Dashboard Launcher */}
-      <button
-        id="topbar-memory-button"
-        onClick={() => {
-          const fn = (window as any).__MITRA_MEMORY__;
-          if (fn) fn();
-        }}
-        className="w-8 h-8 hidden md:flex items-center justify-center rounded-lg hover:bg-brand/20 text-text-secondary hover:text-brand-light transition-all active:scale-95"
-        aria-label="Companion Memory Dashboard"
-        title="Companion Memory Dashboard"
-      >
-        <span className="text-sm">🧠</span>
-      </button>
-
-      {/* Settings Trigger */}
-      <button
-        id="topbar-settings-button"
-        onClick={() => {
-          const fn = (window as any).__MITRA_SETTINGS__;
-          if (fn) fn();
-        }}
-        className="w-8 h-8 flex items-center justify-center rounded-lg hover:bg-surface-overlay text-text-secondary hover:text-text-primary transition-colors"
-        aria-label="Settings"
-        title="Settings"
-      >
-        <Settings size={15} />
-      </button>
 
       {/* Account / Login Trigger */}
       <button

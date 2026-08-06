@@ -106,19 +106,23 @@ const ConversationCenter: React.FC = () => {
 
   return (
     <main className="zone-center flex flex-col overflow-hidden bg-surface-base">
-      <div className="flex-1 overflow-y-auto px-3 py-4 sm:px-6 sm:py-6 space-y-3 sm:space-y-4 overscroll-contain">
+      <div className="flex-1 overflow-y-auto px-3 py-4 sm:px-6 sm:py-6 overscroll-contain">
         {messages.length === 0 ? (
-          <EmptyState onBriefingAction={handleBriefingAction} />
+          <div className="min-h-full flex flex-col items-center justify-center py-2 sm:py-6">
+            <EmptyState onBriefingAction={handleBriefingAction} />
+          </div>
         ) : (
-          <AnimatePresence initial={false}>
-            <DailyBriefingCard onActionClick={handleBriefingAction} />
-            {messages.map(msg => (
-              <ConversationCard key={msg.id} message={msg} onActionConfirm={handleActionConfirm} />
-            ))}
-            {isThinking && (
-              <ThinkingIndicator key="thinking" />
-            )}
-          </AnimatePresence>
+          <div className="space-y-3 sm:space-y-4">
+            <AnimatePresence initial={false}>
+              <DailyBriefingCard onActionClick={handleBriefingAction} />
+              {messages.map(msg => (
+                <ConversationCard key={msg.id} message={msg} onActionConfirm={handleActionConfirm} />
+              ))}
+              {isThinking && (
+                <ThinkingIndicator key="thinking" />
+              )}
+            </AnimatePresence>
+          </div>
         )}
         <div ref={bottomRef} />
       </div>
