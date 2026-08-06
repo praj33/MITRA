@@ -21,7 +21,7 @@ import AnalyticsPage from './components/pages/AnalyticsPage';
 import { useCompanionStore } from './store/companion.store';
 import { CompanionService } from './services/companion.service';
 import { cn } from './lib/utils';
-import { LayoutDashboard, Calendar, CheckSquare, BookOpen, PlayCircle, PanelRight, TrendingUp } from 'lucide-react';
+import { LayoutDashboard, Calendar, CheckSquare, PlayCircle, TrendingUp } from 'lucide-react';
 
 /* Helper hook to keep isMobile store value in sync */
 const useIsMobile = () => {
@@ -70,13 +70,12 @@ const speakAudioResponse = async (text: string) => {
   }
 };
 
-/* Mobile bottom nav items */
+/* Mobile bottom nav items — 5 primary tabs for clean mobile fit */
 const mobileNavItems = [
   { id: 'chat',      label: 'Chat',      icon: LayoutDashboard },
   { id: 'analytics', label: 'Analytics', icon: TrendingUp },
   { id: 'calendar',  label: 'Calendar',  icon: Calendar },
   { id: 'tasks',     label: 'Tasks',     icon: CheckSquare },
-  { id: 'knowledge', label: 'Knowledge', icon: BookOpen },
   { id: 'workflows', label: 'Workflows', icon: PlayCircle },
 ];
 
@@ -85,10 +84,8 @@ const MobileBottomNav: React.FC<{
   active: string;
   onSelect: (id: string) => void;
 }> = ({ active, onSelect }) => {
-  const toggleMobileContext = useCompanionStore(s => s.toggleMobileContext);
-
   return (
-    <nav className="zone-bottomnav mobile-bottom-nav bottom-nav flex flex-row items-center justify-around w-full bg-surface-raised border-t border-border-subtle py-1.5 px-2">
+    <nav className="zone-bottomnav mobile-bottom-nav bottom-nav flex flex-row items-center justify-between w-full bg-surface-raised border-t border-border-subtle py-1.5 px-1">
       {mobileNavItems.map(item => {
         const Icon = item.icon;
         const isActive = active === item.id;
@@ -96,24 +93,14 @@ const MobileBottomNav: React.FC<{
           <button
             key={item.id}
             onClick={() => onSelect(item.id)}
-            className={`bottom-nav-item ${isActive ? 'active' : ''}`}
+            className={`bottom-nav-item flex-1 flex flex-col items-center justify-center min-w-0 ${isActive ? 'active' : ''}`}
             aria-label={item.label}
           >
-            <Icon size={20} className="bottom-nav-icon" />
-            <span>{item.label}</span>
+            <Icon size={18} className="bottom-nav-icon" />
+            <span className="truncate w-full text-center text-[10px]">{item.label}</span>
           </button>
         );
       })}
-      {/* Context panel trigger on mobile */}
-      <button
-        id="bottomnav-context"
-        onClick={toggleMobileContext}
-        className="bottom-nav-item"
-        aria-label="Context panel"
-      >
-        <PanelRight size={20} className="bottom-nav-icon" />
-        <span>Context</span>
-      </button>
     </nav>
   );
 };

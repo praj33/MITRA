@@ -51,7 +51,7 @@ const EmptyState: React.FC<{ onBriefingAction: (prompt: string) => void }> = ({ 
             I'm Mitra — your AI companion. Ask me anything, run a workflow, or let me help you get things done.
           </p>
         </div>
-        <div className="flex flex-wrap justify-center gap-1.5 sm:gap-2">
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 w-full max-w-sm mx-auto">
           {[
             'What\'s on my calendar today?',
             'Summarize my tasks',
@@ -61,7 +61,7 @@ const EmptyState: React.FC<{ onBriefingAction: (prompt: string) => void }> = ({ 
             <button key={s} onClick={() => {
               const store = (window as any).__MITRA_SEND__;
               if (store) store(s);
-            }} className="text-2xs px-2.5 sm:px-3 py-1 sm:py-1.5 rounded-full border border-border-subtle text-text-muted bg-surface-overlay hover:border-brand/40 hover:text-brand-light transition-all cursor-pointer active:scale-95">
+            }} className="text-2xs px-3 py-2 rounded-xl border border-border-subtle text-text-muted bg-surface-overlay hover:border-brand/40 hover:text-brand-light transition-all cursor-pointer active:scale-95 text-center truncate">
               {s}
             </button>
           ))}
