@@ -12,6 +12,7 @@ import { CommandPaletteModal } from './components/modals/CommandPaletteModal';
 import { MemoryDashboardModal } from './components/modals/MemoryDashboardModal';
 import { VoiceTalkModal } from './components/modals/VoiceTalkModal';
 import { MemoryMindMapModal } from './components/modals/MemoryMindMapModal';
+import InstallPwaBanner from './components/shell/InstallPwaBanner';
 import Toast, { showToast } from './components/shell/Toast';
 import CalendarPage from './components/pages/CalendarPage';
 import TasksPage from './components/pages/TasksPage';
@@ -329,6 +330,9 @@ const App: React.FC = () => {
 
       {/* Auth Modal */}
       <AuthModal open={authModalOpen} onClose={() => setAuthModalOpen(false)} />
+
+      {/* Native PWA Install Banner */}
+      <InstallPwaBanner />
 
       {/* Global Toast Notifications */}
       <Toast />

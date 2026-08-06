@@ -82,6 +82,52 @@
   --shadow-glow:  0 0 20px rgba(99,102,241,0.15);
 }
 
+/* ── Emerald Zen Aura Theme Tokens ───────────────────────── */
+[data-theme="emerald"] {
+  --brand:          #10B981;
+  --brand-light:    #34D399;
+  --brand-dim:      #064E3B;
+  --brand-muted:    rgba(16,185,129,0.18);
+
+  --surface-base:     #041510;
+  --surface-raised:   #09211A;
+  --surface-elevated: #0E2E25;
+  --surface-overlay:  #153A30;
+  --surface-hover:    #1F473C;
+
+  --border-subtle:  rgba(52,211,153,0.12);
+  --border-default: rgba(52,211,153,0.22);
+  --border-strong:  rgba(52,211,153,0.35);
+
+  --text-primary:   #ECFDF5;
+  --text-secondary: #A7F3D0;
+  --text-muted:     #4ADE80;
+  --text-brand:     #34D399;
+}
+
+/* ── Solar Violet Aura Theme Tokens ──────────────────────── */
+[data-theme="violet"] {
+  --brand:          #8B5CF6;
+  --brand-light:    #A78BFA;
+  --brand-dim:      #4C1D95;
+  --brand-muted:    rgba(139,92,246,0.18);
+
+  --surface-base:     #0F0A1C;
+  --surface-raised:   #17102A;
+  --surface-elevated: #21173B;
+  --surface-overlay:  #2B1F4C;
+  --surface-hover:    #37295E;
+
+  --border-subtle:  rgba(167,139,250,0.12);
+  --border-default: rgba(167,139,250,0.22);
+  --border-strong:  rgba(167,139,250,0.35);
+
+  --text-primary:   #F5F3FF;
+  --text-secondary: #DDD6FE;
+  --text-muted:     #A78BFA;
+  --text-brand:     #C4B5FD;
+}
+
 /* ── Base Reset & Global ──────────────────────────────── */
 *, *::before, *::after {
   box-sizing: border-box;

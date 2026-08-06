@@ -124,6 +124,41 @@ const ConversationCard: React.FC<Props> = ({ message, onActionConfirm }) => {
           />
         )}
 
+        {/* Smart Interactive Action Pills for Assistant Responses */}
+        {isAssistant && !message.capabilityResult && (
+          <div className="flex flex-wrap gap-1.5 mt-1 select-none">
+            {(() => {
+              const text = message.content.toLowerCase();
+              const pills: { label: string; action: string; icon: string }[] = [];
+
+              if (text.includes('calendar') || text.includes('event') || text.includes('schedule') || text.includes('meeting')) {
+                pills.push({ label: 'View Calendar', action: 'calendar', icon: '📅' });
+                pills.push({ label: 'Add Event', action: 'Create a new calendar event', icon: '➕' });
+              } else if (text.includes('task') || text.includes('todo') || text.includes('briefing') || text.includes('project')) {
+                pills.push({ label: 'View Tasks', action: 'tasks', icon: '✅' });
+                pills.push({ label: 'New Task', action: 'Create a new high priority task', icon: '📝' });
+              } else if (text.includes('reminder') || text.includes('alarm') || text.includes('remember')) {
+                pills.push({ label: 'Reminders', action: 'reminders', icon: '🔔' });
+                pills.push({ label: 'Set Reminder', action: 'Set a reminder for evening', icon: '⏰' });
+              } else {
+                pills.push({ label: 'Key Bullets', action: 'Summarize the key takeaways in 3 bullet points', icon: '📌' });
+                pills.push({ label: 'Explain Details', action: 'Can you break this down step by step?', icon: '💡' });
+              }
+
+              return pills.map(p => (
+                <button
+                  key={p.label}
+                  onClick={() => onActionConfirm?.(p.action, message.id)}
+                  className="px-2.5 py-1 rounded-lg bg-surface-overlay border border-border-subtle hover:border-brand/40 text-text-muted hover:text-brand-light text-2xs font-medium flex items-center gap-1.5 transition-all active:scale-95 shadow-sm"
+                >
+                  <span>{p.icon}</span>
+                  <span>{p.label}</span>
+                </button>
+              ));
+            })()}
+          </div>
+        )}
+
         {/* Timestamp & Voice Speaker Button */}
         <div className="flex items-center gap-2 text-2xs text-text-muted select-none">
           <span>{formatTime(message.timestamp)}</span>

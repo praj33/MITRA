@@ -1,11 +1,11 @@
 // components/shell/SettingsModal.tsx — Settings with theme toggle & user profile
 import React, { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { X, Sun, Moon, Monitor, User, Key, Palette, Info, Check } from 'lucide-react';
+import { X, Sun, Moon, Monitor, User, Key, Palette, Info, Check, Sparkles } from 'lucide-react';
 import { useCompanionStore } from '../../store/companion.store';
 import { showToast } from './Toast';
 
-type Theme = 'dark' | 'light' | 'system';
+type Theme = 'dark' | 'emerald' | 'violet' | 'light' | 'system';
 
 interface Props {
   open: boolean;
@@ -74,16 +74,22 @@ const SettingsModal: React.FC<Props> = ({ open, onClose }) => {
               {/* Appearance */}
               <section className="settings-section">
                 <h3 className="settings-section-title"><Palette size={14} /> Appearance</h3>
-                <div className="settings-theme-row">
+                <div className="grid grid-cols-2 sm:grid-cols-3 gap-2 mt-2">
                   {([
-                    { value: 'dark', icon: <Moon size={16} />, label: 'Dark' },
-                    { value: 'light', icon: <Sun size={16} />, label: 'Light (Day)' },
-                    { value: 'system', icon: <Monitor size={16} />, label: 'System' },
+                    { value: 'dark', icon: <Moon size={15} />, label: 'Midnight' },
+                    { value: 'emerald', icon: <Sparkles size={15} className="text-emerald-400" />, label: 'Emerald' },
+                    { value: 'violet', icon: <Sparkles size={15} className="text-violet-400" />, label: 'Violet' },
+                    { value: 'light', icon: <Sun size={15} className="text-amber-400" />, label: 'Light' },
+                    { value: 'system', icon: <Monitor size={15} />, label: 'System' },
                   ] as { value: Theme; icon: React.ReactNode; label: string }[]).map(t => (
                     <button
                       key={t.value}
                       onClick={() => setTheme(t.value)}
-                      className={`settings-theme-btn ${theme === t.value ? 'active' : ''}`}
+                      className={`px-3 py-2 rounded-xl border text-xs font-semibold flex items-center justify-center gap-1.5 transition-all cursor-pointer ${
+                        theme === t.value
+                          ? 'border-brand bg-brand/15 text-brand-light shadow-sm'
+                          : 'border-border-subtle bg-surface-overlay text-text-muted hover:text-text-primary'
+                      }`}
                     >
                       {t.icon} {t.label}
                     </button>
