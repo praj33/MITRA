@@ -957,6 +957,33 @@ body {
   }
 }
 
+/* ── Form Inputs iOS WebKit Box-Sizing & Overflow Hardening ──── */
+input[type="date"],
+input[type="time"],
+input[type="datetime-local"],
+input[type="text"],
+input[type="number"],
+select,
+textarea {
+  box-sizing: border-box !important;
+  max-width: 100% !important;
+  min-width: 0 !important;
+  width: 100% !important;
+  margin: 0 !important;
+  -webkit-appearance: none;
+  -moz-appearance: none;
+  appearance: none;
+}
+
+.date-time-input-container {
+  position: relative;
+  width: 100%;
+  min-width: 0;
+  max-width: 100%;
+  box-sizing: border-box;
+  overflow: hidden;
+}
+
 .notif-header {
   display: flex; align-items: center; justify-content: space-between;
   padding: 12px 16px;
