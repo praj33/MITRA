@@ -19,6 +19,7 @@ const TopBar: React.FC<Props> = ({ onSearch }) => {
   } = useCompanionStore();
   const unread = notifications.filter(n => !n.read).length;
   const [notifOpen, setNotifOpen] = useState(false);
+  const [quickToolsOpen, setQuickToolsOpen] = useState(false);
 
   return (
     <header className="zone-topbar glass flex items-center px-3 sm:px-4 gap-2 sm:gap-3 select-none">
@@ -67,7 +68,7 @@ const TopBar: React.FC<Props> = ({ onSearch }) => {
         Hey, {!userName || ['there', 'user_default', 'using', 'anonymous'].includes(userName.toLowerCase()) ? 'User' : userName} 👋
       </span>
 
-      {/* Action Icons Container — Fits cleanly across all mobile phone screens */}
+      {/* Action Icons Container — Clean & compact on mobile, expanded on desktop */}
       <div className="flex items-center gap-1 sm:gap-1.5 flex-shrink-0">
         {/* Search */}
         <button
@@ -83,6 +84,157 @@ const TopBar: React.FC<Props> = ({ onSearch }) => {
         >
           <Search size={13} />
         </button>
+
+        {/* MOBILE ONLY: Single "Quick Tools (⚡)" Combined Launcher */}
+        <div className="relative md:hidden">
+          <button
+            id="topbar-quick-tools-mobile"
+            onClick={() => setQuickToolsOpen(!quickToolsOpen)}
+            className="h-7 px-2 flex items-center gap-1 rounded-lg bg-brand-muted/80 border border-brand/30 text-brand-light hover:bg-brand/20 transition-all text-2xs font-semibold active:scale-95"
+            aria-label="Quick AI Tools"
+            title="Quick AI Tools Menu"
+          >
+            <span>⚡</span>
+            <span>Tools</span>
+          </button>
+
+          {/* Quick Tools Dropdown */}
+          {quickToolsOpen && (
+            <>
+              <div className="fixed inset-0 z-40" onClick={() => setQuickToolsOpen(false)} />
+              <motion.div
+                initial={{ opacity: 0, y: 8, scale: 0.95 }}
+                animate={{ opacity: 1, y: 0, scale: 1 }}
+                exit={{ opacity: 0, y: 8, scale: 0.95 }}
+                className="absolute right-0 top-9 w-64 p-2 rounded-xl bg-surface-elevated border border-border-default shadow-2xl z-50 flex flex-col gap-1 select-none"
+              >
+                <div className="px-2 py-1 border-b border-border-subtle mb-1 flex items-center justify-between">
+                  <span className="text-2xs font-bold text-text-secondary uppercase tracking-wider">Mitra AI Launchpad</span>
+                  <span className="text-2xs text-brand-light font-medium">4 Tools</span>
+                </div>
+
+                <button
+                  onClick={() => {
+                    setQuickToolsOpen(false);
+                    const fn = (window as any).__MITRA_VOICE_TALK__;
+                    if (fn) fn();
+                  }}
+                  className="flex items-center gap-2.5 px-2.5 py-2 rounded-lg hover:bg-surface-overlay text-left transition-colors group"
+                >
+                  <span className="w-7 h-7 rounded-lg bg-emerald-500/10 border border-emerald-500/20 flex items-center justify-center text-sm group-hover:scale-110 transition-transform">🎙️</span>
+                  <div>
+                    <div className="text-xs font-semibold text-text-primary">Hands-Free Voice</div>
+                    <div className="text-[10px] text-text-muted">Real-time voice conversation</div>
+                  </div>
+                </button>
+
+                <button
+                  onClick={() => {
+                    setQuickToolsOpen(false);
+                    const fn = (window as any).__MITRA_FOCUS__;
+                    if (fn) fn();
+                  }}
+                  className="flex items-center gap-2.5 px-2.5 py-2 rounded-lg hover:bg-surface-overlay text-left transition-colors group"
+                >
+                  <span className="w-7 h-7 rounded-lg bg-amber-500/10 border border-amber-500/20 flex items-center justify-center text-sm group-hover:scale-110 transition-transform">⏱️</span>
+                  <div>
+                    <div className="text-xs font-semibold text-text-primary">Focus Mode & Sounds</div>
+                    <div className="text-[10px] text-text-muted">Pomodoro timer & soundscapes</div>
+                  </div>
+                </button>
+
+                <button
+                  onClick={() => {
+                    setQuickToolsOpen(false);
+                    const fn = (window as any).__MITRA_MINDMAP__;
+                    if (fn) fn();
+                  }}
+                  className="flex items-center gap-2.5 px-2.5 py-2 rounded-lg hover:bg-surface-overlay text-left transition-colors group"
+                >
+                  <span className="w-7 h-7 rounded-lg bg-purple-500/10 border border-purple-500/20 flex items-center justify-center text-sm group-hover:scale-110 transition-transform">🕸️</span>
+                  <div>
+                    <div className="text-xs font-semibold text-text-primary">Brain Mind Map</div>
+                    <div className="text-[10px] text-text-muted">Visual knowledge memory graph</div>
+                  </div>
+                </button>
+
+                <button
+                  onClick={() => {
+                    setQuickToolsOpen(false);
+                    const fn = (window as any).__MITRA_MEMORY__;
+                    if (fn) fn();
+                  }}
+                  className="flex items-center gap-2.5 px-2.5 py-2 rounded-lg hover:bg-surface-overlay text-left transition-colors group"
+                >
+                  <span className="w-7 h-7 rounded-lg bg-indigo-500/10 border border-indigo-500/20 flex items-center justify-center text-sm group-hover:scale-110 transition-transform">🧠</span>
+                  <div>
+                    <div className="text-xs font-semibold text-text-primary">Memory Dashboard</div>
+                    <div className="text-[10px] text-text-muted">Manage saved facts & context</div>
+                  </div>
+                </button>
+              </motion.div>
+            </>
+          )}
+        </div>
+
+        {/* DESKTOP ONLY: Individual Launcher Buttons */}
+        <div className="hidden md:flex items-center gap-1.5">
+          {/* Focus Mode */}
+          <button
+            id="topbar-focus-button"
+            onClick={() => {
+              const fn = (window as any).__MITRA_FOCUS__;
+              if (fn) fn();
+            }}
+            className="w-8 h-8 flex items-center justify-center rounded-lg hover:bg-brand/20 text-text-secondary hover:text-brand-light transition-all active:scale-95 text-xs"
+            aria-label="Focus Session"
+            title="Focus Session & Soundscapes"
+          >
+            <span>⏱️</span>
+          </button>
+
+          {/* Voice Talk */}
+          <button
+            id="topbar-voice-talk-button"
+            onClick={() => {
+              const fn = (window as any).__MITRA_VOICE_TALK__;
+              if (fn) fn();
+            }}
+            className="w-8 h-8 flex items-center justify-center rounded-lg hover:bg-emerald-500/20 text-text-secondary hover:text-emerald-400 transition-all active:scale-95 text-xs"
+            aria-label="Hands-Free Voice Talk"
+            title="Hands-Free Voice Talk Mode"
+          >
+            <span>🎙️</span>
+          </button>
+
+          {/* Mind Map */}
+          <button
+            id="topbar-mindmap-button"
+            onClick={() => {
+              const fn = (window as any).__MITRA_MINDMAP__;
+              if (fn) fn();
+            }}
+            className="w-8 h-8 flex items-center justify-center rounded-lg hover:bg-purple-500/20 text-text-secondary hover:text-purple-400 transition-all active:scale-95 text-xs"
+            aria-label="Brain Mind Map"
+            title="Brain Mind Map Visualizer"
+          >
+            <span>🕸️</span>
+          </button>
+
+          {/* Memory Dashboard */}
+          <button
+            id="topbar-memory-button"
+            onClick={() => {
+              const fn = (window as any).__MITRA_MEMORY__;
+              if (fn) fn();
+            }}
+            className="w-8 h-8 flex items-center justify-center rounded-lg hover:bg-brand/20 text-text-secondary hover:text-brand-light transition-all active:scale-95 text-xs"
+            aria-label="Memory Dashboard"
+            title="Companion Memory Dashboard"
+          >
+            <span>🧠</span>
+          </button>
+        </div>
 
         {/* Notifications */}
         <div className="relative">
@@ -102,62 +254,6 @@ const TopBar: React.FC<Props> = ({ onSearch }) => {
           </button>
           <NotificationDropdown open={notifOpen} onClose={() => setNotifOpen(false)} />
         </div>
-
-        {/* Focus Mode Launcher */}
-        <button
-          id="topbar-focus-button"
-          onClick={() => {
-            const fn = (window as any).__MITRA_FOCUS__;
-            if (fn) fn();
-          }}
-          className="w-7 h-7 sm:w-8 sm:h-8 flex items-center justify-center rounded-lg hover:bg-brand/20 text-text-secondary hover:text-brand-light transition-all active:scale-95 text-xs"
-          aria-label="Focus Session & Soundscapes"
-          title="Focus Session & Ambient Soundscapes"
-        >
-          <span>⏱️</span>
-        </button>
-
-        {/* Hands-Free Voice Talk Launcher */}
-        <button
-          id="topbar-voice-talk-button"
-          onClick={() => {
-            const fn = (window as any).__MITRA_VOICE_TALK__;
-            if (fn) fn();
-          }}
-          className="w-7 h-7 sm:w-8 sm:h-8 flex items-center justify-center rounded-lg hover:bg-emerald-500/20 text-text-secondary hover:text-emerald-400 transition-all active:scale-95 text-xs"
-          aria-label="Full-Screen Voice Talk Mode"
-          title="Full-Screen Hands-Free Voice Talk Mode"
-        >
-          <span>🎙️</span>
-        </button>
-
-        {/* Brain Graph Visualizer Launcher */}
-        <button
-          id="topbar-mindmap-button"
-          onClick={() => {
-            const fn = (window as any).__MITRA_MINDMAP__;
-            if (fn) fn();
-          }}
-          className="w-7 h-7 sm:w-8 sm:h-8 flex items-center justify-center rounded-lg hover:bg-purple-500/20 text-text-secondary hover:text-purple-400 transition-all active:scale-95 text-xs"
-          aria-label="Brain Mind Map Visualizer"
-          title="Brain Mind Map Visualizer"
-        >
-          <span>🕸️</span>
-        </button>
-
-        {/* Companion Memory Dashboard Launcher */}
-        <button
-          id="topbar-memory-button"
-          onClick={() => {
-            const fn = (window as any).__MITRA_MEMORY__;
-            if (fn) fn();
-          }}
-          className="w-7 h-7 sm:w-8 sm:h-8 flex items-center justify-center rounded-lg hover:bg-brand/20 text-text-secondary hover:text-brand-light transition-all active:scale-95 text-xs"
-          aria-label="Companion Memory Dashboard"
-          title="Companion Memory Dashboard"
-        >
-          <span>🧠</span>
-        </button>
 
         {/* Settings Trigger */}
         <button

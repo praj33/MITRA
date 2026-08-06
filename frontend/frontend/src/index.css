@@ -164,8 +164,11 @@ body {
       "center"
       "input"
       "bottomnav";
-    grid-template-columns: 1fr;
+    grid-template-columns: 100vw;
     grid-template-rows: var(--topbar-height) 1fr auto auto;
+    width: 100vw;
+    max-width: 100vw;
+    overflow-x: hidden;
   }
 
   /* Both sidebar-collapsed and context-hidden should keep the same mobile layout */
@@ -177,8 +180,20 @@ body {
       "center"
       "input"
       "bottomnav";
-    grid-template-columns: 1fr;
+    grid-template-columns: 100vw;
     grid-template-rows: var(--topbar-height) 1fr auto auto;
+    width: 100vw;
+    max-width: 100vw;
+    overflow-x: hidden;
+  }
+
+  .zone-topbar,
+  .zone-center,
+  .zone-input,
+  .zone-bottomnav {
+    width: 100vw;
+    max-width: 100vw;
+    box-sizing: border-box;
   }
 
   /* Sidebar becomes a hidden offscreen element (controlled by React overlay) */
