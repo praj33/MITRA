@@ -124,6 +124,47 @@ export const CompanionService = {
     }
   },
 
+  async getHabits(userId: string): Promise<{ habits: any[] }> {
+    try {
+      const resp = await fetch(`${getBase()}/api/pages/habits/list?user_id=${userId}`, {
+        headers: headers(),
+      });
+      if (!resp.ok) throw new Error(`HTTP ${resp.status}`);
+      return await resp.json();
+    } catch (e) {
+      console.warn('Habits fetch failed:', e);
+      return { habits: [] };
+    }
+  },
+
+  async createHabit(userId: string, name: string): Promise<any> {
+    const resp = await fetch(`${getBase()}/api/pages/habits/create?user_id=${userId}`, {
+      method: 'POST',
+      headers: headers(),
+      body: JSON.stringify({ name }),
+    });
+    if (!resp.ok) throw new Error(`HTTP ${resp.status}`);
+    return await resp.json();
+  },
+
+  async toggleHabit(userId: string, habitId: string): Promise<any> {
+    const resp = await fetch(`${getBase()}/api/pages/habits/toggle?user_id=${userId}&habit_id=${habitId}`, {
+      method: 'POST',
+      headers: headers(),
+    });
+    if (!resp.ok) throw new Error(`HTTP ${resp.status}`);
+    return await resp.json();
+  },
+
+  async deleteHabit(userId: string, habitId: string): Promise<any> {
+    const resp = await fetch(`${getBase()}/api/pages/habits/${habitId}?user_id=${userId}`, {
+      method: 'DELETE',
+      headers: headers(),
+    });
+    if (!resp.ok) throw new Error(`HTTP ${resp.status}`);
+    return await resp.json();
+  },
+
   async listCapabilities(): Promise<{ capabilities: any[] }> {
     const resp = await fetch(`${getBase()}/api/companion/capabilities`, {
       headers: headers(),
