@@ -1,7 +1,7 @@
 // components/pages/AnalyticsPage.tsx — Real-Time Productivity Analytics & Backend Synchronized Habit Monitor
 import React, { useEffect, useState, useCallback } from 'react';
 import { motion } from 'framer-motion';
-import { TrendingUp, Award, Flame, CheckCircle2, Clock, Zap, Target, Plus, Trash2, RefreshCw } from 'lucide-react';
+import { TrendingUp, Award, Flame, CheckCircle2, Clock, Zap, Target, Plus, Trash2, RefreshCw, Sparkles } from 'lucide-react';
 import { CompanionService } from '../../services/companion.service';
 import { useCompanionStore } from '../../store/companion.store';
 
@@ -11,6 +11,16 @@ interface Habit {
   streak: number;
   completedToday: boolean;
 }
+
+const PRESET_HABITS = [
+  '🎯 25m Deep Work Session',
+  '📖 Read Tech Article / Docs',
+  '💧 Drink 2L Water',
+  '🌅 Morning Briefing Check',
+  '🧘 10m Mindfulness & Focus',
+  '🏋️ 30m Fitness Workout',
+  '📝 Nightly Reflection & Notes',
+];
 
 export const AnalyticsPage: React.FC<{ onChatNavigate: (msg: string) => void }> = ({ onChatNavigate }) => {
   const userId = useCompanionStore(s => s.userId);
@@ -79,22 +89,31 @@ export const AnalyticsPage: React.FC<{ onChatNavigate: (msg: string) => void }> 
     }
   };
 
-  const addHabit = async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!newHabitName.trim()) return;
-
-    const habitName = newHabitName.trim();
-    setNewHabitName('');
-    setShowAddHabit(false);
-
+  const createHabitByName = async (habitName: string) => {
+    if (!habitName.trim()) return;
     try {
-      const res = await CompanionService.createHabit(userId, habitName);
+      const res = await CompanionService.createHabit(userId, habitName.trim());
       if (res && res.habit) {
         setHabits(prev => [res.habit, ...prev]);
       }
       fetchRealtimeAnalyticsAndHabits();
     } catch (err) {
       console.warn('Failed to create habit on server:', err);
+    }
+  };
+
+  const addHabit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!newHabitName.trim()) return;
+    const name = newHabitName.trim();
+    setNewHabitName('');
+    setShowAddHabit(false);
+    await createHabitByName(name);
+  };
+
+  const addPresetHabits = async () => {
+    for (const preset of PRESET_HABITS.slice(0, 4)) {
+      await createHabitByName(preset);
     }
   };
 
@@ -249,12 +268,36 @@ export const AnalyticsPage: React.FC<{ onChatNavigate: (msg: string) => void }> 
                 </h3>
                 <p className="text-3xs text-text-muted mt-0.5">Persisted directly in MongoDB & synced across devices</p>
               </div>
-              <button
-                onClick={() => setShowAddHabit(!showAddHabit)}
-                className="page-btn-sm flex items-center gap-1 cursor-pointer"
-              >
-                <Plus size={12} /> Add Habit
-              </button>
+              <div className="flex items-center gap-2">
+                {habits.length === 0 && (
+                  <button
+                    onClick={addPresetHabits}
+                    className="px-2.5 py-1 rounded-lg bg-brand/20 border border-brand/40 text-brand-light text-2xs font-semibold flex items-center gap-1 hover:bg-brand/30 transition-all cursor-pointer"
+                  >
+                    <Sparkles size={12} /> Add Preset Suite
+                  </button>
+                )}
+                <button
+                  onClick={() => setShowAddHabit(!showAddHabit)}
+                  className="page-btn-sm flex items-center gap-1 cursor-pointer"
+                >
+                  <Plus size={12} /> Add Habit
+                </button>
+              </div>
+            </div>
+
+            {/* Quick 1-Click Preset Chips */}
+            <div className="flex items-center gap-1.5 overflow-x-auto pb-2 mb-2">
+              <span className="text-3xs font-bold text-text-muted uppercase tracking-wider flex-shrink-0">Presets:</span>
+              {PRESET_HABITS.map(preset => (
+                <button
+                  key={preset}
+                  onClick={() => createHabitByName(preset)}
+                  className="px-2 py-0.5 rounded-full bg-surface-overlay hover:bg-surface-hover border border-border-subtle text-text-primary text-3xs font-medium flex-shrink-0 flex items-center gap-1 transition-all active:scale-95 cursor-pointer"
+                >
+                  <Plus size={10} className="text-brand-light" /> {preset}
+                </button>
+              ))}
             </div>
 
             {/* Add habit inline form */}
@@ -262,7 +305,7 @@ export const AnalyticsPage: React.FC<{ onChatNavigate: (msg: string) => void }> 
               <form onSubmit={addHabit} className="mb-3 flex items-center gap-2">
                 <input
                   type="text"
-                  placeholder="Habit title (e.g. 🎯 Exercise 30m)..."
+                  placeholder="Custom habit title (e.g. 🎯 Exercise 30m)..."
                   value={newHabitName}
                   onChange={e => setNewHabitName(e.target.value)}
                   className="flex-1 bg-surface-overlay border border-border-subtle rounded-lg px-3 py-1.5 text-xs text-text-primary outline-none focus:border-brand"
@@ -274,7 +317,17 @@ export const AnalyticsPage: React.FC<{ onChatNavigate: (msg: string) => void }> 
 
             <div className="flex flex-col gap-2">
               {habits.length === 0 ? (
-                <p className="text-2xs text-text-muted italic py-2">No active habits logged. Add your first habit above!</p>
+                <div className="p-4 rounded-xl bg-surface-overlay/50 border border-dashed border-border-subtle text-center flex flex-col items-center gap-2">
+                  <Flame size={24} className="text-orange-400/60 animate-bounce" />
+                  <p className="text-xs text-text-primary font-medium">No habits added yet!</p>
+                  <p className="text-2xs text-text-muted max-w-sm">Tap any preset habit chip above or click <strong>"Add Preset Suite"</strong> to instantly start tracking your daily routines & live streaks.</p>
+                  <button
+                    onClick={addPresetHabits}
+                    className="mt-1 px-3 py-1.5 rounded-xl bg-brand text-white text-xs font-semibold flex items-center gap-1.5 shadow-sm hover:bg-brand-light transition-all active:scale-95 cursor-pointer"
+                  >
+                    <Sparkles size={13} /> Populate 4 Starter Habits
+                  </button>
+                </div>
               ) : (
                 habits.map(habit => (
                   <div
