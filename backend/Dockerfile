@@ -5,6 +5,12 @@ WORKDIR /app
 COPY requirements.txt .
 RUN pip install --no-cache-dir --prefix=/install torch -r requirements.txt --index-url https://download.pytorch.org/whl/cpu --extra-index-url https://pypi.org/simple
 
+# Clean up any accidental CUDA packages, compiler caches, and test files
+RUN rm -rf /install/lib/python3.10/site-packages/nvidia* && \
+    rm -rf /install/lib/python3.10/site-packages/triton* && \
+    find /install -name '__pycache__' -type d -exec rm -rf {} + && \
+    find /install -name 'tests' -type d -exec rm -rf {} +
+
 FROM python:3.10-slim
 
 ENV PYTHONDONTWRITEBYTECODE=1 \
