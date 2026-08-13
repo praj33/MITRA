@@ -33,7 +33,8 @@ class SamruddhiCapability(BaseCapability):
             user_id = params.get("user_id", "user_default")
             message = params.get("message", "").strip().lower()
 
-            base_url = (os.getenv("SAMRUDDHI_API_BASE") or os.getenv("SAMRUDDHI_URL") or "http://localhost:3000").rstrip("/")
+            base_url = (os.getenv("SAMRUDDHI_API_BASE") or os.getenv("SAMRUDDHI_URL") or "https://samruddhi.blackholeinfiverse.com").rstrip("/")
+
             api_key = os.getenv("SAMRUDDHI_API_KEY", "")
 
             headers = {
