@@ -34,7 +34,13 @@ _CAPABILITY_INTENT_MAP: Dict[str, str] = {
     "search":        "browser",
     "instagram":     "notification",
     "device":        "notification",
+    "samruddhi":     "samruddhi",
+    "portfolio":     "samruddhi",
+    "balance":       "samruddhi",
+    "trades":        "samruddhi",
+    "transactions":  "samruddhi",
 }
+
 
 _KNOWLEDGE_KEYWORDS = {
     "explain", "what is", "how does", "define", "teach",
