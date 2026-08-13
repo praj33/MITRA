@@ -20,3 +20,9 @@ frontend/frontend/dist/
 Thumbs.db
 .vscode/
 .idea/
+
+# Local Mission Vana Audits & Cloud Guides
+MISSION_VANA_REUSABLE_ASSETS_AUDIT.md
+MITRA_CLOUD_VM_DEPLOYMENT_GUIDE.md
+
+

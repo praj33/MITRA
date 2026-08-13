@@ -216,7 +216,7 @@ class CompanionOrchestrator:
             return False, ""
 
     async def _call_conversation(self, message: str, user_id: str) -> str:
-        """General LLM conversation with full context."""
+        """General LLM conversation with full context & live web/market integration."""
         facts = await companion_memory.get_user_facts(user_id)
         user_name = facts.get("name") or "there"
         system_prompt = personality_engine.build_system_prompt(
@@ -224,6 +224,31 @@ class CompanionOrchestrator:
             user_facts=facts,
             enabled_capabilities=self._config.enabled_capabilities,
         )
+
+        msg_lower = message.lower()
+        live_keywords = [
+            "news", "finance", "stock", "share", "market", "sensex", "nifty", "bse", "nse",
+            "price", "today", "weather", "crypto", "bitcoin", "btc", "eth", "ethereum",
+            "hdfc", "reliance", "tcs", "infosys", "sbi", "icici", "tata", "apple", "tesla",
+            "gold", "silver", "commodity", "mutual fund", "sip", "bond", "inflation", "rbi",
+            "rate", "currency", "rupee", "dollar", "inr", "usd", "latest", "update", "headline",
+            "gain", "loss", "ups", "downs", "up", "down", "rally", "crash"
+        ]
+        if any(kw in msg_lower for kw in live_keywords):
+
+            try:
+                from app.tools.search_tool import SearchTool
+                search_tool = SearchTool()
+                live_info = await search_tool.run(message)
+                if live_info:
+                    system_prompt += (
+                        f"\n\n[REAL-TIME LIVE DATA INJECTED FOR USER QUERY]:\n{live_info}\n"
+                        "Instruction: Use the exact live numbers and news snippet provided above. "
+                        "Do NOT guess or hallucinate stock prices or news headlines."
+                    )
+            except Exception as e:
+                logger.warning(f"Live search context enrichment failed: {e}")
+
         history = await session_manager.get_history(
             user_id, limit=self._config.max_history_turns
         )
@@ -233,6 +258,7 @@ class CompanionOrchestrator:
             messages=messages,
             temperature=0.7,
         )
+
 
     async def _call_knowledge(self, message: str, user_id: str) -> str:
         """Route to UniGuru for knowledge queries."""
