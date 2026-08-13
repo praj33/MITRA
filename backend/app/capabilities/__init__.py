@@ -27,6 +27,7 @@ def register_all_capabilities() -> None:
     from app.capabilities.browser_capability import BrowserCapability
     from app.capabilities.document_capability import DocumentCapability
     from app.capabilities.uniguru_capability import UniGuruCapability
+    from app.capabilities.samruddhi_capability import SamruddhiCapability
 
     for cap_cls in [
         EmailCapability,
@@ -40,8 +41,10 @@ def register_all_capabilities() -> None:
         BrowserCapability,
         DocumentCapability,
         UniGuruCapability,
+        SamruddhiCapability,
     ]:
         capability_registry.register(cap_cls())
+
 
 
 __all__ = ["register_all_capabilities"]
