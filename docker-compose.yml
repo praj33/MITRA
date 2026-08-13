@@ -1,0 +1,39 @@
+services:
+
+  backend:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    container_name: mitra_backend
+    ports:
+      - "8011:8000"
+    env_file:
+      - ./backend/.env
+    environment:
+      - MONGODB_URI=${MONGODB_URI}
+    networks:
+      - mitra_network
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8000/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+    restart: unless-stopped
+
+  frontend:
+    build:
+      context: ./frontend/frontend
+      dockerfile: Dockerfile
+    container_name: mitra_frontend
+    ports:
+      - "3007:3000"
+    networks:
+      - mitra_network
+    depends_on:
+      backend:
+        condition: service_healthy
+    restart: unless-stopped
+
+networks:
+  mitra_network:
+    driver: bridge
