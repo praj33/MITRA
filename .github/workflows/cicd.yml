@@ -73,8 +73,8 @@ jobs:
           docker buildx build --push \
             --tag bhiv/mitra-frontend:${{ steps.vars.outputs.sha_short }} \
             --tag bhiv/mitra-frontend:latest \
-            --build-arg REACT_APP_API_URL=http://163.128.209.18:8011 \
-            --build-arg REACT_APP_AUTH_API_URL=http://163.128.209.18:8011 \
+            --build-arg REACT_APP_API_URL=https://mitra.blackholeinfiverse.com/api \
+            --build-arg REACT_APP_AUTH_API_URL=https://mitra.blackholeinfiverse.com/api \
             --build-arg REACT_APP_API_KEY=${{ secrets.API_KEY }} \
             --build-arg REACT_APP_USER_ID=user_default \
             -f frontend/frontend/Dockerfile frontend/frontend
