@@ -3,7 +3,7 @@ FROM python:3.10-slim AS build
 WORKDIR /app
 
 COPY requirements.txt .
-RUN pip install --no-cache-dir --prefix=/install torch --index-url https://download.pytorch.org/whl/cpu
+RUN pip install --no-cache-dir --prefix=/install torch --index-url https://download.pytorch.org/whl/cpu --extra-index-url https://pypi.org/simple
 RUN pip install --no-cache-dir --prefix=/install -r requirements.txt
 
 FROM python:3.10-slim
