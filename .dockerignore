@@ -1,0 +1,32 @@
+# Ignore Git
+.git
+.gitignore
+.github
+
+# Ignore Python
+**/__pycache__/
+**/*.pyc
+**/*.pyo
+**/*.pyd
+.venv/
+venv/
+env/
+ENV/
+backend/.env
+frontend/.env
+frontend/frontend/.env
+
+# Ignore Node.js
+**/node_modules/
+**/build/
+**/dist/
+
+# Ignore logs
+**/logs/
+**/*.log
+
+# Ignore documentation/proofs
+docs/
+evidence_packet/
+review_packets/
+*.md

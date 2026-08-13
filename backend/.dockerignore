@@ -1,0 +1,15 @@
+# Ignore Python build files
+**/__pycache__/
+**/*.pyc
+**/*.pyo
+**/*.pyd
+venv/
+.venv/
+env/
+ENV/
+.env
+logs/
+*.log
+sqlite_*.db
+*.db
+tests/

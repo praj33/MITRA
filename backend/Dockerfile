@@ -3,7 +3,7 @@ FROM python:3.10-slim AS build
 WORKDIR /app
 
 COPY requirements.txt .
-RUN pip install --no-cache-dir --prefix=/install torch -r requirements.txt --index-url https://download.pytorch.org/whl/cpu --extra-index-url https://pypi.org/simple
+RUN pip install --no-cache-dir --prefix=/install torch==2.0.1+cpu -r requirements.txt --index-url https://download.pytorch.org/whl/cpu --extra-index-url https://pypi.org/simple
 
 # Clean up any accidental CUDA packages, compiler caches, and test files
 RUN rm -rf /install/lib/python3.10/site-packages/nvidia* && \
