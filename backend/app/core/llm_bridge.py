@@ -248,12 +248,22 @@ class LLMBridge:
                 "What would you like to do?"
             )
 
+        # Live web search fallback for factual queries (e.g. radius of earth, news, facts)
+        try:
+            from app.tools.search_tool import SearchTool
+            search_tool = SearchTool()
+            search_res = asyncio.run(search_tool.run(user_msg))
+            if search_res and "LIVE" in search_res:
+                return f"Here is what I found for your query:\n\n{search_res}"
+        except Exception as e:
+            logger.warning(f"Rule-based live search fallback failed: {e}")
+
         # Generic thoughtful reply
         return (
-            "I understand you're asking about that. I'm working on getting you a full answer "
-            "— my knowledge service is warming up. Could you ask again in just a moment, "
-            "or try rephrasing? I'm here and listening."
+            "I'm listening and working on fetching the best information for you. "
+            "Could you rephrase your question or ask about tasks, calendar, reminders, or market trends?"
         )
+
 
 
 llm_bridge = LLMBridge()
