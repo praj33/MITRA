@@ -149,9 +149,21 @@ class CalendarCapability(BaseCapability):
             # Save to MongoDB
             event_id = _save_event_to_db(user_id, title, date_str, time_str, trace_id or "")
 
-            summary = f"Calendar event created: {title}"
-            if date_str:
-                summary += f" on {date_str}"
+            # Generate Native Device Calendar Sync URLs (Google, Outlook, Apple iCal)
+            now = datetime.now(timezone.utc)
+            start_dt = now + timedelta(hours=1)
+            end_dt = start_dt + timedelta(hours=1)
+            
+            import urllib.parse
+            start_iso = start_dt.strftime("%Y%m%dT%H%M%SZ")
+            end_iso = end_dt.strftime("%Y%m%dT%H%M%SZ")
+            encoded_title = urllib.parse.quote(title)
+            encoded_details = urllib.parse.quote("Scheduled via MITRA Companion Engine")
+
+            google_url = f"https://calendar.google.com/calendar/render?action=TEMPLATE&text={encoded_title}&dates={start_iso}/{end_iso}&details={encoded_details}"
+            outlook_url = f"https://outlook.live.com/calendar/0/deeplink/compose?path=/calendar/action/compose&rru=addevent&subject={encoded_title}&startdt={start_dt.isoformat()}&enddt={end_dt.isoformat()}&body={encoded_details}"
+
+            summary = f"Calendar event created: '{title}'. You can sync it directly to your device calendar below:"
 
             return CapabilityResult(
                 capability=self.name, intent=intent, status="success",
@@ -162,11 +174,15 @@ class CalendarCapability(BaseCapability):
                     "date": date_str,
                     "time": time_str,
                     "persisted": event_id is not None,
+                    "sync_urls": {
+                        "google_calendar": google_url,
+                        "outlook_calendar": outlook_url,
+                    }
                 },
                 trace_id=trace_id,
                 actions=[
-                    {"label": "Add to calendar", "action": "Add to calendar"},
-                    {"label": "Set a reminder", "action": "Set a reminder"},
+                    {"label": "📅 Add to Google Calendar", "action": google_url},
+                    {"label": "📆 Add to Outlook Calendar", "action": outlook_url},
                 ],
             )
         except Exception as exc:

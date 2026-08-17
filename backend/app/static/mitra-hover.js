@@ -302,6 +302,28 @@
   const micBtn = document.getElementById('mitraMicBtn');
   const msgList = document.getElementById('mitraMsgList');
 
+  // Request Native Device Notification permission for smart reminders
+  if ('Notification' in window && Notification.permission === 'default') {
+    setTimeout(() => { Notification.requestPermission().catch(() => {}); }, 3000);
+  }
+
+  // Cross-App Session & History Continuity Hydration
+  async function loadCrossAppHistory() {
+    try {
+      const res = await fetch(`${API_BASE}/api/companion/history/${USER_ID}`);
+      if (res.ok) {
+        const data = await res.json();
+        if (data.history && data.history.length > 0) {
+          msgList.innerHTML = '';
+          data.history.forEach(turn => {
+            appendMessage(turn.role, turn.content);
+          });
+        }
+      }
+    } catch (e) {}
+  }
+  setTimeout(loadCrossAppHistory, 500);
+
   // Toggle widget
   function toggleWidget() {
     isOpen = !isOpen;
