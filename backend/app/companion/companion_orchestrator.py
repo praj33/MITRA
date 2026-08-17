@@ -92,14 +92,28 @@ class CompanionOrchestrator:
         platform: str = "web",
         device: str = "browser",
         trace_id: Optional[str] = None,
+        page_context: Optional[Dict[str, Any]] = None,
     ) -> CompanionResponse:
         """
         Process a user message and return a CompanionResponse.
-        Enforces canonical context (trace_id, correlation_id, execution_id)
-        and streams real-time runtime state events.
+        Enforces canonical context (trace_id, correlation_id, execution_id),
+        syncs active DOM page context, and streams real-time runtime state events.
         """
         from app.runtime.canonical_context import create_canonical_context
         from app.runtime.runtime_event_bus import runtime_event_bus
+        import json
+
+        # Store page_context if provided directly in request
+        if page_context:
+            try:
+                await companion_memory.set_fact(
+                    user_id=user_id,
+                    key="active_ui_context",
+                    value=json.dumps(page_context),
+                    source="dom_scraper",
+                )
+            except Exception:
+                pass
 
         # 0. Enforce Canonical Context (trace_id, correlation_id, execution_id)
         ctx = create_canonical_context(
@@ -323,6 +337,30 @@ class CompanionOrchestrator:
             user_facts=facts,
             enabled_capabilities=self._config.enabled_capabilities,
         )
+
+        # Inject Active UI DOM Context if present (from host app DOM Extractor)
+        if "active_ui_context" in facts:
+            try:
+                import json
+                ctx_obj = json.loads(facts["active_ui_context"])
+                buttons_str = ", ".join(ctx_obj.get("buttons", [])) or "None detected"
+                headings_str = ", ".join(ctx_obj.get("headings", [])) or "None detected"
+                fields_str = ", ".join(ctx_obj.get("fields", [])) or "None detected"
+                snippet = (ctx_obj.get("snippet") or "")[:400]
+
+                system_prompt += (
+                    f"\n\n[ACTIVE HOST APP SCREEN CONTEXT (DOM SCRAPED)]:\n"
+                    f"- Page Title: {ctx_obj.get('title', 'Unknown Page')}\n"
+                    f"- URL: {ctx_obj.get('url', 'Unknown URL')}\n"
+                    f"- Visible Buttons: {buttons_str}\n"
+                    f"- Visible Headings/Sections: {headings_str}\n"
+                    f"- Visible Form Fields: {fields_str}\n"
+                    f"- Visible Content Snippet: {snippet}\n\n"
+                    "INSTRUCTION: The user is currently looking at this active application screen. "
+                    "Use this exact screen context to answer questions about buttons, settings, options, and actions available to them."
+                )
+            except Exception as e:
+                logger.warning(f"UI Context injection error: {e}")
 
         msg_lower = message.lower()
         live_keywords = [

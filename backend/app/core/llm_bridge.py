@@ -252,8 +252,8 @@ class LLMBridge:
         try:
             from app.tools.search_tool import SearchTool
             search_tool = SearchTool()
-            search_res = asyncio.run(search_tool.run(user_msg))
-            if search_res and "LIVE" in search_res:
+            search_res = await search_tool.run(user_msg)
+            if search_res:
                 return f"Here is what I found for your query:\n\n{search_res}"
         except Exception as e:
             logger.warning(f"Rule-based live search fallback failed: {e}")

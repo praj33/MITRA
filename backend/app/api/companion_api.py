@@ -28,6 +28,12 @@ class CompanionChatRequest(BaseModel):
     user_id: Optional[str] = None
     platform: str = "web"
     device: str = "browser"
+    page_context: Optional[dict] = None
+
+
+class CompanionContextSyncRequest(BaseModel):
+    user_id: str
+    context: dict
 
 
 class CompanionMemoryUpdateRequest(BaseModel):
@@ -46,8 +52,8 @@ async def companion_chat(
 ):
     """
     Primary companion conversation endpoint.
-    Accepts a user message, routes through CompanionOrchestrator,
-    returns companion response + optional capability result.
+    Accepts a user message + active UI DOM page context,
+    routes through CompanionOrchestrator.
     """
     _ = x_api_key
     user_id = request.user_id or x_user_id or "anonymous"
@@ -60,11 +66,25 @@ async def companion_chat(
             message=request.message.strip(),
             platform=request.platform,
             device=request.device,
+            page_context=request.page_context,
         )
         return JSONResponse(status_code=200, content=response.to_dict())
     except Exception as exc:
         logger.exception("Companion chat failed for user_id=%s: %s", user_id, exc)
         return JSONResponse(status_code=500, content={"error": "Companion pipeline failed."})
+
+
+@router.post("/api/companion/context/sync")
+async def sync_page_context(request: CompanionContextSyncRequest):
+    """Store real-time UI DOM map extracted from host application (Samruddhi, Gurukul, etc.)."""
+    import json
+    await companion_memory.set_fact(
+        user_id=request.user_id,
+        key="active_ui_context",
+        value=json.dumps(request.context),
+        source="dom_scraper",
+    )
+    return {"status": "ui_context_synced", "user_id": request.user_id}
 
 
 @router.get("/api/companion/greeting/{user_id}")

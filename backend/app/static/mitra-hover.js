@@ -336,9 +336,57 @@
   }
 
   // Send query to MITRA API
+  // ── DOM UI Context Extractor & Synchronization ────────────────────────
+  function extractActiveUIContext() {
+    try {
+      const buttons = Array.from(document.querySelectorAll('button, a.btn, [role="button"]'))
+        .map(b => (b.innerText || b.getAttribute('aria-label') || b.getAttribute('title') || '').trim())
+        .filter(t => t.length > 0 && t.length < 50);
+
+      const headings = Array.from(document.querySelectorAll('h1, h2, h3, h4'))
+        .map(h => (h.innerText || '').trim())
+        .filter(t => t.length > 0 && t.length < 80);
+
+      const inputs = Array.from(document.querySelectorAll('label, input[placeholder], select'))
+        .map(i => (i.innerText || i.getAttribute('placeholder') || i.name || '').trim())
+        .filter(t => t.length > 0 && t.length < 50);
+
+      const bodyText = (document.body.innerText || '').replace(/\s+/g, ' ').substring(0, 1000);
+
+      return {
+        url: window.location.href,
+        title: document.title,
+        buttons: Array.from(new Set(buttons)).slice(0, 15),
+        headings: Array.from(new Set(headings)).slice(0, 10),
+        fields: Array.from(new Set(inputs)).slice(0, 10),
+        snippet: bodyText,
+        app_id: APP_ID,
+      };
+    } catch (e) {
+      return { url: window.location.href, title: document.title, app_id: APP_ID };
+    }
+  }
+
+  async function syncActiveContext() {
+    try {
+      const pageCtx = extractActiveUIContext();
+      fetch(`${API_BASE}/api/companion/context/sync`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ user_id: USER_ID, context: pageCtx }),
+      }).catch(() => {});
+    } catch (e) {}
+  }
+
+  // Trigger DOM context sync on load & navigation
+  setTimeout(syncActiveContext, 1500);
+  window.addEventListener('popstate', syncActiveContext);
+
   async function sendMessage() {
     const query = inputEl.value.trim();
     if (!query || isThinking) return;
+
+    const pageCtx = extractActiveUIContext();
 
     appendMessage('user', query);
     inputEl.value = '';
@@ -347,14 +395,14 @@
     const thinkingDiv = document.createElement('div');
     thinkingDiv.className = 'mitra-thinking';
     thinkingDiv.id = 'mitraThinking';
-    thinkingDiv.textContent = 'Mitra is thinking...';
+    thinkingDiv.textContent = 'Mitra is analyzing screen & thinking...';
     msgList.appendChild(thinkingDiv);
     msgList.scrollTop = msgList.scrollHeight;
 
     try {
       // 1. Primary MITRA Backend
       const controller = new AbortController();
-      const timeoutId = setTimeout(() => controller.abort(), 6000);
+      const timeoutId = setTimeout(() => controller.abort(), 8000);
       const res = await fetch(`${API_BASE}/api/companion/chat`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -363,6 +411,7 @@
           session_id: sessionId,
           user_id: USER_ID,
           app_id: APP_ID,
+          page_context: pageCtx,
         }),
         signal: controller.signal,
       });
