@@ -264,10 +264,58 @@ def generate_trace_id(canonical_payload: Dict[str, Any]) -> str:
         enforcement_category="REQUEST",
     )
 
+async def extract_action_parameters_llm(text: str, action_type: str) -> Optional[Dict[str, Any]]:
+    """Extract action parameters from user text using LLM for dynamic parsing."""
+    from app.core.llm_bridge import llm_bridge
+
+    prompt = (
+        f"Extract the following information from the user message and return a JSON object.\n"
+        f"Action type: {action_type}\n"
+        f"User message: {text}\n\n"
+        f"Return ONLY a valid JSON object with these fields:\n"
+    )
+
+    if action_type == "email":
+        prompt += '{"to": "email address", "subject": "email subject", "message": "email body"}\n'
+    elif action_type == "whatsapp":
+        prompt += '{"to": "phone number", "message": "message text"}\n'
+    elif action_type == "telegram":
+        prompt += '{"to": "@username or chat_id", "message": "message text"}\n'
+    elif action_type == "calendar":
+        prompt += '{"action": "create_event", "title": "event title", "start_time": "ISO datetime", "description": "event description"}\n'
+    elif action_type == "reminder":
+        prompt += '{"action": "create_reminder", "message": "reminder text", "remind_at": "ISO datetime or null"}\n'
+    elif action_type == "ems":
+        prompt += '{"action": "create_task", "title": "task title", "assignee": "person or empty", "priority": "high/medium/low", "description": "task description"}\n'
+    elif action_type == "instagram":
+        prompt += '{"to": "@username", "message": "message text"}\n'
+    elif action_type == "device":
+        prompt += '{"device_id": "device identifier", "command": "command to execute", "params": {}}\n'
+    else:
+        prompt += '{"action": "execute", "params": {}}\n'
+
+    prompt += (
+        "\nIf a field cannot be determined from the message, use null for optional fields "
+        "or a reasonable default. Return ONLY the JSON, no other text.\n"
+    )
+
+    try:
+        response = await llm_bridge.call_llm("uniguru", prompt)
+        # Parse JSON from response, handling markdown code blocks
+        cleaned = response.strip()
+        if cleaned.startswith("```"):
+            cleaned = re.sub(r'^```(?:json)?\s*', '', cleaned)
+            cleaned = re.sub(r'\s*```$', '', cleaned)
+        result = json.loads(cleaned)
+        if isinstance(result, dict) and result:
+            return result
+    except Exception:
+        pass
+    return None
+
+
 def extract_action_parameters(text: str, action_type: str) -> Dict[str, Any]:
-    """Extract action parameters from user text for all supported platforms"""
-    import re
-    
+    """Extract action parameters using regex fallback (synchronous)."""
     if action_type == "email":
         email_match = re.search(r'(?:to|send.*?to)\s+([\w\.-]+@[\w\.-]+)', text, re.IGNORECASE)
         subject_match = re.search(r"(?:subject|with subject)\s+['\"](.*?)['\"]", text, re.IGNORECASE)
@@ -588,14 +636,20 @@ async def handle_assistant_request(request):
             logger.warning(f"[{trace_id}] Summary generation failed: {e}. Using original text.")
             processed_text = text
         
-        # Intent detection
+        # Intent detection (async with LLM, fallback to regex)
         try:
-            intent = intent_flow.process_text(processed_text)
+            intent = await intent_flow.process_text_async(processed_text)
             if not intent:
                 intent = {"intent": "general"}
         except Exception as e:
-            logger.warning(f"[{trace_id}] Intent detection failed: {e}. Using general intent.")
-            intent = {"intent": "general"}
+            logger.warning(f"[{trace_id}] Async intent detection failed: {e}, using fallback")
+            try:
+                intent = intent_flow.process_text(processed_text)
+                if not intent:
+                    intent = {"intent": "general"}
+            except Exception as e2:
+                logger.warning(f"[{trace_id}] Fallback intent detection also failed: {e2}. Using general intent.")
+                intent = {"intent": "general"}
         
         log_to_bucket(trace_id, "orchestration_processing", {
             "processed_text": processed_text,
@@ -633,6 +687,15 @@ async def handle_assistant_request(request):
 
             if action_data:
                 logger.info(f"[{trace_id}] Executing {detected_platform} action via TANTRA Runtime")
+
+                # Try dynamic LLM extraction first, fall back to regex
+                try:
+                    llm_action_data = await extract_action_parameters_llm(text, detected_platform)
+                    if llm_action_data:
+                        action_data = llm_action_data
+                        logger.info(f"[{trace_id}] LLM extracted {detected_platform} parameters successfully")
+                except Exception as e:
+                    logger.debug(f"[{trace_id}] LLM extraction failed, using regex fallback: {e}")
 
                 # Build TANTRA execution context from orchestrator state
                 tantra_context = ExecutionContext(

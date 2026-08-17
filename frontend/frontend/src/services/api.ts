@@ -7,7 +7,7 @@ const getBaseUrl = () => {
 };
 
 const API_BASE_URL = getBaseUrl();
-const API_KEY = process.env.REACT_APP_API_KEY || 'bhiv-enterprise-key';
+const API_KEY = process.env.REACT_APP_API_KEY || '';
 const getToken = (): string | null => localStorage.getItem('authToken');
 
 class ApiService {
@@ -174,36 +174,92 @@ class ApiService {
   }
 
   async getTasks(): Promise<Task[]> {
-    // STUB: Backend v3.0.0 does not support independent task fetching
-    console.warn('getTasks: Not supported by current backend version');
-    return [];
+    try {
+      const response = await fetch(`${API_BASE_URL}/api/tasks`, {
+        method: 'GET',
+        headers: this.getHeaders(),
+      });
+      if (!response.ok) return [];
+      const data = await response.json();
+      return Array.isArray(data) ? data : data.tasks || [];
+    } catch {
+      return [];
+    }
   }
 
-  async updateTaskStatus(taskId: number, status: string): Promise<Task> {
-    // STUB: Backend v3.0.0 does not support task updates
-    throw new Error('Task updates not supported by this backend');
+  async updateTaskStatus(taskId: string, status: string): Promise<Task> {
+    const response = await fetch(`${API_BASE_URL}/api/tasks/${taskId}`, {
+      method: 'PUT',
+      headers: this.getHeaders(),
+      body: JSON.stringify({ status }),
+    });
+    if (!response.ok) throw new Error(`Failed to update task: ${response.statusText}`);
+    return await response.json();
   }
 
 
 
   /**
-   * Web Search API
-   * Search the web with a query
+   * Web Search API - delegates to backend for search
    */
   async search(request: import('../types').SearchRequest): Promise<import('../types').SearchResponse> {
-    // STUB: Search not supported
-    console.warn('Search API not supported by this backend');
-    return { query: request.query, results: [] };
+    try {
+      const response = await fetch(`${API_BASE_URL}/api/search`, {
+        method: 'POST',
+        headers: this.getHeaders(),
+        body: JSON.stringify(request),
+      });
+      if (!response.ok) {
+        // Fallback: use assistant to answer search queries
+        const assistantResponse = await this.sendMessage({
+          message: `Search for: ${request.query}`,
+          platform: 'web',
+        });
+        return {
+          query: request.query,
+          results: [{
+            title: 'Search Result',
+            url: '',
+            snippet: assistantResponse.data?.decision?.response || 'No results found',
+            relevance: 1.0,
+          }],
+        };
+      }
+      return await response.json();
+    } catch {
+      return { query: request.query, results: [] };
+    }
   }
 
   /**
-   * Web Research API
-   * Perform deep research on a topic
+   * Web Research API - delegates to backend for deep research
    */
   async research(request: import('../types').ResearchRequest): Promise<import('../types').ResearchResponse> {
-    // STUB: Research not supported
-    console.warn('Research API not supported by this backend');
-    throw new Error('Deep Research is not available in this environment.');
+    try {
+      const response = await fetch(`${API_BASE_URL}/api/research`, {
+        method: 'POST',
+        headers: this.getHeaders(),
+        body: JSON.stringify(request),
+      });
+      if (!response.ok) {
+        // Fallback: use assistant for research queries
+        const assistantResponse = await this.sendMessage({
+          message: `Research this topic thoroughly: ${request.query}`,
+          platform: 'web',
+        });
+        return {
+          topic: request.query,
+          summary: assistantResponse.data?.decision?.response || 'Research not available',
+          key_findings: [],
+          sources: [],
+          depth: 1,
+        };
+      }
+      return await response.json();
+    } catch (error) {
+      if (error instanceof Error) throw error;
+      throw new Error('Research failed');
+    }
   }
 
 
@@ -259,59 +315,78 @@ class ApiService {
 
   /**
    * System Information API
-   * Get system information
    */
   async getSystemInfo(): Promise<import('../types').SystemInfo> {
     try {
-      const response = await fetch(`${API_BASE_URL}/api/system/info`, {
+      const response = await fetch(`${API_BASE_URL}/health/system`, {
         method: 'GET',
         headers: this.getHeaders(),
       });
-
-      if (!response.ok) {
-        throw new Error(`Failed to get system info: ${response.statusText}`);
-      }
-
-      return await response.json();
+      if (!response.ok) throw new Error(`Failed to get system info: ${response.statusText}`);
+      const data = await response.json();
+      return {
+        platform: data.platform || 'unknown',
+        python_version: data.python_version || 'unknown',
+        working_directory: data.working_directory || 'unknown',
+        available_space: data.available_space || 'unknown',
+        memory_usage: data.memory_usage || { total: 0, available: 0, percent: 0, used: 0 },
+      };
     } catch (error) {
-      if (error instanceof Error) {
-        throw error;
-      }
+      if (error instanceof Error) throw error;
       throw new Error('Failed to get system info');
     }
   }
 
   /**
    * System Statistics API
-   * Get system statistics
    */
   async getSystemStats(): Promise<import('../types').SystemStats> {
     try {
-      const response = await fetch(`${API_BASE_URL}/api/system/stats`, {
+      const response = await fetch(`${API_BASE_URL}/api/metrics/system`, {
         method: 'GET',
         headers: this.getHeaders(),
       });
-
-      if (!response.ok) {
-        throw new Error(`Failed to get system stats: ${response.statusText}`);
-      }
-
-      return await response.json();
+      if (!response.ok) throw new Error(`Failed to get system stats: ${response.statusText}`);
+      const data = await response.json();
+      return {
+        memory_stats: data.memory_stats || { total_entries: 0, users: 0 },
+        task_queue_status: data.task_queue_status || { pending: 0, running: 0, completed: 0 },
+        safety_stats: data.safety_stats || { total_evaluations: 0, blocked_count: 0 },
+        policy_violations: data.policy_violations || { total: 0 },
+        performance_metrics: data.performance_metrics || 0,
+      };
     } catch (error) {
-      if (error instanceof Error) {
-        throw error;
-      }
+      if (error instanceof Error) throw error;
       throw new Error('Failed to get system stats');
     }
   }
 
   /**
    * Performance Insights API
-   * Get performance metrics and recommendations
    */
   async getPerformanceInsights(): Promise<import('../types').PerformanceInsights> {
-    // STUB: Analytics not supported
-    throw new Error('Analytics not supported');
+    try {
+      const response = await fetch(`${API_BASE_URL}/api/metrics`, {
+        method: 'GET',
+        headers: this.getHeaders(),
+      });
+      if (!response.ok) throw new Error(`Failed to get performance insights: ${response.statusText}`);
+      const data = await response.json();
+      return {
+        performance_metrics: data.performance_metrics || {
+          total_interactions: 0,
+          successful_interactions: 0,
+          average_response_time: 0,
+          average_satisfaction: 0,
+          improvement_areas: [],
+        },
+        patterns: data.patterns || [],
+        recommendations: data.recommendations || [],
+      };
+    } catch (error) {
+      if (error instanceof Error) throw error;
+      throw new Error('Failed to get performance insights');
+    }
   }
 
   /**
@@ -335,6 +410,84 @@ class ApiService {
     } catch (error) {
       console.error('TTS API error:', error);
       throw error;
+    }
+  }
+
+  /**
+   * Stream a message via SSE for real-time responses
+   */
+  async sendMessageStream(
+    request: AssistantRequest,
+    onChunk: (chunk: any) => void,
+    onDone: () => void,
+    onError: (error: Error) => void,
+  ): Promise<void> {
+    try {
+      const preferredLanguage = localStorage.getItem('mitra_language') || 'en';
+      const requestPayload = {
+        version: "3.0.0",
+        input: {
+          message: request.message,
+          summarized_payload: null
+        },
+        context: {
+          platform: request.platform || 'web',
+          device: request.device_context || 'desktop',
+          voice_input: request.voice_input || false,
+          session_id: 'default',
+          preferred_language: preferredLanguage
+        }
+      };
+
+      const response = await fetch(`${API_BASE_URL}/api/assistant/stream`, {
+        method: 'POST',
+        headers: this.getHeaders(),
+        body: JSON.stringify(requestPayload),
+      });
+
+      if (!response.ok) {
+        throw new Error(`Stream request failed: ${response.status}`);
+      }
+
+      const reader = response.body?.getReader();
+      if (!reader) throw new Error('No response body');
+
+      const decoder = new TextDecoder();
+      let buffer = '';
+
+      while (true) {
+        const { done, value } = await reader.read();
+        if (done) break;
+
+        buffer += decoder.decode(value, { stream: true });
+        const lines = buffer.split('\n');
+        buffer = lines.pop() || '';
+
+        for (const line of lines) {
+          if (line.startsWith('event: ')) {
+            const eventType = line.slice(7).trim();
+            if (eventType === 'done') {
+              onDone();
+              return;
+            }
+            if (eventType === 'error') {
+              onError(new Error('Stream error event'));
+              return;
+            }
+          }
+          if (line.startsWith('data: ')) {
+            try {
+              const data = JSON.parse(line.slice(6));
+              onChunk(data);
+            } catch {
+              // Ignore non-JSON lines
+            }
+          }
+        }
+      }
+      onDone();
+    } catch (error) {
+      onError(error instanceof Error ? error : new Error('Stream failed'));
     }
   }
 

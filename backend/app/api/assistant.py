@@ -1,8 +1,9 @@
 from fastapi import APIRouter, Header, Request
-from fastapi.responses import Response
+from fastapi.responses import Response, StreamingResponse
 from pydantic import BaseModel
-from typing import Optional, Literal, Union
+from typing import Optional, Literal, Union, AsyncGenerator
 from datetime import datetime
+import json
 import os
 
 from app.core.assistant_orchestrator import handle_assistant_request
@@ -139,7 +140,7 @@ async def assistant_options(request: Request):
     This explicit handler prevents FastAPI from trying to validate OPTIONS requests
     against the POST route handler which requires headers and body.
     """
-    # Get allowed origins (same logic as main.py)
+    # Get allowed origins from environment
     allowed_origins = [
         "http://localhost:3000",
         "http://localhost:3001",
@@ -154,25 +155,24 @@ async def assistant_options(request: Request):
         elif frontend_url.startswith("http://"):
             allowed_origins.append(frontend_url.replace("http://", "https://"))
     
-    # Add common Render.com frontend URLs (for production deployments)
-    render_frontends = [
-        "https://ai-assistant-yykb.onrender.com",
-        "https://ai-assistant-frontend.onrender.com",
-    ]
-    allowed_origins.extend(render_frontends)
+    # Additional CORS origins from env
+    cors_origins = os.getenv("CORS_ORIGINS", "")
+    if cors_origins:
+        allowed_origins.extend([o.strip() for o in cors_origins.split(",") if o.strip()])
     
     origin = request.headers.get("origin", "")
     
-    # Check if origin is allowed (only ai-assistant Render.com subdomains)
+    # Check if origin is allowed
     is_allowed = False
     if origin:
-        import re
-        # Check explicit list
         if origin in allowed_origins:
             is_allowed = True
-        # Allow only ai-assistant Render.com subdomains
-        elif re.match(r"https://ai-assistant[-\w]*\.onrender\.com$", origin):
-            is_allowed = True
+        # Also allow any FRONTEND_URL subdomain pattern if it's a Render/Vercel URL
+        if frontend_url and origin != frontend_url:
+            import re
+            base_domain = re.escape(frontend_url.split("://")[-1].split("/")[0])
+            if re.match(rf"https?://{base_domain}$", origin):
+                is_allowed = True
     
     # Determine allowed origin
     if is_allowed and origin:
@@ -234,3 +234,69 @@ async def assistant_endpoint(
             },
             "processed_at": datetime.utcnow().isoformat() + "Z",
         }
+
+
+# =========================
+# SSE STREAMING ENDPOINT
+# =========================
+
+async def _stream_assistant_response(
+    request_payload: dict,
+) -> AsyncGenerator[str, None]:
+    """Generate SSE events from assistant response."""
+    try:
+        yield f"event: start\ndata: {json.dumps({'status': 'processing'})}\n\n"
+
+        result = await handle_assistant_request(request_payload)
+
+        # Stream the full response as a single event
+        yield f"event: message\ndata: {json.dumps(result)}\n\n"
+        yield f"event: done\ndata: {json.dumps({'status': 'complete'})}\n\n"
+
+    except Exception as e:
+        error_payload = {
+            "version": "3.0.0",
+            "status": "error",
+            "error": {"code": "STREAM_ERROR", "message": str(e)},
+            "processed_at": datetime.utcnow().isoformat() + "Z",
+        }
+        yield f"event: error\ndata: {json.dumps(error_payload)}\n\n"
+
+
+@router.post("/api/assistant/stream")
+async def assistant_stream_endpoint(
+    request: AssistantRequest,
+    x_api_key: str = Header(...),
+    authorization: Optional[str] = Header(None),
+):
+    """SSE streaming endpoint for real-time assistant responses."""
+    try:
+        request_payload = model_to_dict(request)
+        authenticated_user_context = _build_authenticated_user_context(
+            request_context=request.context,
+            x_api_key=x_api_key,
+            authorization=authorization,
+        )
+        request_payload["context"]["authenticated_user_context"] = authenticated_user_context
+        request_payload["context"]["user_context"] = authenticated_user_context
+
+        return StreamingResponse(
+            _stream_assistant_response(request_payload),
+            media_type="text/event-stream",
+            headers={
+                "Cache-Control": "no-cache",
+                "Connection": "keep-alive",
+                "X-Accel-Buffering": "no",
+            },
+        )
+    except Exception as e:
+        error_payload = {
+            "version": "3.0.0",
+            "status": "error",
+            "error": {"code": "STREAM_ERROR", "message": str(e)},
+            "processed_at": datetime.utcnow().isoformat() + "Z",
+        }
+        return StreamingResponse(
+            iter([f"event: error\ndata: {json.dumps(error_payload)}\n\n"]),
+            media_type="text/event-stream",
+        )

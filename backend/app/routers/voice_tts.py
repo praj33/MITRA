@@ -21,7 +21,7 @@ os.makedirs(os.path.abspath(CACHE_DIR), exist_ok=True)
 class TTSRequest(BaseModel):
     text: str
     voice: str = "alloy"
-    model: str = "gpt-4o-mini-tts"   # Updated official TTS model
+    model: str = os.getenv("TTS_MODEL", "gpt-4o-mini-tts")
     save_cache: bool = True
 
     @validator("voice")

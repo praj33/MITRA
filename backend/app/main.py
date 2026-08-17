@@ -156,7 +156,7 @@ app = FastAPI(
 # CORS - Explicit origins for production security
 # -------------------------------------------------
 def _get_allowed_origins() -> list[str]:
-    """Build CORS allowed origins from environment and known deployments."""
+    """Build CORS allowed origins from environment. No hardcoded URLs."""
     origins = [
         "http://localhost:3000",
         "http://localhost:3001",
@@ -170,14 +170,13 @@ def _get_allowed_origins() -> list[str]:
             origins.append(frontend_url.replace("https://", "http://"))
         elif frontend_url.startswith("http://"):
             origins.append(frontend_url.replace("http://", "https://"))
-    # Production Render deployments
-    render_frontends = [
-        "https://ai-assistant-yykb.onrender.com",
-        "https://ai-assistant-frontend.onrender.com",
-        "https://mitra-t42.vercel.app",
-        "http://mitra-t42.vercel.app",
-    ]
-    origins.extend(render_frontends)
+    # Additional CORS origins from env (comma-separated)
+    extra_origins = os.getenv("CORS_ORIGINS", "").strip()
+    if extra_origins:
+        for origin in extra_origins.split(","):
+            origin = origin.strip()
+            if origin:
+                origins.append(origin)
     return list(set(origins))
 
 app.add_middleware(
