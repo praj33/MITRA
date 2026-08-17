@@ -111,7 +111,7 @@ class LLMBridge:
             except Exception as exc:
                 logger.warning("Fallback provider=%s failed: %s", provider, exc)
         # Final rule-based fallback — always gives a useful reply
-        return self._rule_based_response(messages)
+        return await self._rule_based_response(messages)
 
     # ── providers ─────────────────────────────────────────────────
     async def _call_groq(self, messages: list, temperature: float, max_tokens: int) -> str:
@@ -192,7 +192,7 @@ class LLMBridge:
             logger.warning("UniGuru HTTP %s: %s", resp.status_code, resp.text[:200])
             raise ValueError(f"UniGuru HTTP {resp.status_code}")
 
-    def _rule_based_response(self, messages: list) -> str:
+    async def _rule_based_response(self, messages: list) -> str:
         """Smart rule-based fallback — always returns something useful."""
         import re
         user_msg = next(
