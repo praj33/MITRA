@@ -525,3 +525,48 @@ async def web_summarize(req: WebSummarizeRequest):
         }
 
 
+# ── Real-Time Runtime Event Stream (Ashwini UI Interface) ───────────────────
+
+@router.get("/api/v1/runtime/events")
+@router.get("/api/companion/events/{user_id}")
+async def runtime_events_stream(user_id: str = "anonymous"):
+    """
+    Real-time Server-Sent Events (SSE) stream emitting runtime state changes.
+    States: requested, queued, running, capability_running, completed, failed, retrying.
+    Used by Ashwini's companion UI.
+    """
+    from fastapi.responses import StreamingResponse
+    from app.runtime.runtime_event_bus import runtime_event_bus
+
+    return StreamingResponse(
+        runtime_event_bus.subscribe(user_id=user_id),
+        media_type="text/event-stream",
+        headers={
+            "Cache-Control": "no-cache",
+            "Connection": "keep-alive",
+            "X-Accel-Buffering": "no",
+        },
+    )
+
+
+@router.get("/api/v1/runtime/events/history")
+async def runtime_events_history(user_id: str = "anonymous", limit: int = 50):
+    """Fetch recent execution state event history."""
+    from app.runtime.runtime_event_bus import runtime_event_bus
+    return {
+        "user_id": user_id,
+        "events": runtime_event_bus.get_recent_events(user_id=user_id, limit=limit),
+    }
+
+
+@router.get("/api/v1/runtime/replay/{trace_id}")
+async def replay_trace_execution(trace_id: str):
+    """
+    Reconstruct exact execution state facts from persisted evidence for a given trace_id.
+    """
+    from app.runtime.replay_engine import replay_engine
+    return replay_engine.reconstruct_execution(trace_id=trace_id)
+
+
+
+

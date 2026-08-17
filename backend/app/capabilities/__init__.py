@@ -28,6 +28,7 @@ def register_all_capabilities() -> None:
     from app.capabilities.document_capability import DocumentCapability
     from app.capabilities.uniguru_capability import UniGuruCapability
     from app.capabilities.samruddhi_capability import SamruddhiCapability
+    from app.capabilities.samachar_capability import SamacharCapability
 
     for cap_cls in [
         EmailCapability,
@@ -42,6 +43,7 @@ def register_all_capabilities() -> None:
         DocumentCapability,
         UniGuruCapability,
         SamruddhiCapability,
+        SamacharCapability,
     ]:
         capability_registry.register(cap_cls())
 

@@ -39,6 +39,9 @@ _CAPABILITY_INTENT_MAP: Dict[str, str] = {
     "balance":       "samruddhi",
     "trades":        "samruddhi",
     "transactions":  "samruddhi",
+    "samachar":      "samachar",
+    "news":          "samachar",
+    "headlines":     "samachar",
 }
 
 
@@ -92,7 +95,28 @@ class CompanionOrchestrator:
     ) -> CompanionResponse:
         """
         Process a user message and return a CompanionResponse.
+        Enforces canonical context (trace_id, correlation_id, execution_id)
+        and streams real-time runtime state events.
         """
+        from app.runtime.canonical_context import create_canonical_context
+        from app.runtime.runtime_event_bus import runtime_event_bus
+
+        # 0. Enforce Canonical Context (trace_id, correlation_id, execution_id)
+        ctx = create_canonical_context(
+            user_id=user_id,
+            trace_id=trace_id,
+            platform=platform,
+            device=device,
+        )
+
+        await runtime_event_bus.publish(
+            event_type="requested",
+            user_id=user_id,
+            trace_id=ctx.trace_id,
+            execution_id=ctx.execution_id,
+            data={"message": message, "platform": platform},
+        )
+
         # 1. Get/create session
         session = await session_manager.get_or_create(
             user_id=user_id,
@@ -108,18 +132,33 @@ class CompanionOrchestrator:
         intent_data = intent_flow.process_text(message)
         intent = intent_data.get("intent", "general")
 
+        await runtime_event_bus.publish(
+            event_type="running",
+            user_id=user_id,
+            trace_id=ctx.trace_id,
+            execution_id=ctx.execution_id,
+            data={"intent": intent},
+        )
+
         # 4. Mitra safety gate
         if self._config.safety_gate_enabled:
-            blocked, block_reason = await self._safety_check(message, user_id, trace_id)
+            blocked, block_reason = await self._safety_check(message, user_id, ctx.trace_id)
             if blocked:
                 response_text = personality_engine.build_capability_fail(
                     "I can't help with that particular request."
                 )
                 await session_manager.add_turn(user_id, role="assistant", content=response_text)
+                await runtime_event_bus.publish(
+                    event_type="failed",
+                    user_id=user_id,
+                    trace_id=ctx.trace_id,
+                    execution_id=ctx.execution_id,
+                    data={"reason": block_reason or "safety_gate_blocked"},
+                )
                 return CompanionResponse(
                     message=response_text,
                     session_id=session.session_id,
-                    trace_id=trace_id,
+                    trace_id=ctx.trace_id,
                     intent=intent,
                 )
 
@@ -132,15 +171,25 @@ class CompanionOrchestrator:
 
         if capability_name and capability_name in self._config.enabled_capabilities:
             # ── Capability path ───────────────────────────────────────
+            await runtime_event_bus.publish(
+                event_type="capability_running",
+                user_id=user_id,
+                trace_id=ctx.trace_id,
+                execution_id=ctx.execution_id,
+                capability=capability_name,
+                data={"intent": intent},
+            )
             params = {
                 "message":   message,
                 "entities":  intent_data.get("entities", {}),
                 "dates":     intent_data.get("dates_times", {}),
                 "context":   intent_data.get("context", {}),
                 "user_id":   user_id,
+                "trace_id":  ctx.trace_id,
+                "execution_id": ctx.execution_id,
             }
             capability_result = await capability_registry.execute(
-                intent=intent, params=params, trace_id=trace_id
+                intent=intent, params=params, trace_id=ctx.trace_id
             )
             if capability_result and capability_result.status == "success":
                 response_text = personality_engine.build_capability_confirm(
@@ -150,6 +199,14 @@ class CompanionOrchestrator:
                     user_id, capability_result.capability, intent, success=True
                 )
                 await session_manager.touch(user_id, capability=capability_name)
+                await runtime_event_bus.publish(
+                    event_type="completed",
+                    user_id=user_id,
+                    trace_id=ctx.trace_id,
+                    execution_id=ctx.execution_id,
+                    capability=capability_name,
+                    data={"status": "success"},
+                )
             else:
                 err = capability_result.error if capability_result else "Unknown error"
                 response_text = personality_engine.build_capability_fail(err)
@@ -157,14 +214,50 @@ class CompanionOrchestrator:
                     await companion_memory.log_capability_use(
                         user_id, capability_result.capability, intent, success=False
                     )
+                await runtime_event_bus.publish(
+                    event_type="failed",
+                    user_id=user_id,
+                    trace_id=ctx.trace_id,
+                    execution_id=ctx.execution_id,
+                    capability=capability_name,
+                    data={"error": err},
+                )
 
         elif is_knowledge and "uniguru" in self._config.enabled_capabilities:
             # ── UniGuru knowledge path ────────────────────────────────
+            await runtime_event_bus.publish(
+                event_type="capability_running",
+                user_id=user_id,
+                trace_id=ctx.trace_id,
+                execution_id=ctx.execution_id,
+                capability="uniguru",
+            )
             response_text = await self._call_knowledge(message, user_id)
+            await runtime_event_bus.publish(
+                event_type="completed",
+                user_id=user_id,
+                trace_id=ctx.trace_id,
+                execution_id=ctx.execution_id,
+                capability="uniguru",
+            )
 
         else:
             # ── General conversation path ─────────────────────────────
+            await runtime_event_bus.publish(
+                event_type="capability_running",
+                user_id=user_id,
+                trace_id=ctx.trace_id,
+                execution_id=ctx.execution_id,
+                capability="conversation",
+            )
             response_text = await self._call_conversation(message, user_id)
+            await runtime_event_bus.publish(
+                event_type="completed",
+                user_id=user_id,
+                trace_id=ctx.trace_id,
+                execution_id=ctx.execution_id,
+                capability="conversation",
+            )
 
         # 6. Store assistant turn
         await session_manager.add_turn(
