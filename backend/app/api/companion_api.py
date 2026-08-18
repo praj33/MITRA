@@ -324,9 +324,8 @@ async def get_daily_briefing(user_id: str):
     - User profile details & contextual time-of-day greeting
     """
     from datetime import datetime, timezone
-    from app.capabilities.task_capability import task_capability
-    from app.capabilities.calendar_capability import calendar_capability
-    from app.capabilities.reminder_capability import reminder_capability
+    from app.companion.capability_registry import capability_registry
+    from app.capabilities.base_capability import CapabilityResult
 
     try:
         facts = await companion_memory.get_user_facts(user_id)
@@ -344,21 +343,36 @@ async def get_daily_briefing(user_id: str):
             greeting = f"Good evening, {user_name}!"
             period = "evening"
 
-        tasks_res = await task_capability.execute("get_tasks", {"user_id": user_id})
-        events_res = await calendar_capability.execute("get_events", {"user_id": user_id})
-        reminders_res = await reminder_capability.execute("get_reminders", {"user_id": user_id})
+        task_cap = capability_registry.get("task")
+        calendar_cap = capability_registry.get("calendar")
+        reminder_cap = capability_registry.get("reminder")
 
-        all_tasks = tasks_res.get("tasks", []) if isinstance(tasks_res, dict) else []
-        all_events = events_res.get("events", []) if isinstance(events_res, dict) else []
-        all_reminders = reminders_res.get("reminders", []) if isinstance(reminders_res, dict) else []
+        tasks_res = await task_cap.execute("list_tasks", {"user_id": user_id}) if task_cap else None
+        events_res = await calendar_cap.execute("list_events", {"user_id": user_id}) if calendar_cap else None
+        reminders_res = await reminder_cap.execute("list_reminders", {"user_id": user_id}) if reminder_cap else None
 
-        pending_tasks = [t for t in all_tasks if t.get("status") in ("pending", "in_progress")]
+        def extract_data(res):
+            if isinstance(res, CapabilityResult):
+                return res.data
+            elif isinstance(res, dict):
+                return res.get("data", res)
+            return {}
+
+        tasks_data = extract_data(tasks_res)
+        events_data = extract_data(events_res)
+        reminders_data = extract_data(reminders_res)
+
+        all_tasks = tasks_data.get("tasks", [])
+        all_events = events_data.get("events", [])
+        all_reminders = reminders_data.get("reminders", [])
+
+        pending_tasks = [t for t in all_tasks if isinstance(t, dict) and t.get("status") in ("pending", "in_progress")]
         high_priority_tasks = [t for t in pending_tasks if t.get("priority") == "high"]
 
         today_str = now.strftime("%Y-%m-%d")
-        today_events = [e for e in all_events if str(e.get("start", "")).startswith(today_str)]
+        today_events = [e for e in all_events if isinstance(e, dict) and str(e.get("start", "")).startswith(today_str)]
 
-        active_reminders = [r for r in all_reminders if r.get("status") == "active"]
+        active_reminders = [r for r in all_reminders if isinstance(r, dict) and r.get("status") == "active"]
 
         insights = []
         if today_events:
