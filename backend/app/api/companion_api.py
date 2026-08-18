@@ -331,7 +331,9 @@ async def get_daily_briefing(user_id: str):
         facts = await companion_memory.get_user_facts(user_id)
         user_name = facts.get("user_name") or facts.get("name") or "Friend"
 
-        now = datetime.now(timezone.utc)
+        from datetime import timedelta
+        ist_tz = timezone(timedelta(hours=5, minutes=30))
+        now = datetime.now(ist_tz)
         hour = now.hour
         if 5 <= hour < 12:
             greeting = f"Good morning, {user_name}!"

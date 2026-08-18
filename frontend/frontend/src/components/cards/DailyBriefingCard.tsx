@@ -27,7 +27,17 @@ export const DailyBriefingCard: React.FC<DailyBriefingCardProps> = ({ onActionCl
   const userId = useCompanionStore(s => s.userId);
   const [briefing, setBriefing] = useState<DailyBriefingData | null>(null);
   const [loading, setLoading] = useState(true);
-  const [expanded, setExpanded] = useState(true);
+  const [expanded, setExpanded] = useState(() => {
+    return localStorage.getItem('mitra_briefing_collapsed') !== 'true';
+  });
+
+  const toggleExpanded = () => {
+    setExpanded(prev => {
+      const next = !prev;
+      localStorage.setItem('mitra_briefing_collapsed', String(!next));
+      return next;
+    });
+  };
 
   useEffect(() => {
     let isMounted = true;
@@ -75,7 +85,7 @@ export const DailyBriefingCard: React.FC<DailyBriefingCardProps> = ({ onActionCl
         </div>
 
         <button
-          onClick={() => setExpanded(prev => !prev)}
+          onClick={toggleExpanded}
           className="p-1 rounded-lg text-text-muted hover:text-text-primary hover:bg-surface-overlay transition-colors flex-shrink-0"
           aria-label="Toggle briefing"
         >

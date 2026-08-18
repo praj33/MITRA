@@ -8,7 +8,7 @@ import logging
 logger = logging.getLogger(__name__)
 
 def _get_user_tasks_from_db(user_id: str) -> List[Dict[str, Any]]:
-    """Fetch tasks for user from MongoDB, filtering out legacy test entries."""
+    """Fetch tasks for user from MongoDB with strict enterprise user data isolation."""
     try:
         from pymongo import MongoClient
         import os
@@ -16,9 +16,9 @@ def _get_user_tasks_from_db(user_id: str) -> List[Dict[str, Any]]:
         db_name = os.getenv("DATABASE_NAME", "ai_assistant")
         client = MongoClient(uri, serverSelectionTimeoutMS=3000)
         db = client[db_name]
-        docs = list(db["user_tasks"].find({"$or": [{"user_id": user_id}, {"user_id": "user_default"}]}).sort("created_at", -1).limit(20))
+        docs = list(db["user_tasks"].find({"user_id": user_id}).sort("created_at", -1).limit(20))
         if not docs:
-            docs = list(db["tasks"].find({"$or": [{"user_id": user_id}, {"user_id": "user_default"}]}).sort("created_at", -1).limit(20))
+            docs = list(db["tasks"].find({"user_id": user_id}).sort("created_at", -1).limit(20))
         filtered = []
         dummy_exact = {"task", "new task", "create task", "check my tasks", "show my pending tasks", "what are my tasks"}
         for doc in docs:

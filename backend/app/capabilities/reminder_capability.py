@@ -58,7 +58,7 @@ def _save_reminder_to_db(user_id: str, message: str, remind_at: str, trace_id: s
 
 
 def _get_user_reminders_from_db(user_id: str) -> List[Dict[str, Any]]:
-    """Fetch active reminders for user from MongoDB, filtering out legacy test entries."""
+    """Fetch active reminders for user from MongoDB with strict enterprise user data isolation."""
     try:
         from pymongo import MongoClient
         import os
@@ -66,7 +66,7 @@ def _get_user_reminders_from_db(user_id: str) -> List[Dict[str, Any]]:
         db_name = os.getenv("DATABASE_NAME", "ai_assistant")
         client = MongoClient(uri, serverSelectionTimeoutMS=3000)
         db = client[db_name]
-        docs = list(db["reminders"].find({"$or": [{"user_id": user_id}, {"user_id": "user_default"}]}).sort("created_at", -1).limit(20))
+        docs = list(db["reminders"].find({"user_id": user_id}).sort("created_at", -1).limit(20))
         filtered = []
         dummy_exact = {"reminder", "check my reminders", "what are my reminders", "what is a reminder", "set reminder", "create reminder"}
         for doc in docs:

@@ -229,11 +229,15 @@ class LLMBridge:
             except Exception:
                 pass
 
-        # Time/date
-        if re.search(r"\b(time|date|today|what day|what time)\b", user_msg):
-            from datetime import datetime
-            now = datetime.now()
-            return f"It's currently **{now.strftime('%A, %d %B %Y')}** and the time is **{now.strftime('%I:%M %p')}**."
+        # Time/date (only trigger on direct time/date queries, not scheduling requests)
+        planning_keywords = ("plan", "schedule", "meeting", "agenda", "organize", "routine", "todo", "task", "reminder", "event")
+        is_planning = any(k in user_msg for k in planning_keywords)
+        if not is_planning and re.search(r"\b(what time|current time|what is the time|what date|what day is it|current date)\b", user_msg):
+            from datetime import datetime, timezone, timedelta
+            # Default to IST (UTC+5:30) for local user display
+            ist_tz = timezone(timedelta(hours=5, minutes=30))
+            now = datetime.now(ist_tz)
+            return f"It's currently **{now.strftime('%A, %d %B %Y')}** and the time is **{now.strftime('%I:%M %p IST')}**."
 
         # Help
         if re.search(r"\b(help|what can you do|capabilities|features)\b", user_msg):
