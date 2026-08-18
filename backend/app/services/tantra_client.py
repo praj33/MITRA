@@ -44,6 +44,16 @@ class TANTRAClient:
         self.base_url = TANTRA_RUNTIME_URL.rstrip("/") if TANTRA_RUNTIME_URL else "https://bhiv-mitra.onrender.com"
         self.api_key = TANTRA_API_KEY
         self._bucket_traces: list[Dict[str, Any]] = []
+        self._client: Optional[httpx.AsyncClient] = None
+
+    def _get_client(self) -> httpx.AsyncClient:
+        import httpx
+        if self._client is None or self._client.is_closed:
+            self._client = httpx.AsyncClient(
+                timeout=httpx.Timeout(10.0, connect=3.0),
+                limits=httpx.Limits(max_keepalive_connections=10, max_connections=20),
+            )
+        return self._client
 
     @property
     def is_available(self) -> bool:
@@ -69,7 +79,6 @@ class TANTRAClient:
 
         # Route through TANTRA (try ecosystem endpoint first, then fallback to /execute)
         try:
-            import httpx
             payload = {
                 "product": params.get("app_id", "mitra_companion"),
                 "action": capability,
@@ -82,39 +91,39 @@ class TANTRAClient:
                 "X-API-Key": self.api_key or "internal_key",
                 "X-Trace-ID": trace_id,
             }
-            async with httpx.AsyncClient(timeout=10.0) as client:
-                # Try ecosystem endpoint on Ashmit's runtime
-                try:
-                    resp = await client.post(
-                        f"{self.base_url}/api/ecosystem/execute",
-                        json=payload,
-                        headers=headers,
-                    )
-                    if resp.status_code == 200:
-                        result = resp.json()
-                        self._log_bucket(trace_id, user_id, capability, intent, params, result, start_time, governed=True)
-                        return result
-                except Exception:
-                    pass
-
-                # Fallback to direct /execute on Ashmit's runtime
+            client = self._get_client()
+            # Try ecosystem endpoint on Ashmit's runtime
+            try:
                 resp = await client.post(
-                    f"{self.base_url}/execute",
-                    json={
-                        "capability": capability,
-                        "intent": intent,
-                        "params": params,
-                        "user_id": user_id,
-                        "trace_id": trace_id,
-                        "source": "mitra_companion",
-                    },
+                    f"{self.base_url}/api/ecosystem/execute",
+                    json=payload,
                     headers=headers,
                 )
                 if resp.status_code == 200:
                     result = resp.json()
                     self._log_bucket(trace_id, user_id, capability, intent, params, result, start_time, governed=True)
                     return result
-                raise Exception(f"TANTRA HTTP {resp.status_code}")
+            except Exception:
+                pass
+
+            # Fallback to direct /execute on Ashmit's runtime
+            resp = await client.post(
+                f"{self.base_url}/execute",
+                json={
+                    "capability": capability,
+                    "intent": intent,
+                    "params": params,
+                    "user_id": user_id,
+                    "trace_id": trace_id,
+                    "source": "mitra_companion",
+                },
+                headers=headers,
+            )
+            if resp.status_code == 200:
+                result = resp.json()
+                self._log_bucket(trace_id, user_id, capability, intent, params, result, start_time, governed=True)
+                return result
+            raise Exception(f"TANTRA HTTP {resp.status_code}")
         except Exception as exc:
             logger.warning("TANTRA runtime execution notice (%s) — using local capability execution", exc)
             result = await self._local_fallback(capability, intent, params, user_id, trace_id)

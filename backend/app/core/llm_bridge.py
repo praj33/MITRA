@@ -2,6 +2,9 @@ import os
 import asyncio
 import hashlib
 import logging
+import time
+from collections import OrderedDict
+from typing import Dict, List, Optional, Any
 
 try:
     from openai import AsyncOpenAI
@@ -20,7 +23,13 @@ try:
 except ImportError:
     MistralClient = None
 
+import httpx
+
 logger = logging.getLogger(__name__)
+
+# Bounded Enterprise LRU Cache to prevent memory leaks
+MAX_CACHE_SIZE = 500
+CACHE_TTL_SECONDS = 3600  # 1 hour
 
 
 class LLMBridge:
@@ -40,12 +49,41 @@ class LLMBridge:
         )
         # UniGuru live endpoint
         self.uniguru_url = os.getenv("UNIGURU_URL", "https://uniguru-v2.onrender.com/new_query")
-        self.uniguru_key = os.getenv("UNIGURU_API_KEY", "uniguru_secret_123")
+        self.uniguru_key = os.getenv("UNIGURU_API_KEY", "")
 
         if genai and self.google_key:
             genai.configure(api_key=self.google_key)
 
-        self.cache = {}
+        # Bounded LRU Cache: key -> (timestamp, output)
+        self._cache: OrderedDict[str, tuple[float, str]] = OrderedDict()
+        
+        # Shared persistent HTTP client pool for low-latency calls
+        self._http_client: Optional[httpx.AsyncClient] = None
+
+    def _get_http_client(self) -> httpx.AsyncClient:
+        if self._http_client is None or self._http_client.is_closed:
+            self._http_client = httpx.AsyncClient(
+                timeout=httpx.Timeout(15.0, connect=5.0),
+                limits=httpx.Limits(max_keepalive_connections=10, max_connections=20),
+            )
+        return self._http_client
+
+    def _cache_get(self, key: str) -> Optional[str]:
+        if key in self._cache:
+            created_at, val = self._cache[key]
+            if time.time() - created_at < CACHE_TTL_SECONDS:
+                self._cache.move_to_end(key)
+                return val
+            else:
+                del self._cache[key]
+        return None
+
+    def _cache_set(self, key: str, val: str) -> None:
+        if key in self._cache:
+            self._cache.move_to_end(key)
+        self._cache[key] = (time.time(), val)
+        if len(self._cache) > MAX_CACHE_SIZE:
+            self._cache.popitem(last=False)  # Evict oldest entry
 
     # ── backward-compatible single-prompt call ────────────────────
     async def call_llm(self, model: str, prompt: str) -> str:
@@ -68,24 +106,28 @@ class LLMBridge:
         cache_key = hashlib.sha256(
             f"{model}:{messages}:{temperature}".encode()
         ).hexdigest()
-        if cache_key in self.cache:
-            return self.cache[cache_key]
+        
+        cached = self._cache_get(cache_key)
+        if cached:
+            return cached
+
         output = await self._dispatch(model, messages, temperature, max_tokens)
-        self.cache[cache_key] = output
+        if output:
+            self._cache_set(cache_key, output)
         return output
 
     async def _dispatch(self, model: str, messages: list, temperature: float, max_tokens: int) -> str:
         try:
             if model in ("groq", "llama"):
-                return await self._call_groq(messages, temperature, max_tokens)
+                return await asyncio.wait_for(self._call_groq(messages, temperature, max_tokens), timeout=12.0)
             if model in ("chatgpt", "openai", "gpt"):
-                return await self._call_openai(messages, temperature, max_tokens)
+                return await asyncio.wait_for(self._call_openai(messages, temperature, max_tokens), timeout=12.0)
             if model == "gemini":
-                return await self._call_gemini(messages, temperature)
+                return await asyncio.wait_for(self._call_gemini(messages, temperature), timeout=12.0)
             if model == "mistral":
-                return await self._call_mistral(messages, temperature)
+                return await asyncio.wait_for(self._call_mistral(messages, temperature), timeout=12.0)
             if model == "uniguru":
-                return await self._call_uniguru(messages)
+                return await asyncio.wait_for(self._call_uniguru(messages), timeout=15.0)
             raise ValueError(f"Unsupported model: {model}")
         except Exception as exc:
             logger.warning("LLM dispatch failed model=%s: %s — trying fallback chain", model, exc)
@@ -95,19 +137,18 @@ class LLMBridge:
         self, messages: list, temperature: float, max_tokens: int, failed: str
     ) -> str:
         # UniGuru is the canonical intelligence backend — try it FIRST.
-        # Other providers are fallbacks only.
         for provider in ("uniguru", "groq", "openai", "gemini"):
             if provider == failed:
                 continue
             try:
                 if provider == "uniguru":
-                    return await self._call_uniguru(messages)
+                    return await asyncio.wait_for(self._call_uniguru(messages), timeout=12.0)
                 if provider == "groq":
-                    return await self._call_groq(messages, temperature, max_tokens)
+                    return await asyncio.wait_for(self._call_groq(messages, temperature, max_tokens), timeout=12.0)
                 if provider == "openai":
-                    return await self._call_openai(messages, temperature, max_tokens)
+                    return await asyncio.wait_for(self._call_openai(messages, temperature, max_tokens), timeout=12.0)
                 if provider == "gemini":
-                    return await self._call_gemini(messages, temperature)
+                    return await asyncio.wait_for(self._call_gemini(messages, temperature), timeout=12.0)
             except Exception as exc:
                 logger.warning("Fallback provider=%s failed: %s", provider, exc)
         # Final rule-based fallback — always gives a useful reply
@@ -163,34 +204,39 @@ class LLMBridge:
         return result.choices[0].message["content"] or ""
 
     async def _call_uniguru(self, messages: list) -> str:
-        """Live UniGuru v2 API — POST /new_query with X-API-Key."""
-        import httpx
-        query = next(
-            (m["content"] for m in reversed(messages) if m["role"] == "user"), ""
+        """Live UniGuru v2 API — POST /new_query with full context preservation."""
+        client = self._get_http_client()
+        
+        # Preserve full context (System prompt, active DOM map, and conversation turns)
+        formatted_context_parts = []
+        for m in messages:
+            role = m.get("role", "user").upper()
+            content = m.get("content", "")
+            formatted_context_parts.append(f"[{role}]: {content}")
+        
+        full_context_query = "\n".join(formatted_context_parts)
+        
+        headers = {"Content-Type": "application/json"}
+        if self.uniguru_key:
+            headers["X-API-Key"] = self.uniguru_key
+            headers["Authorization"] = f"Bearer {self.uniguru_key}"
+
+        resp = await client.post(
+            self.uniguru_url,
+            json={"query": full_context_query},
+            headers=headers,
         )
-        if not query:
-            return "Please ask a question."
-        async with httpx.AsyncClient(timeout=30.0) as client:
-            resp = await client.post(
-                self.uniguru_url,
-                json={"query": query},
-                headers={
-                    "Content-Type": "application/json",
-                    "X-API-Key": self.uniguru_key,
-                    "Authorization": f"Bearer {self.uniguru_key}",
-                },
+        if resp.status_code == 200:
+            data = resp.json()
+            return (
+                data.get("answer")
+                or data.get("response")
+                or data.get("result")
+                or data.get("output")
+                or str(data)
             )
-            if resp.status_code == 200:
-                data = resp.json()
-                return (
-                    data.get("answer")
-                    or data.get("response")
-                    or data.get("result")
-                    or data.get("output")
-                    or str(data)
-                )
-            logger.warning("UniGuru HTTP %s: %s", resp.status_code, resp.text[:200])
-            raise ValueError(f"UniGuru HTTP {resp.status_code}")
+        logger.warning("UniGuru HTTP %s: %s", resp.status_code, resp.text[:200])
+        raise ValueError(f"UniGuru HTTP {resp.status_code}")
 
     async def _rule_based_response(self, messages: list) -> str:
         """Smart rule-based fallback — always returns something useful."""
@@ -234,7 +280,6 @@ class LLMBridge:
         is_planning = any(k in user_msg for k in planning_keywords)
         if not is_planning and re.search(r"\b(what time|current time|what is the time|what date|what day is it|current date)\b", user_msg):
             from datetime import datetime, timezone, timedelta
-            # Default to IST (UTC+5:30) for local user display
             ist_tz = timezone(timedelta(hours=5, minutes=30))
             now = datetime.now(ist_tz)
             return f"It's currently **{now.strftime('%A, %d %B %Y')}** and the time is **{now.strftime('%I:%M %p IST')}**."
@@ -269,5 +314,5 @@ class LLMBridge:
         )
 
 
-
+# Singleton
 llm_bridge = LLMBridge()
