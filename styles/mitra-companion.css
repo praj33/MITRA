@@ -1,0 +1,285 @@
+/* MITRA Universal Companion - Premium CSS Architecture */
+:host {
+  --mitra-bg: rgba(20, 20, 24, 0.85);
+  --mitra-border: rgba(255, 255, 255, 0.1);
+  --mitra-accent: #6b4cff;
+  --mitra-accent-glow: rgba(107, 76, 255, 0.5);
+  --mitra-text: #ffffff;
+  --mitra-text-muted: rgba(255, 255, 255, 0.6);
+  --mitra-font: 'Inter', -apple-system, sans-serif;
+  --mitra-shadow: 0 8px 32px rgba(0, 0, 0, 0.4);
+  --mitra-radius: 24px;
+  --mitra-blur: blur(20px);
+  --mitra-transition: 0.4s cubic-bezier(0.16, 1, 0.3, 1);
+  --mitra-z-index: 9999;
+}
+
+#mitra-shell {
+  position: fixed;
+  z-index: var(--mitra-z-index);
+  font-family: var(--mitra-font);
+  color: var(--mitra-text);
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  pointer-events: none;
+  transition: all var(--mitra-transition);
+}
+
+/* Docking Modes */
+#mitra-shell.floating {
+  bottom: 24px;
+  right: 24px;
+  align-items: flex-end;
+}
+
+#mitra-shell.docked-right {
+  top: 0;
+  right: 0;
+  bottom: 0;
+  height: 100vh;
+  justify-content: center;
+  border-radius: 0;
+  align-items: stretch;
+}
+
+#mitra-shell.docked-left {
+  top: 0;
+  left: 0;
+  bottom: 0;
+  height: 100vh;
+  justify-content: center;
+  border-radius: 0;
+  align-items: stretch;
+}
+
+#mitra-shell.docked-right .mitra-window,
+#mitra-shell.docked-left .mitra-window {
+  height: 100vh;
+  max-height: none;
+  border-radius: 0;
+  border: none;
+  border-left: 1px solid var(--mitra-border);
+}
+
+#mitra-shell.docked-left .mitra-window {
+  border-left: none;
+  border-right: 1px solid var(--mitra-border);
+}
+
+/* FAB */
+.mitra-fab {
+  width: 64px;
+  height: 64px;
+  border-radius: 50%;
+  background: linear-gradient(135deg, var(--mitra-accent), #4a3aff);
+  box-shadow: 0 4px 20px var(--mitra-accent-glow);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  pointer-events: auto;
+  transition: transform 0.3s ease, box-shadow 0.3s ease;
+  position: relative;
+}
+
+.mitra-fab::before {
+  content: '';
+  position: absolute;
+  top: -4px; left: -4px; right: -4px; bottom: -4px;
+  border-radius: 50%;
+  border: 2px solid var(--mitra-accent);
+  animation: pulse 2s infinite cubic-bezier(0.66, 0, 0, 1);
+  opacity: 0;
+}
+
+@keyframes pulse {
+  0% { transform: scale(0.9); opacity: 0.8; }
+  100% { transform: scale(1.3); opacity: 0; }
+}
+
+.mitra-fab.thinking::before {
+  border-color: #00e676;
+}
+
+.mitra-online-indicator {
+  position: absolute;
+  bottom: 4px;
+  right: 4px;
+  width: 14px;
+  height: 14px;
+  background: #00e676;
+  border: 2px solid #222;
+  border-radius: 50%;
+  z-index: 3;
+}
+
+.mitra-fab svg {
+  width: 28px;
+  height: 28px;
+  fill: #fff;
+  z-index: 2;
+}
+
+/* Notification Badge */
+.mitra-notification-badge {
+  position: absolute;
+  top: 0;
+  right: 0;
+  background: #ff3b30;
+  color: white;
+  border-radius: 12px;
+  padding: 2px 6px;
+  font-size: 12px;
+  font-weight: 700;
+  z-index: 4;
+  border: 2px solid #222;
+  box-shadow: 0 2px 8px rgba(255,59,48,0.5);
+}
+
+/* Window */
+.mitra-window {
+  width: 400px;
+  height: 650px;
+  max-height: calc(100vh - 120px);
+  background: var(--mitra-bg);
+  backdrop-filter: var(--mitra-blur);
+  -webkit-backdrop-filter: var(--mitra-blur);
+  border: 1px solid var(--mitra-border);
+  border-radius: var(--mitra-radius);
+  box-shadow: var(--mitra-shadow);
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  pointer-events: auto;
+  opacity: 0;
+  transform: translateY(20px) scale(0.95);
+  transition: all var(--mitra-transition);
+  visibility: hidden;
+  position: relative;
+}
+
+.mitra-window.expanded {
+  opacity: 1;
+  transform: translateY(0) scale(1);
+  visibility: visible;
+}
+
+/* Header */
+.mitra-header {
+  padding: 16px 24px;
+  border-bottom: 1px solid var(--mitra-border);
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  background: rgba(255,255,255,0.02);
+}
+
+.mitra-title {
+  font-weight: 600;
+  font-size: 16px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.mitra-status-dot {
+  width: 8px; height: 8px;
+  background: #00e676;
+  border-radius: 50%;
+  box-shadow: 0 0 8px #00e676;
+}
+
+/* Dock Controls */
+.mitra-dock-controls {
+  display: flex;
+  background: rgba(0,0,0,0.3);
+  border-radius: 8px;
+  padding: 2px;
+}
+.mitra-btn {
+  background: none; border: none; color: var(--mitra-text-muted);
+  cursor: pointer; padding: 6px; border-radius: 6px;
+  display: flex; align-items: center; justify-content: center;
+  transition: all 0.2s;
+}
+.mitra-btn:hover { color: var(--mitra-text); background: rgba(255,255,255,0.1); }
+.mitra-btn svg { width: 16px; height: 16px; fill: currentColor; }
+
+/* Content Area */
+.mitra-content { flex: 1; display: flex; flex-direction: column; overflow: hidden; position: relative; }
+
+/* Chat */
+.mitra-chat { flex: 1; padding: 20px; overflow-y: auto; display: flex; flex-direction: column; gap: 16px; }
+
+.chat-bubble {
+  padding: 12px 16px;
+  border-radius: 18px;
+  max-width: 85%;
+  line-height: 1.5;
+  font-size: 14px;
+  animation: slideUp 0.3s ease;
+  position: relative;
+}
+.chat-timestamp {
+  font-size: 10px; color: var(--mitra-text-muted);
+  position: absolute; bottom: -18px;
+}
+
+.chat-bubble.user { background: rgba(255,255,255,0.1); align-self: flex-end; border-bottom-right-radius: 4px; }
+.chat-bubble.user .chat-timestamp { right: 4px; }
+.chat-bubble.mitra { background: rgba(107, 76, 255, 0.2); border: 1px solid rgba(107, 76, 255, 0.3); align-self: flex-start; border-bottom-left-radius: 4px; }
+.chat-bubble.mitra .chat-timestamp { left: 4px; }
+
+@keyframes slideUp { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: translateY(0); } }
+
+/* Input */
+.mitra-input-area { padding: 16px; border-top: 1px solid var(--mitra-border); display: flex; gap: 12px; background: rgba(0,0,0,0.2); }
+.mitra-input { flex: 1; background: rgba(255,255,255,0.05); border: 1px solid var(--mitra-border); border-radius: 24px; padding: 12px 20px; color: var(--mitra-text); font-family: var(--mitra-font); font-size: 14px; outline: none; transition: 0.3s; }
+.mitra-input:focus { border-color: var(--mitra-accent); background: rgba(255,255,255,0.1); }
+.mitra-send { width: 44px; height: 44px; border-radius: 50%; background: var(--mitra-accent); border: none; color: white; display: flex; align-items: center; justify-content: center; cursor: pointer; transition: transform 0.2s; }
+.mitra-send:hover { transform: scale(1.05); }
+.mitra-send svg { width: 18px; height: 18px; fill: currentColor; }
+
+/* Launcher */
+.mitra-launcher { position: absolute; top: 0; left: 0; right: 0; bottom: 0; background: rgba(20,20,24,0.95); backdrop-filter: blur(20px); z-index: 10; padding: 24px; display: flex; flex-direction: column; gap: 20px; opacity: 0; pointer-events: none; transition: 0.3s; transform: translateY(20px); overflow-y: auto; }
+.mitra-launcher.active { opacity: 1; pointer-events: auto; transform: translateY(0); }
+.launcher-header { font-size: 18px; font-weight: 600; display: flex; justify-content: space-between; align-items: center; }
+.launcher-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 12px; }
+.capability-card { background: rgba(255,255,255,0.05); border: 1px solid var(--mitra-border); border-radius: 12px; padding: 16px 8px; cursor: pointer; transition: 0.2s; display: flex; flex-direction: column; align-items: center; text-align: center; gap: 8px; }
+.capability-card:hover { background: rgba(255,255,255,0.1); border-color: var(--mitra-accent); transform: translateY(-2px); }
+.capability-icon { width: 36px; height: 36px; background: var(--mitra-accent); border-radius: 8px; display: flex; align-items: center; justify-content: center; }
+.capability-icon svg { width: 20px; height: 20px; fill: white; }
+.capability-title { font-size: 12px; font-weight: 500; }
+
+/* Health Panel */
+.mitra-health-panel { background: rgba(0,0,0,0.8); border-top: 1px solid var(--mitra-border); padding: 16px; font-size: 12px; }
+.health-header { font-weight: 600; margin-bottom: 8px; color: var(--mitra-text-muted); text-transform: uppercase; letter-spacing: 1px; }
+.health-stats { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+.stat-row { display: flex; justify-content: space-between; background: rgba(255,255,255,0.05); padding: 6px 8px; border-radius: 4px; }
+.status-indicator { display: inline-flex; align-items: center; gap: 6px; font-weight: 600; }
+.status-indicator::before { content: ''; width: 8px; height: 8px; border-radius: 50%; }
+.status-indicator.green::before { background: #00e676; box-shadow: 0 0 8px #00e676; }
+.status-indicator.yellow::before { background: #ffea00; box-shadow: 0 0 8px #ffea00; }
+.status-indicator.red::before { background: #ff1744; box-shadow: 0 0 8px #ff1744; }
+
+/* Activity Indicator */
+.mitra-activity-indicator { display: flex; align-items: center; gap: 8px; font-size: 12px; color: var(--mitra-text-muted); padding: 8px 20px; background: rgba(0,0,0,0.3); }
+.indicator-dot { width: 6px; height: 6px; border-radius: 50%; background: #666; }
+.indicator-dot.running { background: var(--mitra-accent); animation: blink 1s infinite; }
+.indicator-dot.thinking { background: #ffea00; animation: blink 1s infinite; }
+.indicator-dot.completed { background: #00e676; }
+.indicator-dot.failed { background: #ff1744; }
+@keyframes blink { 0% { opacity: 1; } 50% { opacity: 0.3; } 100% { opacity: 1; } }
+
+/* Notification Center */
+.mitra-notification-center { position: absolute; top: 16px; left: 50%; transform: translateX(-50%); display: flex; flex-direction: column; gap: 8px; z-index: 20; pointer-events: none; width: 90%; }
+.mitra-toast { background: rgba(107, 76, 255, 0.9); border: 1px solid rgba(255,255,255,0.2); padding: 12px 16px; border-radius: 8px; font-size: 13px; font-weight: 500; box-shadow: 0 4px 12px rgba(0,0,0,0.3); opacity: 0; transform: translateY(-10px); transition: 0.3s; pointer-events: auto; }
+.mitra-toast.show { opacity: 1; transform: translateY(0); }
+
+/* Mobile Readiness */
+@media (max-width: 600px) {
+  #mitra-shell.floating { bottom: 16px; right: 16px; }
+  .mitra-window { width: calc(100vw - 32px); height: calc(100vh - 100px); max-height: none; }
+  #mitra-shell.docked-left .mitra-window, #mitra-shell.docked-right .mitra-window { width: 100vw; }
+}

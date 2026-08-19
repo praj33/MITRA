@@ -1,0 +1,49 @@
+import { contextStore } from '../services/contextStore.js';
+
+export class DockController {
+  constructor(shellElement) {
+    this.shell = shellElement;
+    this.currentMode = contextStore.getDockMode();
+
+    this.element = document.createElement('div');
+    this.element.className = 'mitra-dock-controls';
+    this.element.innerHTML = `
+      <button class="mitra-btn" data-dock="left" title="Dock Left">
+        <svg viewBox="0 0 24 24"><path d="M3 3h8v18H3zM13 3h8v18h-8z"/></svg>
+      </button>
+      <button class="mitra-btn" data-dock="floating" title="Floating">
+        <svg viewBox="0 0 24 24"><path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm0 18c-4.41 0-8-3.59-8-8s3.59-8 8-8 8 3.59 8 8-3.59 8-8 8z"/></svg>
+      </button>
+      <button class="mitra-btn" data-dock="right" title="Dock Right">
+        <svg viewBox="0 0 24 24"><path d="M13 3h8v18h-8zM3 3h8v18H3z"/></svg>
+      </button>
+    `;
+
+    this.element.querySelectorAll('button').forEach(btn => {
+      btn.addEventListener('click', (e) => {
+        const mode = e.currentTarget.getAttribute('data-dock');
+        this.setMode(mode);
+      });
+    });
+
+    // Apply initial state
+    this.setMode(this.currentMode, false);
+  }
+
+  setMode(mode, save = true) {
+    this.currentMode = mode;
+    this.shell.classList.remove('docked-left', 'docked-right', 'floating');
+    
+    if (mode === 'left') {
+      this.shell.classList.add('docked-left');
+    } else if (mode === 'right') {
+      this.shell.classList.add('docked-right');
+    } else {
+      this.shell.classList.add('floating');
+    }
+
+    if (save) {
+      contextStore.setDockMode(mode);
+    }
+  }
+}
