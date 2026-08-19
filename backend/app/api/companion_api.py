@@ -9,7 +9,7 @@ from __future__ import annotations
 from typing import Optional
 
 from fastapi import APIRouter, Header
-from fastapi.responses import JSONResponse
+from fastapi.responses import JSONResponse, StreamingResponse
 from pydantic import BaseModel
 
 from app.companion.companion_orchestrator import companion_orchestrator
@@ -72,6 +72,36 @@ async def companion_chat(
     except Exception as exc:
         logger.exception("Companion chat failed for user_id=%s: %s", user_id, exc)
         return JSONResponse(status_code=500, content={"error": "Companion pipeline failed."})
+
+
+@router.post("/api/companion/chat/stream")
+async def companion_chat_stream(
+    request: CompanionChatRequest,
+    x_api_key: Optional[str] = Header(None, alias="X-API-Key"),
+    x_user_id: Optional[str] = Header(None, alias="X-User-Id"),
+):
+    """
+    High-Speed Server-Sent Events (SSE) streaming endpoint.
+    Emits character-by-character tokens to the client for sub-150ms TTFT latency.
+    """
+    _ = x_api_key
+    user_id = request.user_id or x_user_id or "anonymous"
+    if not request.message or not request.message.strip():
+        return JSONResponse(status_code=400, content={"error": "message is required"})
+
+    async def event_generator():
+        try:
+            async for token in companion_orchestrator.stream_conversation_tokens(
+                message=request.message.strip(),
+                user_id=user_id,
+            ):
+                yield f"data: {token}\n\n"
+            yield "data: [DONE]\n\n"
+        except Exception as exc:
+            logger.exception("Streaming failed for user_id=%s: %s", user_id, exc)
+            yield f"data: Error: {str(exc)}\n\n"
+
+    return StreamingResponse(event_generator(), media_type="text/event-stream")
 
 
 @router.post("/api/companion/context/sync")

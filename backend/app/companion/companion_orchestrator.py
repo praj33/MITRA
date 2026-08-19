@@ -396,6 +396,47 @@ class CompanionOrchestrator:
             temperature=0.7,
         )
 
+    async def stream_conversation_tokens(self, message: str, user_id: str):
+        """High-Speed SSE streaming token generator."""
+        import asyncio
+        facts_task = companion_memory.get_user_facts(user_id)
+        history_task = session_manager.get_history(user_id, limit=self._config.max_history_turns)
+        facts, history = await asyncio.gather(facts_task, history_task)
+
+        user_name = facts.get("name") or "there"
+        system_prompt = personality_engine.build_system_prompt(
+            user_name=user_name,
+            user_facts=facts,
+            enabled_capabilities=self._config.enabled_capabilities,
+        )
+
+        if "active_ui_context" in facts:
+            try:
+                import json
+                ctx_obj = json.loads(facts["active_ui_context"])
+                buttons_str = ", ".join(ctx_obj.get("buttons", [])) or "None detected"
+                headings_str = ", ".join(ctx_obj.get("headings", [])) or "None detected"
+                fields_str = ", ".join(ctx_obj.get("fields", [])) or "None detected"
+                snippet = (ctx_obj.get("snippet") or "")[:400]
+                system_prompt += (
+                    f"\n\n[ACTIVE HOST APP SCREEN CONTEXT (DOM SCRAPED)]:\n"
+                    f"- Page Title: {ctx_obj.get('title', 'Unknown Page')}\n"
+                    f"- Visible Buttons: {buttons_str}\n"
+                    f"- Visible Headings/Sections: {headings_str}\n"
+                    f"- Visible Form Fields: {fields_str}\n"
+                    f"- Visible Content Snippet: {snippet}\n"
+                )
+            except Exception:
+                pass
+
+        messages = [{"role": "system", "content": system_prompt}] + history
+        async for token in llm_bridge.stream_llm_with_messages(
+            model=self._config.llm_provider,
+            messages=messages,
+            temperature=0.7,
+        ):
+            yield token
+
 
     async def _call_knowledge(self, message: str, user_id: str) -> str:
         """Route to UniGuru for knowledge queries."""

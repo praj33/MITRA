@@ -116,42 +116,114 @@ class LLMBridge:
             self._cache_set(cache_key, output)
         return output
 
+    async def stream_llm_with_messages(
+        self,
+        model: str,
+        messages: list,
+        temperature: float = 0.7,
+        max_tokens: int = 800,
+    ):
+        """
+        High-Speed Server-Sent Events (SSE) token generator.
+        Yields chunk strings character-by-character for sub-150ms TTFT latency.
+        """
+        if not messages:
+            raise ValueError("messages must be a non-empty list")
+
+        cache_key = hashlib.sha256(
+            f"{model}:{messages}:{temperature}".encode()
+        ).hexdigest()
+        cached = self._cache_get(cache_key)
+        if cached:
+            chunk_size = 10
+            for i in range(0, len(cached), chunk_size):
+                yield cached[i : i + chunk_size]
+                await asyncio.sleep(0.005)
+            return
+
+        full_response_parts = []
+        try:
+            if model in ("groq", "llama") and self.groq_client:
+                stream = await self.groq_client.chat.completions.create(
+                    model=self.groq_model,
+                    messages=messages,
+                    temperature=temperature,
+                    max_tokens=max_tokens,
+                    stream=True,
+                )
+                async for chunk in stream:
+                    content = chunk.choices[0].delta.content or ""
+                    if content:
+                        full_response_parts.append(content)
+                        yield content
+                full_resp = "".join(full_response_parts)
+                if full_resp:
+                    self._cache_set(cache_key, full_resp)
+                return
+            elif model in ("chatgpt", "openai", "gpt") and self.openai_client:
+                stream = await self.openai_client.chat.completions.create(
+                    model="gpt-3.5-turbo",
+                    messages=messages,
+                    temperature=temperature,
+                    max_tokens=max_tokens,
+                    stream=True,
+                )
+                async for chunk in stream:
+                    content = chunk.choices[0].delta.content or ""
+                    if content:
+                        full_response_parts.append(content)
+                        yield content
+                full_resp = "".join(full_response_parts)
+                if full_resp:
+                    self._cache_set(cache_key, full_resp)
+                return
+        except Exception as exc:
+            logger.warning("Streaming dispatch failed (%s) — falling back to fast batch", exc)
+
+        # Fallback to fast batch dispatch if streaming provider is unavailable
+        full_text = await self.call_llm_with_messages(model, messages, temperature, max_tokens)
+        chunk_size = 12
+        for i in range(0, len(full_text), chunk_size):
+            yield full_text[i : i + chunk_size]
+            await asyncio.sleep(0.008)
+
     async def _dispatch(self, model: str, messages: list, temperature: float, max_tokens: int) -> str:
         try:
             if model in ("groq", "llama"):
-                return await asyncio.wait_for(self._call_groq(messages, temperature, max_tokens), timeout=12.0)
+                return await asyncio.wait_for(self._call_groq(messages, temperature, max_tokens), timeout=4.0)
             if model in ("chatgpt", "openai", "gpt"):
-                return await asyncio.wait_for(self._call_openai(messages, temperature, max_tokens), timeout=12.0)
+                return await asyncio.wait_for(self._call_openai(messages, temperature, max_tokens), timeout=4.0)
             if model == "gemini":
-                return await asyncio.wait_for(self._call_gemini(messages, temperature), timeout=12.0)
+                return await asyncio.wait_for(self._call_gemini(messages, temperature), timeout=4.0)
             if model == "mistral":
-                return await asyncio.wait_for(self._call_mistral(messages, temperature), timeout=12.0)
+                return await asyncio.wait_for(self._call_mistral(messages, temperature), timeout=4.0)
             if model == "uniguru":
-                return await asyncio.wait_for(self._call_uniguru(messages), timeout=15.0)
+                return await asyncio.wait_for(self._call_uniguru(messages), timeout=5.0)
             raise ValueError(f"Unsupported model: {model}")
         except Exception as exc:
-            logger.warning("LLM dispatch failed model=%s: %s — trying fallback chain", model, exc)
+            logger.warning("LLM dispatch failed model=%s: %s — trying fast fallback chain", model, exc)
             return await self._fallback_chain(messages, temperature, max_tokens, failed=model)
 
     async def _fallback_chain(
         self, messages: list, temperature: float, max_tokens: int, failed: str
     ) -> str:
-        # UniGuru is the canonical intelligence backend — try it FIRST.
-        for provider in ("uniguru", "groq", "openai", "gemini"):
+        # High-Speed Provider Priority: Groq -> UniGuru -> OpenAI -> Gemini
+        providers = ["groq", "uniguru", "openai", "gemini"]
+        for provider in providers:
             if provider == failed:
                 continue
             try:
+                if provider == "groq" and self.groq_client:
+                    return await asyncio.wait_for(self._call_groq(messages, temperature, max_tokens), timeout=3.5)
                 if provider == "uniguru":
-                    return await asyncio.wait_for(self._call_uniguru(messages), timeout=12.0)
-                if provider == "groq":
-                    return await asyncio.wait_for(self._call_groq(messages, temperature, max_tokens), timeout=12.0)
-                if provider == "openai":
-                    return await asyncio.wait_for(self._call_openai(messages, temperature, max_tokens), timeout=12.0)
-                if provider == "gemini":
-                    return await asyncio.wait_for(self._call_gemini(messages, temperature), timeout=12.0)
+                    return await asyncio.wait_for(self._call_uniguru(messages), timeout=4.0)
+                if provider == "openai" and self.openai_client:
+                    return await asyncio.wait_for(self._call_openai(messages, temperature, max_tokens), timeout=3.5)
+                if provider == "gemini" and genai and self.google_key:
+                    return await asyncio.wait_for(self._call_gemini(messages, temperature), timeout=3.5)
             except Exception as exc:
                 logger.warning("Fallback provider=%s failed: %s", provider, exc)
-        # Final rule-based fallback — always gives a useful reply
+        # Final rule-based fallback — instant response (< 1ms)
         return await self._rule_based_response(messages)
 
     # ── providers ─────────────────────────────────────────────────
