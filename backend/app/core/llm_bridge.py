@@ -27,9 +27,9 @@ import httpx
 
 logger = logging.getLogger(__name__)
 
-# Bounded Enterprise LRU Cache to prevent memory leaks
-MAX_CACHE_SIZE = 500
-CACHE_TTL_SECONDS = 3600  # 1 hour
+# Bounded Enterprise LRU Cache configured via Environment Variables
+MAX_CACHE_SIZE = int(os.getenv("LLM_CACHE_SIZE", "500"))
+CACHE_TTL_SECONDS = int(os.getenv("LLM_CACHE_TTL", "3600"))  # 1 hour default
 
 
 class LLMBridge:
@@ -39,6 +39,10 @@ class LLMBridge:
         self.groq_model = (
             os.getenv("GROQ_MODEL", "llama-3.1-8b-instant").strip()
             or "llama-3.1-8b-instant"
+        )
+        self.openai_model = (
+            os.getenv("OPENAI_MODEL", "gpt-4o-mini").strip()
+            or "gpt-4o-mini"
         )
         self.openai_client = AsyncOpenAI(api_key=openai_key) if AsyncOpenAI and openai_key else None
         self.groq_client = AsyncGroq(api_key=groq_key) if AsyncGroq and groq_key else None
@@ -162,7 +166,7 @@ class LLMBridge:
                 return
             elif model in ("chatgpt", "openai", "gpt") and self.openai_client:
                 stream = await self.openai_client.chat.completions.create(
-                    model="gpt-3.5-turbo",
+                    model=self.openai_model,
                     messages=messages,
                     temperature=temperature,
                     max_tokens=max_tokens,
@@ -242,7 +246,7 @@ class LLMBridge:
         if not self.openai_client:
             raise ValueError("OPENAI_API_KEY not configured")
         resp = await self.openai_client.chat.completions.create(
-            model="gpt-3.5-turbo",
+            model=self.openai_model,
             messages=messages,
             temperature=temperature,
             max_tokens=max_tokens,
@@ -356,18 +360,18 @@ class LLMBridge:
             now = datetime.now(ist_tz)
             return f"It's currently **{now.strftime('%A, %d %B %Y')}** and the time is **{now.strftime('%I:%M %p IST')}**."
 
-        # Help
+        # Help — dynamically fetched from capability registry
         if re.search(r"\b(help|what can you do|capabilities|features)\b", user_msg):
-            return (
-                "I can help you with:\n\n"
-                "• 📧 **Email** — draft, send, and read emails\n"
-                "• 📅 **Calendar** — schedule and manage events\n"
-                "• ✅ **Tasks** — create and track to-dos\n"
-                "• 🔔 **Reminders** — set smart reminders\n"
-                "• 📚 **Knowledge** — answer questions and explain concepts\n"
-                "• 💬 **WhatsApp** — send messages to contacts\n\n"
-                "What would you like to do?"
-            )
+            try:
+                from app.companion.capability_registry import capability_registry
+                active_caps = capability_registry.get_capabilities()
+                cap_bullets = "\n".join(f"• **{cap.title()}** — Active integrated capability" for cap in active_caps)
+                return f"I am Mitra, your enterprise AI companion. Here are my active capabilities:\n\n{cap_bullets}\n\nWhat would you like to do?"
+            except Exception:
+                return (
+                    "I can help you with your Tasks, Calendar, Reminders, Knowledge, and Enterprise Workflows.\n\n"
+                    "What would you like to do?"
+                )
 
         # Live web search fallback for factual queries (e.g. radius of earth, news, facts)
         try:
