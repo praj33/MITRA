@@ -206,9 +206,16 @@ class CompanionOrchestrator:
                 intent=intent, params=params, trace_id=ctx.trace_id
             )
             if capability_result and capability_result.status == "success":
-                response_text = personality_engine.build_capability_confirm(
-                    capability_result.summary
-                )
+                if capability_name in ("browser", "samachar"):
+                    response_text = await self._call_conversation(
+                        message=message,
+                        user_id=user_id,
+                        extra_context=f"[REAL-TIME LIVE DATA CONTEXT]:\n{capability_result.summary}"
+                    )
+                else:
+                    response_text = personality_engine.build_capability_confirm(
+                        capability_result.summary
+                    )
                 await companion_memory.log_capability_use(
                     user_id, capability_result.capability, intent, success=True
                 )
@@ -328,7 +335,7 @@ class CompanionOrchestrator:
             logger.warning("Safety gate error: %s — failing open for conversation", exc)
             return False, ""
 
-    async def _call_conversation(self, message: str, user_id: str) -> str:
+    async def _call_conversation(self, message: str, user_id: str, extra_context: Optional[str] = None) -> str:
         """General LLM conversation with full context & live web/market integration."""
         facts = await companion_memory.get_user_facts(user_id)
         user_name = facts.get("name") or "there"
@@ -362,29 +369,35 @@ class CompanionOrchestrator:
             except Exception as e:
                 logger.warning(f"UI Context injection error: {e}")
 
-        msg_lower = message.lower()
-        live_keywords = [
-            "news", "finance", "stock", "share", "market", "sensex", "nifty", "bse", "nse",
-            "price", "today", "weather", "crypto", "bitcoin", "btc", "eth", "ethereum",
-            "hdfc", "reliance", "tcs", "infosys", "sbi", "icici", "tata", "apple", "tesla",
-            "gold", "silver", "commodity", "mutual fund", "sip", "bond", "inflation", "rbi",
-            "rate", "currency", "rupee", "dollar", "inr", "usd", "latest", "update", "headline",
-            "gain", "loss", "ups", "downs", "up", "down", "rally", "crash"
-        ]
-        if any(kw in msg_lower for kw in live_keywords):
-
-            try:
-                from app.tools.search_tool import SearchTool
-                search_tool = SearchTool()
-                live_info = await search_tool.run(message)
-                if live_info:
-                    system_prompt += (
-                        f"\n\n[REAL-TIME LIVE DATA INJECTED FOR USER QUERY]:\n{live_info}\n"
-                        "Instruction: Use the exact live numbers and news snippet provided above. "
-                        "Do NOT guess or hallucinate stock prices or news headlines."
-                    )
-            except Exception as e:
-                logger.warning(f"Live search context enrichment failed: {e}")
+        if extra_context:
+            system_prompt += (
+                f"\n\n{extra_context}\n"
+                "INSTRUCTION: Synthesize the live data above into a clean, warm, elegant response for the user. "
+                "Do NOT output raw table pipe symbols (|), internal data IDs, HTML tags, or search tool headers."
+            )
+        else:
+            msg_lower = message.lower()
+            live_keywords = [
+                "news", "finance", "stock", "share", "market", "sensex", "nifty", "bse", "nse",
+                "price", "today", "weather", "temperature", "forecast", "climate", "crypto", "bitcoin",
+                "btc", "eth", "ethereum", "hdfc", "reliance", "tcs", "infosys", "sbi", "icici", "tata",
+                "apple", "tesla", "gold", "silver", "commodity", "mutual fund", "sip", "bond", "inflation",
+                "rbi", "rate", "currency", "rupee", "dollar", "inr", "usd", "latest", "update", "headline",
+                "gain", "loss", "ups", "downs", "up", "down", "rally", "crash"
+            ]
+            if any(kw in msg_lower for kw in live_keywords):
+                try:
+                    from app.tools.search_tool import SearchTool
+                    search_tool = SearchTool()
+                    live_info = await search_tool.run(message)
+                    if live_info:
+                        system_prompt += (
+                            f"\n\n[REAL-TIME LIVE DATA INJECTED FOR USER QUERY]:\n{live_info}\n"
+                            "INSTRUCTION: Use the exact live numbers and data provided above to write a warm, conversational answer. "
+                            "Do NOT output raw table pipe structures, internal numeric IDs, or debug headers."
+                        )
+                except Exception as e:
+                    logger.warning(f"Live search context enrichment failed: {e}")
 
         history = await session_manager.get_history(
             user_id, limit=self._config.max_history_turns
@@ -401,7 +414,23 @@ class CompanionOrchestrator:
         import asyncio
         facts_task = companion_memory.get_user_facts(user_id)
         history_task = session_manager.get_history(user_id, limit=self._config.max_history_turns)
-        facts, history = await asyncio.gather(facts_task, history_task)
+
+        msg_lower = message.lower()
+        live_keywords = [
+            "news", "finance", "stock", "share", "market", "sensex", "nifty", "bse", "nse",
+            "price", "today", "weather", "temperature", "forecast", "climate", "crypto", "bitcoin",
+            "btc", "eth", "ethereum", "hdfc", "reliance", "tcs", "infosys", "sbi", "icici", "tata",
+            "apple", "tesla", "gold", "silver", "commodity", "mutual fund", "sip", "bond", "inflation",
+            "rbi", "rate", "currency", "rupee", "dollar", "inr", "usd", "latest", "update", "headline"
+        ]
+
+        if any(kw in msg_lower for kw in live_keywords):
+            from app.tools.search_tool import SearchTool
+            search_task = SearchTool().run(message)
+            facts, history, live_info = await asyncio.gather(facts_task, history_task, search_task)
+        else:
+            live_info = None
+            facts, history = await asyncio.gather(facts_task, history_task)
 
         user_name = facts.get("name") or "there"
         system_prompt = personality_engine.build_system_prompt(
@@ -409,6 +438,13 @@ class CompanionOrchestrator:
             user_facts=facts,
             enabled_capabilities=self._config.enabled_capabilities,
         )
+
+        if live_info:
+            system_prompt += (
+                f"\n\n[REAL-TIME LIVE DATA INJECTED FOR USER QUERY]:\n{live_info}\n"
+                "INSTRUCTION: Use the exact live data provided above to write a warm, clear, elegant response. "
+                "Do NOT output raw table pipe structures (|), internal numeric IDs, or debug headers."
+            )
 
         if "active_ui_context" in facts:
             try:
