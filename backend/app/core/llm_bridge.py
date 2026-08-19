@@ -193,6 +193,8 @@ class LLMBridge:
 
     async def _dispatch(self, model: str, messages: list, temperature: float, max_tokens: int) -> str:
         try:
+            if model in ("local", "ollama", "vllm"):
+                return await asyncio.wait_for(self._call_local_llm(messages, temperature, max_tokens), timeout=8.0)
             if model in ("groq", "llama"):
                 return await asyncio.wait_for(self._call_groq(messages, temperature, max_tokens), timeout=4.0)
             if model in ("chatgpt", "openai", "gpt"):
@@ -211,12 +213,14 @@ class LLMBridge:
     async def _fallback_chain(
         self, messages: list, temperature: float, max_tokens: int, failed: str
     ) -> str:
-        # High-Speed Provider Priority: Groq -> UniGuru -> OpenAI -> Gemini
-        providers = ["groq", "uniguru", "openai", "gemini"]
+        # High-Speed Provider Priority: Local/Ollama -> Groq -> UniGuru -> OpenAI -> Gemini
+        providers = ["local", "groq", "uniguru", "openai", "gemini"]
         for provider in providers:
             if provider == failed:
                 continue
             try:
+                if provider == "local" and os.getenv("LOCAL_LLM_URL"):
+                    return await asyncio.wait_for(self._call_local_llm(messages, temperature, max_tokens), timeout=6.0)
                 if provider == "groq" and self.groq_client:
                     return await asyncio.wait_for(self._call_groq(messages, temperature, max_tokens), timeout=3.5)
                 if provider == "uniguru":
@@ -231,6 +235,27 @@ class LLMBridge:
         return await self._rule_based_response(messages)
 
     # ── providers ─────────────────────────────────────────────────
+    async def _call_local_llm(self, messages: list, temperature: float, max_tokens: int) -> str:
+        """Call self-hosted OpenAI-compatible local LLM endpoint (Ollama / vLLM)."""
+        base_url = os.getenv("LOCAL_LLM_URL", "http://localhost:11434/v1").rstrip("/")
+        model_name = os.getenv("LOCAL_LLM_MODEL", "llama3.1").strip()
+        client = self._get_http_client()
+        url = f"{base_url}/chat/completions"
+        resp = await client.post(
+            url,
+            json={
+                "model": model_name,
+                "messages": messages,
+                "temperature": temperature,
+                "max_tokens": max_tokens,
+            },
+            headers={"Content-Type": "application/json"}
+        )
+        if resp.status_code == 200:
+            data = resp.json()
+            return data["choices"][0]["message"]["content"] or ""
+        raise ValueError(f"Local LLM HTTP {resp.status_code}: {resp.text[:150]}")
+
     async def _call_groq(self, messages: list, temperature: float, max_tokens: int) -> str:
         if not self.groq_client:
             raise ValueError("GROQ_API_KEY not configured")
@@ -373,20 +398,10 @@ class LLMBridge:
                     "What would you like to do?"
                 )
 
-        # Live web search fallback for factual queries (e.g. radius of earth, news, facts)
-        try:
-            from app.tools.search_tool import SearchTool
-            search_tool = SearchTool()
-            search_res = await search_tool.run(user_msg)
-            if search_res:
-                return f"Here is what I found for your query:\n\n{search_res}"
-        except Exception as e:
-            logger.warning(f"Rule-based live search fallback failed: {e}")
-
         # Generic thoughtful reply
         return (
-            "I'm listening and working on fetching the best information for you. "
-            "Could you rephrase your question or ask about tasks, calendar, reminders, or market trends?"
+            "I'm listening and here to help! "
+            "Could you rephrase your question or ask about tasks, calendar, reminders, news, or weather?"
         )
 
 

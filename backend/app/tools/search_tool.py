@@ -47,7 +47,17 @@ class SearchTool:
             if market_data:
                 return market_data
 
-        # 3. Try Tavily API if configured
+        # 3. Try In-House SearXNG engine if configured or running locally
+        searxng_url = os.getenv("SEARXNG_URL", "").strip()
+        if searxng_url:
+            try:
+                searxng_res = await self._search_searxng(query_str, searxng_url)
+                if searxng_res:
+                    return searxng_res
+            except Exception as e:
+                logger.warning("In-house SearXNG search failed: %s", e)
+
+        # 4. Try Tavily API if configured
         tavily_key = os.getenv("TAVILY_API_KEY", "").strip()
         if tavily_key:
             try:
@@ -57,7 +67,7 @@ class SearchTool:
             except Exception as e:
                 logger.warning("Tavily search failed, falling back to DuckDuckGo: %s", e)
 
-        # 4. Fallback to real-time DuckDuckGo Web Search
+        # 5. Fallback to real-time DuckDuckGo Web Search
         try:
             ddg_res = await self._search_ddg(query_str)
             if ddg_res:
@@ -189,6 +199,29 @@ class SearchTool:
                         return "Live Web Search Context:\n" + "\n".join(snippets)
         except Exception as e:
             logger.warning("Tavily API call failed: %s", e)
+        return None
+
+    async def _search_searxng(self, query: str, base_url: str) -> Optional[str]:
+        """Call in-house self-hosted SearXNG metasearch engine."""
+        try:
+            import httpx
+            endpoint = f"{base_url.rstrip('/')}/search"
+            async with httpx.AsyncClient(timeout=4.0) as client:
+                resp = await client.get(
+                    endpoint,
+                    params={"q": query, "format": "json"},
+                    headers={"User-Agent": "MitraInHouseCompanion/1.0"}
+                )
+                if resp.status_code == 200:
+                    results = resp.json().get("results", [])
+                    if results:
+                        snippets = [
+                            f"- {r.get('title')}: {self._clean_text(r.get('content', ''))}"
+                            for r in results[:4]
+                        ]
+                        return "In-House Live Web Search Context:\n" + "\n".join(snippets)
+        except Exception as e:
+            logger.warning("SearXNG search call failed (%s): %s", base_url, e)
         return None
 
     async def _search_ddg(self, query: str) -> Optional[str]:
