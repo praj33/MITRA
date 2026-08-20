@@ -37,8 +37,8 @@ class LLMBridge:
         openai_key = (os.getenv("OPENAI_API_KEY") or "").strip()
         groq_key = (os.getenv("GROQ_API_KEY") or "").strip()
         self.groq_model = (
-            os.getenv("GROQ_MODEL", "llama-3.3-70b-versatile").strip()
-            or "llama-3.3-70b-versatile"
+            os.getenv("GROQ_MODEL", "groq/compound").strip()
+            or "groq/compound"
         )
         self.openai_model = (
             os.getenv("OPENAI_MODEL", "gpt-4o-mini").strip()
@@ -195,8 +195,8 @@ class LLMBridge:
         try:
             if model in ("local", "ollama", "vllm"):
                 return await asyncio.wait_for(self._call_local_llm(messages, temperature, max_tokens), timeout=8.0)
-            if model in ("groq", "llama"):
-                return await asyncio.wait_for(self._call_groq(messages, temperature, max_tokens), timeout=4.0)
+            if model in ("groq", "llama") or model.startswith("llama-") or model.startswith("groq/"):
+                return await asyncio.wait_for(self._call_groq(messages, temperature, max_tokens, requested_model=model), timeout=4.0)
             if model in ("chatgpt", "openai", "gpt"):
                 return await asyncio.wait_for(self._call_openai(messages, temperature, max_tokens), timeout=4.0)
             if model == "gemini":
@@ -256,15 +256,16 @@ class LLMBridge:
             return data["choices"][0]["message"]["content"] or ""
         raise ValueError(f"Local LLM HTTP {resp.status_code}: {resp.text[:150]}")
 
-    async def _call_groq(self, messages: list, temperature: float, max_tokens: int) -> str:
+    async def _call_groq(self, messages: list, temperature: float, max_tokens: int, requested_model: Optional[str] = None) -> str:
         if not self.groq_client:
             groq_key = (os.getenv("GROQ_API_KEY") or "").strip()
             if groq_key and AsyncGroq:
                 self.groq_client = AsyncGroq(api_key=groq_key)
             else:
                 raise ValueError("GROQ_API_KEY not configured")
-        # Try configured model first (e.g. llama-3.3-70b-versatile)
-        models_to_try = [self.groq_model, "groq/compound", "llama-3.1-8b-instant"]
+        # Try requested model first if provided, else configured model
+        base_model = requested_model if (requested_model and requested_model not in ("groq", "llama")) else self.groq_model
+        models_to_try = [base_model, "llama-3.1-8b-instant", "groq/compound"]
         # Remove duplicates preserving order
         models_to_try = list(dict.fromkeys(models_to_try))
         
@@ -288,7 +289,8 @@ class LLMBridge:
                 if "404" in err_str or "model_not_found" in err_str.lower():
                     logger.info("Groq model '%s' not found on key tier — trying next model candidate", m)
                     continue
-                raise exc
+                logger.warning("Groq model '%s' failed (%s) — trying next candidate", m, exc)
+                continue
         if last_exc:
             raise last_exc
         raise ValueError("Groq call failed on all candidate models")
@@ -312,8 +314,8 @@ class LLMBridge:
             for m in messages
             if m["role"] != "system"
         )
-        configured_model = os.getenv("GEMINI_MODEL", "gemini-1.5-flash").strip()
-        gemini_candidates = [configured_model, "gemini-flash-latest", "gemini-1.5-pro", "gemini-pro"]
+        configured_model = os.getenv("GEMINI_MODEL", "gemini-flash-latest").strip()
+        gemini_candidates = [configured_model, "gemini-flash-latest", "gemini-1.5-flash", "gemini-1.5-pro"]
         gemini_candidates = list(dict.fromkeys(gemini_candidates))
 
         last_exc = None

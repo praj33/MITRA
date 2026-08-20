@@ -139,15 +139,19 @@ class CompanionOrchestrator:
             ttl_hours=self._config.session_ttl_hours,
         )
 
-        # 2. Dynamic Zero-Shot LLM & Algorithmic Typo Correction
-        from app.core.text_normalizer import normalize_text_async
+        # 2. Dynamic Zero-Shot LLM & Algorithmic Typo Correction + Coreference Resolution
+        from app.core.text_normalizer import normalize_text_async, resolve_coreference_query_async
         normalized_message = await normalize_text_async(message)
+
+        # Retrieve recent history for conversational coreference resolution
+        recent_history = await session_manager.get_history(user_id, limit=6)
+        resolved_message = await resolve_coreference_query_async(normalized_message, recent_history)
 
         # Store original user turn
         await session_manager.add_turn(user_id, role="user", content=message)
 
-        # 3. Classify intent using normalized message
-        intent_data = intent_flow.process_text(normalized_message)
+        # 3. Classify intent using resolved standalone message
+        intent_data = intent_flow.process_text(resolved_message)
         intent = intent_data.get("intent", "general")
 
         await runtime_event_bus.publish(
@@ -198,7 +202,7 @@ class CompanionOrchestrator:
                 data={"intent": intent},
             )
             params = {
-                "message":   message,
+                "message":   resolved_message,
                 "entities":  intent_data.get("entities", {}),
                 "dates":     intent_data.get("dates_times", {}),
                 "context":   intent_data.get("context", {}),
@@ -212,7 +216,7 @@ class CompanionOrchestrator:
             if capability_result and capability_result.status == "success":
                 if capability_name in ("browser", "samachar"):
                     response_text = await self._call_conversation(
-                        message=message,
+                        message=resolved_message,
                         user_id=user_id,
                         extra_context=f"[REAL-TIME LIVE DATA CONTEXT]:\n{capability_result.summary}"
                     )
@@ -257,7 +261,7 @@ class CompanionOrchestrator:
                 execution_id=ctx.execution_id,
                 capability="uniguru",
             )
-            response_text = await self._call_knowledge(message, user_id)
+            response_text = await self._call_knowledge(resolved_message, user_id)
             await runtime_event_bus.publish(
                 event_type="completed",
                 user_id=user_id,
@@ -275,7 +279,7 @@ class CompanionOrchestrator:
                 execution_id=ctx.execution_id,
                 capability="conversation",
             )
-            response_text = await self._call_conversation(message, user_id)
+            response_text = await self._call_conversation(resolved_message, user_id)
             await runtime_event_bus.publish(
                 event_type="completed",
                 user_id=user_id,

@@ -13,6 +13,64 @@ from typing import Optional
 logger = logging.getLogger(__name__)
 
 
+async def resolve_coreference_query_async(query: str, history: list[dict[str, str]]) -> str:
+    """
+    Zero-Shot Conversational Coreference Resolver.
+    If query contains anaphoric pronouns or follow-up references ('it', 'that', 'they', 'can we build it'),
+    uses fast zero-shot LLM reasoning to resolve pronouns against conversation history into a clear, standalone query.
+    """
+    if not query or not history:
+        return query
+
+    query_clean = query.strip()
+    pronoun_pattern = r"\b(it|that|this|they|them|these|those|there|here|built|build|cost|work|invented)\b"
+    if not re.search(pronoun_pattern, query_clean, re.IGNORECASE):
+        return query_clean
+
+    try:
+        from app.core.llm_bridge import llm_bridge
+        formatted_history = "\n".join(
+            f"{m.get('role', 'user').upper()}: {m.get('content', '')}"
+            for m in history[-6:]
+            if m.get("content")
+        )
+        coref_prompt = [
+            {
+                "role": "system",
+                "content": (
+                    "You are an expert conversational coreference preprocessor. "
+                    "Given the recent conversation history [HISTORY] and the user's latest follow-up question [FOLLOW_UP], "
+                    "rewrite [FOLLOW_UP] into a complete, standalone, explicit question by replacing ambiguous pronouns "
+                    "(e.g. 'it', 'that', 'this', 'built it') with the exact topic/subject from history. "
+                    "Return ONLY the rewritten standalone question. Do NOT add quotes, labels, or extra text."
+                ),
+            },
+            {
+                "role": "user",
+                "content": f"[HISTORY]\n{formatted_history}\n\n[FOLLOW_UP]\n{query_clean}",
+            },
+        ]
+        resolved = await llm_bridge.call_llm_with_messages(
+            model="groq",
+            messages=coref_prompt,
+            temperature=0.0,
+            max_tokens=60,
+        )
+        if resolved and isinstance(resolved, str):
+            clean = resolved.strip()
+            if "Based on live information" in clean:
+                clean = clean.split("\n\n")[-1]
+            clean_res = clean.split("\n")[0].strip('"\'')
+            clean_res = re.sub(r"^(rewritten question|standalone query|question):\s*", "", clean_res, flags=re.IGNORECASE).strip()
+            if len(clean_res) > 0 and not clean_res.startswith("["):
+                logger.info("Coreference resolved: '%s' -> '%s'", query_clean, clean_res)
+                return clean_res
+    except Exception as exc:
+        logger.debug("Coreference resolution skipped: %s", exc)
+
+    return query_clean
+
+
 async def normalize_text_async(text: str) -> str:
     """
     Dynamic Zero-Shot text normalization. Uses fast LLM reasoning to resolve
