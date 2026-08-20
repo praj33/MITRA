@@ -78,10 +78,10 @@ class SearchTool:
         return f"Real-time query completed for: '{query_str}'."
 
     async def _fetch_live_weather(self, query: str) -> Optional[str]:
-        """Fetch clean structured weather data using wttr.in JSON API."""
+        """Fetch clean structured weather data using WeatherAPI.com (if key set) or wttr.in fallback."""
         try:
             import httpx
-            # Extract city name heuristic (default to Mumbai if mentioned or fallback)
+            # Extract city name heuristic
             words = query.strip().split()
             city = "Mumbai"
             for w in words:
@@ -90,6 +90,35 @@ class SearchTool:
                     city = clean_w
                     break
 
+            weather_key = os.getenv("WEATHER_API_KEY", "").strip()
+            if weather_key:
+                try:
+                    url = f"http://api.weatherapi.com/v1/current.json?key={weather_key}&q={urllib.parse.quote(city)}"
+                    async with httpx.AsyncClient(timeout=4.0) as client:
+                        resp = await client.get(url)
+                        if resp.status_code == 200:
+                            data = resp.json()
+                            loc = data.get("location", {})
+                            curr = data.get("current", {})
+                            c_name = loc.get("name", city)
+                            region = loc.get("region", "")
+                            country = loc.get("country", "")
+                            temp_c = curr.get("temp_c", "N/A")
+                            feels_c = curr.get("feelslike_c", "N/A")
+                            condition = curr.get("condition", {}).get("text", "Clear")
+                            humidity = curr.get("humidity", "N/A")
+                            wind_kph = curr.get("wind_kph", "N/A")
+                            return (
+                                f"Live Weather Data for {c_name}, {region} ({country}):\n"
+                                f"- Condition: {condition}\n"
+                                f"- Temperature: {temp_c}°C (Feels like: {feels_c}°C)\n"
+                                f"- Humidity: {humidity}%\n"
+                                f"- Wind Speed: {wind_kph} km/h"
+                            )
+                except Exception as exc:
+                    logger.warning("WeatherAPI.com query failed: %s — trying wttr.in fallback", exc)
+
+            # Fallback to wttr.in JSON API
             url = f"https://wttr.in/{urllib.parse.quote(city)}?format=j1"
             async with httpx.AsyncClient(timeout=4.0, follow_redirects=True) as client:
                 resp = await client.get(url, headers={"User-Agent": "Mozilla/5.0"})
@@ -114,7 +143,7 @@ class SearchTool:
                         f"- Wind Speed: {wind_speed} km/h"
                     )
         except Exception as exc:
-            logger.warning("Live weather API lookup failed: %s", exc)
+            logger.warning("Live weather lookup failed: %s", exc)
         return None
 
     async def _fetch_live_finance(self, query: str) -> Optional[str]:

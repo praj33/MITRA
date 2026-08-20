@@ -37,8 +37,8 @@ class LLMBridge:
         openai_key = os.getenv("OPENAI_API_KEY")
         groq_key = os.getenv("GROQ_API_KEY")
         self.groq_model = (
-            os.getenv("GROQ_MODEL", "llama-3.1-8b-instant").strip()
-            or "llama-3.1-8b-instant"
+            os.getenv("GROQ_MODEL", "llama-3.3-70b-versatile").strip()
+            or "llama-3.3-70b-versatile"
         )
         self.openai_model = (
             os.getenv("OPENAI_MODEL", "gpt-4o-mini").strip()
@@ -293,7 +293,8 @@ class LLMBridge:
             for m in messages
             if m["role"] != "system"
         )
-        gem = genai.GenerativeModel("gemini-pro")
+        gemini_model = os.getenv("GEMINI_MODEL", "gemini-1.5-flash").strip()
+        gem = genai.GenerativeModel(gemini_model)
         result = await asyncio.to_thread(
             gem.generate_content, prompt,
             generation_config={"temperature": temperature},

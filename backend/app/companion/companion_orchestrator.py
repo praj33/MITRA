@@ -139,11 +139,15 @@ class CompanionOrchestrator:
             ttl_hours=self._config.session_ttl_hours,
         )
 
-        # 2. Store user turn
+        # 2. Dynamic Zero-Shot LLM & Algorithmic Typo Correction
+        from app.core.text_normalizer import normalize_text_async
+        normalized_message = await normalize_text_async(message)
+
+        # Store original user turn
         await session_manager.add_turn(user_id, role="user", content=message)
 
-        # 3. Classify intent
-        intent_data = intent_flow.process_text(message)
+        # 3. Classify intent using normalized message
+        intent_data = intent_flow.process_text(normalized_message)
         intent = intent_data.get("intent", "general")
 
         await runtime_event_bus.publish(
