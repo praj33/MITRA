@@ -29,11 +29,19 @@ async def resolve_coreference_query_async(query: str, history: list[dict[str, st
 
     try:
         from app.core.llm_bridge import llm_bridge
-        formatted_history = "\n".join(
-            f"{m.get('role', 'user').upper()}: {m.get('content', '')}"
-            for m in history[-6:]
-            if m.get("content")
-        )
+        # Clean history items to remove any embedded raw search payloads
+        clean_history = []
+        for m in history[-6:]:
+            content = m.get("content", "")
+            if not content:
+                continue
+            if "Live Web Search Context:" in content:
+                content = content.split("Live Web Search Context:")[0].strip()
+            elif "Live Weather Data" in content:
+                content = content.split("Live Weather Data")[0].strip()
+            clean_history.append(f"{m.get('role', 'user').upper()}: {content[:300]}")
+
+        formatted_history = "\n".join(clean_history)
         coref_prompt = [
             {
                 "role": "system",
@@ -42,7 +50,7 @@ async def resolve_coreference_query_async(query: str, history: list[dict[str, st
                     "Given the recent conversation history [HISTORY] and the user's latest follow-up question [FOLLOW_UP], "
                     "rewrite [FOLLOW_UP] into a complete, standalone, explicit question by replacing ambiguous pronouns "
                     "(e.g. 'it', 'that', 'this', 'built it') with the exact topic/subject from history. "
-                    "Return ONLY the rewritten standalone question. Do NOT add quotes, labels, or extra text."
+                    "Return ONLY the single rewritten standalone question sentence. Do NOT add quotes, labels, search contexts, or extra commentary."
                 ),
             },
             {
@@ -58,17 +66,58 @@ async def resolve_coreference_query_async(query: str, history: list[dict[str, st
         )
         if resolved and isinstance(resolved, str):
             clean = resolved.strip()
+            if "Live Web Search Context:" in clean:
+                clean = clean.split("Live Web Search Context:")[0].strip()
             if "Based on live information" in clean:
-                clean = clean.split("\n\n")[-1]
-            clean_res = clean.split("\n")[0].strip('"\'')
+                clean = clean.split("\n\n")[-1].strip()
+
+            lines = [l.strip() for l in clean.split("\n") if l.strip() and not l.strip().startswith("-") and not l.strip().startswith("#")]
+            clean_res = lines[0] if lines else clean
+            clean_res = clean_res.strip('"\'')
             clean_res = re.sub(r"^(rewritten question|standalone query|question):\s*", "", clean_res, flags=re.IGNORECASE).strip()
-            if len(clean_res) > 0 and not clean_res.startswith("["):
+            
+            if len(clean_res) > 0 and not clean_res.startswith("[") and not clean_res.startswith("Based on"):
                 logger.info("Coreference resolved: '%s' -> '%s'", query_clean, clean_res)
                 return clean_res
     except Exception as exc:
-        logger.debug("Coreference resolution skipped: %s", exc)
+        logger.debug("LLM coreference resolution skipped: %s — using heuristic fallback", exc)
 
-    return query_clean
+    return _heuristic_coreference_rewrite(query_clean, history)
+
+
+def _heuristic_coreference_rewrite(query: str, history: list[dict[str, str]]) -> str:
+    """
+    Algorithmic coreference fallback.
+    Extracts key subject noun phrase from recent user turns in history and replaces anaphoric pronouns.
+    """
+    if not history:
+        return query
+
+    last_user_turn = None
+    for m in reversed(history):
+        if m.get("role") == "user" and m.get("content"):
+            last_user_turn = m.get("content")
+            break
+
+    if not last_user_turn:
+        return query
+
+    clean_prev = re.sub(
+        r"^(what is|what are|explain|tell me about|how does|who is|where is|why is|detail)\s+",
+        "",
+        last_user_turn.strip(),
+        flags=re.IGNORECASE,
+    ).strip("?.!")
+
+    if not clean_prev or len(clean_prev) < 3:
+        return query
+
+    query_replaced = re.sub(r"\b(it|that|this)\b", clean_prev, query, flags=re.IGNORECASE)
+    if query_replaced != query:
+        logger.info("Heuristic coreference resolved: '%s' -> '%s'", query, query_replaced)
+        return query_replaced
+
+    return query
 
 
 async def normalize_text_async(text: str) -> str:
