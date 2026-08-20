@@ -81,14 +81,11 @@ class SearchTool:
         """Fetch clean structured weather data using WeatherAPI.com (if key set) or wttr.in fallback."""
         try:
             import httpx
-            # Extract city name heuristic
-            words = query.strip().split()
-            city = "Mumbai"
-            for w in words:
-                clean_w = re.sub(r"[^\w]", "", w)
-                if clean_w.lower() not in ("how", "is", "the", "weather", "today", "tomorrow", "forecast", "in", "at", "for"):
-                    city = clean_w
-                    break
+            # Extract city name by filtering all weather query stop words
+            stop_words = {"what", "us", "is", "the", "weather", "of", "in", "at", "for", "tell", "me", "today", "tomorrow", "forecast", "how", "about", "currently", "live", "current", "temperature", "climate", "report", "like"}
+            query_clean = re.sub(r"[^\w\s]", "", query)
+            city_words = [w for w in query_clean.strip().split() if w.lower() not in stop_words]
+            city = " ".join(city_words) if city_words else "Mumbai"
 
             weather_key = os.getenv("WEATHER_API_KEY", "").strip()
             if weather_key:
