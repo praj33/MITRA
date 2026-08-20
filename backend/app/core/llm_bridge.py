@@ -259,13 +259,20 @@ class LLMBridge:
     async def _call_groq(self, messages: list, temperature: float, max_tokens: int) -> str:
         if not self.groq_client:
             raise ValueError("GROQ_API_KEY not configured")
-        resp = await self.groq_client.chat.completions.create(
-            model=self.groq_model,
-            messages=messages,
-            temperature=temperature,
-            max_tokens=max_tokens,
-        )
-        return resp.choices[0].message.content or ""
+        try:
+            resp = await self.groq_client.chat.completions.create(
+                model=self.groq_model,
+                messages=messages,
+                temperature=temperature,
+                max_tokens=max_tokens,
+            )
+            return resp.choices[0].message.content or ""
+        except Exception as exc:
+            err_str = str(exc)
+            if "401" in err_str or "invalid_api_key" in err_str.lower():
+                logger.error("GROQ_API_KEY is invalid or unauthorized — disabling Groq client fallback")
+                self.groq_client = None
+            raise exc
 
     async def _call_openai(self, messages: list, temperature: float, max_tokens: int) -> str:
         if not self.openai_client:
@@ -385,8 +392,8 @@ class LLMBridge:
             now = datetime.now(ist_tz)
             return f"It's currently **{now.strftime('%A, %d %B %Y')}** and the time is **{now.strftime('%I:%M %p IST')}**."
 
-        # Help — dynamically fetched from capability registry
-        if re.search(r"\b(help|what can you do|capabilities|features)\b", user_msg):
+        # Help / Capabilities (handles typos like 'what can yo do', 'what can u do')
+        if re.search(r"\b(help|what can (you|yo|u) do|capabilities|features|who are (you|yo|u))\b", user_msg):
             try:
                 from app.companion.capability_registry import capability_registry
                 active_caps = capability_registry.get_capabilities()
@@ -397,6 +404,15 @@ class LLMBridge:
                     "I can help you with your Tasks, Calendar, Reminders, Knowledge, and Enterprise Workflows.\n\n"
                     "What would you like to do?"
                 )
+
+        # Smart factual web search fallback for general knowledge queries (e.g. solar system, science, facts)
+        try:
+            from app.tools.search_tool import SearchTool
+            search_res = await SearchTool().run(user_msg)
+            if search_res:
+                return f"Based on live information for your query:\n\n{search_res}"
+        except Exception as exc:
+            logger.warning("Factual search fallback error: %s", exc)
 
         # Generic thoughtful reply
         return (
