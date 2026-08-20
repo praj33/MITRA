@@ -34,8 +34,8 @@ CACHE_TTL_SECONDS = int(os.getenv("LLM_CACHE_TTL", "3600"))  # 1 hour default
 
 class LLMBridge:
     def __init__(self):
-        openai_key = os.getenv("OPENAI_API_KEY")
-        groq_key = os.getenv("GROQ_API_KEY")
+        openai_key = (os.getenv("OPENAI_API_KEY") or "").strip()
+        groq_key = (os.getenv("GROQ_API_KEY") or "").strip()
         self.groq_model = (
             os.getenv("GROQ_MODEL", "llama-3.3-70b-versatile").strip()
             or "llama-3.3-70b-versatile"
@@ -258,21 +258,40 @@ class LLMBridge:
 
     async def _call_groq(self, messages: list, temperature: float, max_tokens: int) -> str:
         if not self.groq_client:
-            raise ValueError("GROQ_API_KEY not configured")
-        try:
-            resp = await self.groq_client.chat.completions.create(
-                model=self.groq_model,
-                messages=messages,
-                temperature=temperature,
-                max_tokens=max_tokens,
-            )
-            return resp.choices[0].message.content or ""
-        except Exception as exc:
-            err_str = str(exc)
-            if "401" in err_str or "invalid_api_key" in err_str.lower():
-                logger.error("GROQ_API_KEY is invalid or unauthorized — disabling Groq client fallback")
-                self.groq_client = None
-            raise exc
+            groq_key = (os.getenv("GROQ_API_KEY") or "").strip()
+            if groq_key and AsyncGroq:
+                self.groq_client = AsyncGroq(api_key=groq_key)
+            else:
+                raise ValueError("GROQ_API_KEY not configured")
+        # Try configured model first (e.g. llama-3.3-70b-versatile)
+        models_to_try = [self.groq_model, "groq/compound", "llama-3.1-8b-instant"]
+        # Remove duplicates preserving order
+        models_to_try = list(dict.fromkeys(models_to_try))
+        
+        last_exc = None
+        for m in models_to_try:
+            try:
+                resp = await self.groq_client.chat.completions.create(
+                    model=m,
+                    messages=messages,
+                    temperature=temperature,
+                    max_tokens=max_tokens,
+                )
+                return resp.choices[0].message.content or ""
+            except Exception as exc:
+                last_exc = exc
+                err_str = str(exc)
+                if "401" in err_str or "invalid_api_key" in err_str.lower():
+                    logger.error("GROQ_API_KEY is invalid or unauthorized — disabling Groq client fallback")
+                    self.groq_client = None
+                    raise exc
+                if "404" in err_str or "model_not_found" in err_str.lower():
+                    logger.info("Groq model '%s' not found on key tier — trying next model candidate", m)
+                    continue
+                raise exc
+        if last_exc:
+            raise last_exc
+        raise ValueError("Groq call failed on all candidate models")
 
     async def _call_openai(self, messages: list, temperature: float, max_tokens: int) -> str:
         if not self.openai_client:
@@ -293,13 +312,26 @@ class LLMBridge:
             for m in messages
             if m["role"] != "system"
         )
-        gemini_model = os.getenv("GEMINI_MODEL", "gemini-1.5-flash").strip()
-        gem = genai.GenerativeModel(gemini_model)
-        result = await asyncio.to_thread(
-            gem.generate_content, prompt,
-            generation_config={"temperature": temperature},
-        )
-        return result.text or ""
+        configured_model = os.getenv("GEMINI_MODEL", "gemini-1.5-flash").strip()
+        gemini_candidates = [configured_model, "gemini-flash-latest", "gemini-1.5-pro", "gemini-pro"]
+        gemini_candidates = list(dict.fromkeys(gemini_candidates))
+
+        last_exc = None
+        for gm in gemini_candidates:
+            try:
+                gem = genai.GenerativeModel(gm)
+                result = await asyncio.to_thread(
+                    gem.generate_content, prompt,
+                    generation_config={"temperature": temperature},
+                )
+                return result.text or ""
+            except Exception as exc:
+                last_exc = exc
+                logger.info("Gemini model '%s' returned error: %s — trying next candidate", gm, exc)
+                continue
+        if last_exc:
+            raise last_exc
+        raise ValueError("Gemini call failed on all candidate models")
 
     async def _call_mistral(self, messages: list, temperature: float) -> str:
         if not self.mistral_client:
