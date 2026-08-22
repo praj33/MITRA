@@ -385,15 +385,10 @@ class CompanionOrchestrator:
             )
         else:
             msg_lower = message.lower()
-            live_keywords = [
-                "news", "finance", "stock", "share", "market", "sensex", "nifty", "bse", "nse",
-                "price", "today", "weather", "temperature", "forecast", "climate", "crypto", "bitcoin",
-                "btc", "eth", "ethereum", "hdfc", "reliance", "tcs", "infosys", "sbi", "icici", "tata",
-                "apple", "tesla", "gold", "silver", "commodity", "mutual fund", "sip", "bond", "inflation",
-                "rbi", "rate", "currency", "rupee", "dollar", "inr", "usd", "latest", "update", "headline",
-                "gain", "loss", "ups", "downs", "up", "down", "rally", "crash"
-            ]
-            if any(kw in msg_lower for kw in live_keywords):
+            live_domains = ["stock", "share price", "market price", "weather", "temperature", "forecast", "news today", "latest news", "crypto", "exchange rate", "sensex", "nifty", "nasdaq"]
+            needs_live_data = any(domain in msg_lower for domain in live_domains)
+
+            if needs_live_data:
                 try:
                     from app.tools.search_tool import SearchTool
                     search_tool = SearchTool()
@@ -401,8 +396,9 @@ class CompanionOrchestrator:
                     if live_info:
                         system_prompt += (
                             f"\n\n[REAL-TIME LIVE DATA INJECTED FOR USER QUERY]:\n{live_info}\n"
-                            "INSTRUCTION: Use the exact live numbers and data provided above to write a warm, conversational answer. "
-                            "Do NOT output raw table pipe structures, internal numeric IDs, or debug headers."
+                            "INSTRUCTION: Synthesize the live data above into an elegant, structured response matching Google AI Overview format. "
+                            "Include Key Statistics bullet points, bold key figures, and offer relevant follow-up suggestions. "
+                            "Do NOT output raw table pipe symbols (|), internal data IDs, HTML tags, or search tool headers like 'Live Web Search Context:'."
                         )
                 except Exception as e:
                     logger.warning(f"Live search context enrichment failed: {e}")
@@ -424,15 +420,10 @@ class CompanionOrchestrator:
         history_task = session_manager.get_history(user_id, limit=self._config.max_history_turns)
 
         msg_lower = message.lower()
-        live_keywords = [
-            "news", "finance", "stock", "share", "market", "sensex", "nifty", "bse", "nse",
-            "price", "today", "weather", "temperature", "forecast", "climate", "crypto", "bitcoin",
-            "btc", "eth", "ethereum", "hdfc", "reliance", "tcs", "infosys", "sbi", "icici", "tata",
-            "apple", "tesla", "gold", "silver", "commodity", "mutual fund", "sip", "bond", "inflation",
-            "rbi", "rate", "currency", "rupee", "dollar", "inr", "usd", "latest", "update", "headline"
-        ]
+        live_domains = ["stock", "share price", "market price", "weather", "temperature", "forecast", "news today", "latest news", "crypto", "exchange rate", "sensex", "nifty", "nasdaq"]
+        needs_live_data = any(domain in msg_lower for domain in live_domains)
 
-        if any(kw in msg_lower for kw in live_keywords):
+        if needs_live_data:
             from app.tools.search_tool import SearchTool
             search_task = SearchTool().run(message)
             facts, history, live_info = await asyncio.gather(facts_task, history_task, search_task)

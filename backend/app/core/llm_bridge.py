@@ -1,4 +1,5 @@
 import os
+import re
 import asyncio
 import hashlib
 import logging
@@ -37,8 +38,8 @@ class LLMBridge:
         openai_key = (os.getenv("OPENAI_API_KEY") or "").strip()
         groq_key = (os.getenv("GROQ_API_KEY") or "").strip()
         self.groq_model = (
-            os.getenv("GROQ_MODEL", "groq/compound").strip()
-            or "groq/compound"
+            os.getenv("GROQ_MODEL", "llama-3.3-70b-versatile").strip()
+            or "llama-3.3-70b-versatile"
         )
         self.openai_model = (
             os.getenv("OPENAI_MODEL", "gpt-4o-mini").strip()
@@ -97,6 +98,19 @@ class LLMBridge:
             model, [{"role": "user", "content": prompt.strip()}]
         )
 
+    def _sanitize_llm_output(self, text: str) -> str:
+        """Centralized sanitizer to ensure no model or fallback ever returns raw search/debug dumps."""
+        if not text:
+            return ""
+        text = re.sub(r"^Based on live information for your query:\s*", "", text, flags=re.IGNORECASE).strip()
+        text = re.sub(r"INSTRUCTION TO LLM:.*", "", text, flags=re.DOTALL).strip()
+        if text.startswith("Live Web Search Context:") or text.startswith("Web Search Intelligence:"):
+            parts = re.split(r"\n\s*•\s+.*", text)
+            synth = [p.strip() for p in parts if p.strip() and not p.strip().startswith("Live Web Search Context:") and not p.strip().startswith("Web Search Intelligence:")]
+            if synth:
+                text = "\n\n".join(synth)
+        return text.strip()
+
     # ── full chat-history call (companion primary path) ───────────
     async def call_llm_with_messages(
         self,
@@ -116,6 +130,7 @@ class LLMBridge:
             return cached
 
         output = await self._dispatch(model, messages, temperature, max_tokens)
+        output = self._sanitize_llm_output(output)
         if output:
             self._cache_set(cache_key, output)
         return output
@@ -278,7 +293,15 @@ class LLMBridge:
                     temperature=temperature,
                     max_tokens=max_tokens,
                 )
-                return resp.choices[0].message.content or ""
+                raw_text = resp.choices[0].message.content or ""
+                clean_text = re.sub(r"^Based on live information for your query:\s*", "", raw_text, flags=re.IGNORECASE).strip()
+                clean_text = re.sub(r"INSTRUCTION TO LLM:.*", "", clean_text, flags=re.DOTALL).strip()
+                if clean_text.startswith("Live Web Search Context:"):
+                    parts = re.split(r"\n\s*•\s+.*", clean_text)
+                    synth = [p.strip() for p in parts if p.strip() and not p.strip().startswith("Live Web Search Context:")]
+                    if synth:
+                        clean_text = "\n\n".join(synth)
+                return clean_text
             except Exception as exc:
                 last_exc = exc
                 err_str = str(exc)

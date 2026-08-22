@@ -141,34 +141,32 @@ class SearchTool:
                     )
         except Exception as exc:
             logger.warning("Live weather lookup failed: %s", exc)
+    async def _resolve_ticker_symbol(self, query: str) -> Optional[str]:
+        """Dynamically resolve any company name to its exact stock ticker symbol via Yahoo Search API."""
+        try:
+            import httpx, re
+            clean_q = re.sub(r"\b(stock|share|price|today|live|quote|chart|nse|bse|ticker)\b", "", query, flags=re.IGNORECASE).strip()
+            if not clean_q:
+                clean_q = query.strip()
+            search_url = f"https://query2.finance.yahoo.com/v1/finance/search?q={urllib.parse.quote(clean_q)}&quotesCount=5"
+            headers = {"User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64)"}
+            async with httpx.AsyncClient(timeout=3.0) as client:
+                resp = await client.get(search_url, headers=headers)
+                if resp.status_code == 200:
+                    quotes = resp.json().get("quotes", [])
+                    for q in quotes:
+                        sym = q.get("symbol", "")
+                        if sym.endswith(".NS") or sym.endswith(".BO"):
+                            return sym
+                    if quotes:
+                        return quotes[0].get("symbol")
+        except Exception as exc:
+            logger.debug("Dynamic ticker symbol lookup failed: %s", exc)
         return None
 
     async def _fetch_live_finance(self, query: str) -> Optional[str]:
-        """Fetch live ticker prices from Yahoo Finance API."""
-        symbol_map = {
-            "sensex": "^BSESN", "nifty": "^NSEI", "hdfc": "HDFCBANK.NS",
-            "reliance": "RELIANCE.NS", "infosys": "INFY.NS", "tcs": "TCS.NS",
-            "icici": "ICICIBANK.NS", "sbi": "SBIN.NS", "tatamotors": "TATAMOTORS.NS",
-            "tata": "TATAMOTORS.NS", "apple": "AAPL", "tesla": "TSLA",
-            "microsoft": "MSFT", "google": "GOOGL", "btc": "BTC-USD",
-            "bitcoin": "BTC-USD", "eth": "ETH-USD", "gold": "GC=F", "silver": "SI=F"
-        }
-        q_lower = query.lower()
-        symbol = None
-        name = query
-
-        for key, sym in symbol_map.items():
-            if key in q_lower:
-                symbol = sym
-                name = key.upper()
-                break
-
-        if not symbol:
-            clean_word = query.strip().split()[0].upper()
-            if len(clean_word) <= 5 and clean_word.isalpha():
-                symbol = clean_word
-                name = clean_word
-
+        """Fetch live ticker prices and stock metrics from Yahoo Finance API without hardcoded maps."""
+        symbol = await self._resolve_ticker_symbol(query)
         if not symbol:
             return None
 
@@ -183,19 +181,50 @@ class SearchTool:
                     meta = result.get("meta", {})
                     current_price = meta.get("regularMarketPrice")
                     prev_close = meta.get("chartPreviousClose") or meta.get("previousClose")
-                    currency = meta.get("currency", "USD")
+                    day_low = meta.get("regularMarketDayLow") or meta.get("dayLow")
+                    day_high = meta.get("regularMarketDayHigh") or meta.get("dayHigh")
+                    fifty_two_low = meta.get("fiftyTwoWeekLow")
+                    fifty_two_high = meta.get("fiftyTwoWeekHigh")
+                    currency = meta.get("currency", "INR")
                     long_name = meta.get("longName") or meta.get("shortName") or name
 
-                    if current_price and prev_close:
-                        diff = round(current_price - prev_close, 2)
-                        pct = round((diff / prev_close) * 100, 2)
-                        direction = "UP" if diff >= 0 else "DOWN"
-                        symbol_str = "+" if diff >= 0 else ""
+                    if current_price:
+                        def _safe_float(val):
+                            try:
+                                return float(val)
+                            except (TypeError, ValueError):
+                                return None
+
+                        cp = _safe_float(current_price)
+                        pc = _safe_float(prev_close)
+                        dl = _safe_float(day_low)
+                        dh = _safe_float(day_high)
+                        ftl = _safe_float(fifty_two_low)
+                        fth = _safe_float(fifty_two_high)
+
+                        diff_str = ""
+                        pct_str = ""
+                        if cp is not None and pc is not None and pc > 0:
+                            diff = round(cp - pc, 2)
+                            pct = round((diff / pc) * 100, 2)
+                            symbol_str = "+" if diff >= 0 else ""
+                            diff_str = f" ({symbol_str}{diff:.2f})"
+                            pct_str = f" {symbol_str}{pct:.2f}%"
+
+                        range_str = f"{currency} {dl:.2f} – {dh:.2f}" if (dl is not None and dh is not None) else "N/A"
+                        ft_str = f"{currency} {ftl:.2f} / {fth:.2f}" if (ftl is not None and fth is not None) else "N/A"
+
+                        cp_fmt = f"{cp:.2f}" if cp is not None else str(current_price)
+                        pc_fmt = f"{pc:.2f}" if pc is not None else "N/A"
+
                         return (
-                            f"Live Financial Ticker ({long_name} / {symbol}):\n"
-                            f"- Current Price: {currency} {current_price:.2f}\n"
-                            f"- Change Today: {direction} {symbol_str}{diff:.2f} ({symbol_str}{pct:.2f}%)\n"
-                            f"- Previous Close: {currency} {prev_close:.2f}"
+                            f"Live Financial Ticker Card ({long_name} / Symbol: {symbol}):\n"
+                            f"- Current Share Price: {currency} {cp_fmt}{diff_str}{pct_str}\n"
+                            f"- Previous Close: {currency} {pc_fmt}\n"
+                            f"- Day's Range: {range_str}\n"
+                            f"- 52-Week High / Low: {ft_str}\n"
+                            f"INSTRUCTION TO LLM: Present this stock data in a clean, executive Google AI Overview format. "
+                            f"Include a short summary sentence, Key Stock Statistics bullet points, and an inviting follow-up question."
                         )
         except Exception as e:
             logger.warning("Live Yahoo Finance lookup failed for %s: %s", symbol, e)
