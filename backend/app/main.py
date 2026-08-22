@@ -319,7 +319,7 @@ async def security_middleware(request: Request, call_next):
         expected_api_key = os.getenv("API_KEY")
 
         # Whitelist frontend-facing routes (no API key required)
-        whitelisted_prefixes = ("/api/companion", "/api/pages", "/api/workflow", "/api/v1", "/api/stt", "/voice_stt", "/health")
+        whitelisted_prefixes = ("/api/companion", "/api/pages", "/api/workflow", "/api/v1", "/api/stt", "/voice_stt", "/health", "/api/integrations")
         is_whitelisted = any(request.url.path.startswith(p) for p in whitelisted_prefixes)
 
         # Check API key (handle None cases gracefully)
