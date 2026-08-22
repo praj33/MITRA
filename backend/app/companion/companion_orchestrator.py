@@ -385,7 +385,12 @@ class CompanionOrchestrator:
             )
         else:
             msg_lower = message.lower()
-            live_domains = ["stock", "share price", "market price", "weather", "temperature", "forecast", "news today", "latest news", "crypto", "exchange rate", "sensex", "nifty", "nasdaq"]
+            live_domains = [
+                "stock", "share price", "market price", "weather", "temperature", "forecast",
+                "news today", "latest news", "crypto", "exchange rate", "sensex", "nifty", "nasdaq",
+                "bse", "nse", "closing summary", "market summary", "past week", "weekly summary",
+                "market trend", "market today"
+            ]
             needs_live_data = any(domain in msg_lower for domain in live_domains)
 
             if needs_live_data:
@@ -420,7 +425,12 @@ class CompanionOrchestrator:
         history_task = session_manager.get_history(user_id, limit=self._config.max_history_turns)
 
         msg_lower = message.lower()
-        live_domains = ["stock", "share price", "market price", "weather", "temperature", "forecast", "news today", "latest news", "crypto", "exchange rate", "sensex", "nifty", "nasdaq"]
+        live_domains = [
+            "stock", "share price", "market price", "weather", "temperature", "forecast",
+            "news today", "latest news", "crypto", "exchange rate", "sensex", "nifty", "nasdaq",
+            "bse", "nse", "closing summary", "market summary", "past week", "weekly summary",
+            "market trend", "market today"
+        ]
         needs_live_data = any(domain in msg_lower for domain in live_domains)
 
         if needs_live_data:

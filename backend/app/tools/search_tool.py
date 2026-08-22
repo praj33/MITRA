@@ -178,8 +178,67 @@ class SearchTool:
             logger.debug("Dynamic ticker symbol lookup failed: %s", exc)
         return None
 
+    async def _fetch_broad_market_summary(self, query: str) -> Optional[str]:
+        """Fetch real-time closing & multi-day market index metrics for NSE (Nifty 50, Bank Nifty) & BSE (Sensex)."""
+        q_lower = query.lower()
+        broad_terms = [
+            "closing summary", "market summary", "bse and nse", "nse and bse",
+            "nse bse", "stock market today", "market today", "past week", "weekly summary",
+            "past 3 days", "market trend", "bse nse summary", "overall market"
+        ]
+        if not any(term in q_lower for term in broad_terms):
+            return None
+
+        import httpx, asyncio
+        indices = [
+            ("^NSEI", "NIFTY 50 (NSE Benchmark)"),
+            ("^BSESN", "BSE SENSEX (BSE Benchmark)"),
+            ("^NSEBANK", "BANK NIFTY (Banking Index)")
+        ]
+        results_summary = []
+
+        async with httpx.AsyncClient(timeout=4.0) as client:
+            headers = {"User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64)"}
+            for sym, label in indices:
+                try:
+                    url = f"https://query1.finance.yahoo.com/v8/finance/chart/{sym}?interval=1d&range=5d"
+                    resp = await client.get(url, headers=headers)
+                    if resp.status_code == 200:
+                        meta = resp.json().get("chart", {}).get("result", [{}])[0].get("meta", {})
+                        cp = meta.get("regularMarketPrice")
+                        pc = meta.get("chartPreviousClose") or meta.get("previousClose")
+                        dl = meta.get("regularMarketDayLow")
+                        dh = meta.get("regularMarketDayHigh")
+                        if cp:
+                            diff = (cp - pc) if pc else 0.0
+                            pct = (diff / pc * 100) if pc else 0.0
+                            sign = "+" if diff >= 0 else ""
+                            item = (
+                                f"• {label}:\n"
+                                f"  - Current Level: {cp:,.2f} ({sign}{diff:.2f} / {sign}{pct:.2f}%)\n"
+                                f"  - Previous Close: {pc:,.2f}\n"
+                            )
+                            if dl and dh:
+                                item += f"  - Day's Range: {dl:,.2f} – {dh:,.2f}\n"
+                            results_summary.append(item)
+                except Exception as exc:
+                    logger.debug("Failed fetching index %s: %s", sym, exc)
+
+        if results_summary:
+            tavily_key = os.getenv("TAVILY_API_KEY", "")
+            news_context = await self._search_tavily(f"NSE BSE Indian stock market closing news summary {query}", tavily_key) if tavily_key else None
+            summary_card = "Indian Equity Markets Live Closing & Index Summary (NSE & BSE Benchmarks):\n" + "\n".join(results_summary)
+            if news_context:
+                summary_card += f"\n\nMarket Headlines & Sectoral Context:\n{news_context}"
+            return summary_card
+        return None
+
     async def _fetch_live_finance(self, query: str) -> Optional[str]:
         """Fetch live ticker prices and stock metrics from Yahoo Finance API without hardcoded maps."""
+        broad_res = await self._fetch_broad_market_summary(query)
+        if broad_res:
+            return broad_res
+
         symbol = await self._resolve_ticker_symbol(query)
         if not symbol:
             return None
