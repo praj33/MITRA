@@ -233,8 +233,50 @@ class SearchTool:
             return summary_card
         return None
 
+    async def _fetch_fii_dii_summary(self, query: str) -> Optional[str]:
+        """Fetch live FII/DII institutional net buy/sell values and India VIX volatility index."""
+        q_lower = query.lower()
+        fii_terms = ["fii", "dii", "institutional", "fii dii", "vix", "volatility", "pcr", "put call ratio"]
+        if not any(term in q_lower for term in fii_terms):
+            return None
+
+        import httpx
+        vix_str = "India VIX: N/A"
+        try:
+            url = "https://query1.finance.yahoo.com/v8/finance/chart/^INDIAVIX?interval=1d&range=1d"
+            headers = {"User-Agent": "Mozilla/5.0"}
+            async with httpx.AsyncClient(timeout=3.0) as client:
+                resp = await client.get(url, headers=headers)
+                if resp.status_code == 200:
+                    meta = resp.json().get("chart", {}).get("result", [{}])[0].get("meta", {})
+                    price = meta.get("regularMarketPrice")
+                    pc = meta.get("chartPreviousClose")
+                    if price:
+                        diff = (price - pc) if pc else 0.0
+                        sign = "+" if diff >= 0 else ""
+                        vix_str = f"India VIX (Market Volatility Index): {price:.2f} ({sign}{diff:.2f})"
+        except Exception as exc:
+            logger.debug("Failed fetching India VIX: %s", exc)
+
+        tavily_key = os.getenv("TAVILY_API_KEY", "")
+        fii_snippets = await self._search_tavily(f"FII DII net buy sell activity today NSE BSE moneycontrol cash market {query}", tavily_key) if tavily_key else None
+
+        card = f"Institutional FII/DII Net Flow & Volatility Sentiment Card:\n- {vix_str}\n"
+        if fii_snippets:
+            card += f"\nInstitutional Cash Market Buying/Selling Data:\n{fii_snippets}\n"
+
+        card += (
+            "INSTRUCTION TO LLM: Synthesize the FII/DII figures and India VIX level above into an executive market sentiment card. "
+            "Clearly state whether FIIs/DIIs are net buyers or sellers in ₹ Crores, explain what India VIX indicates for market risk, and provide an executive summary."
+        )
+        return card
+
     async def _fetch_live_finance(self, query: str) -> Optional[str]:
         """Fetch live ticker prices and stock metrics from Yahoo Finance API without hardcoded maps."""
+        fii_res = await self._fetch_fii_dii_summary(query)
+        if fii_res:
+            return fii_res
+
         broad_res = await self._fetch_broad_market_summary(query)
         if broad_res:
             return broad_res

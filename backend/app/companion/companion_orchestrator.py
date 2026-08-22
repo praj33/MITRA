@@ -389,7 +389,7 @@ class CompanionOrchestrator:
                 "stock", "share price", "market price", "weather", "temperature", "forecast",
                 "news today", "latest news", "crypto", "exchange rate", "sensex", "nifty", "nasdaq",
                 "bse", "nse", "closing summary", "market summary", "past week", "weekly summary",
-                "market trend", "market today"
+                "market trend", "market today", "fii", "dii", "institutional", "vix", "volatility", "pcr", "put call ratio"
             ]
             needs_live_data = any(domain in msg_lower for domain in live_domains)
 
@@ -429,7 +429,7 @@ class CompanionOrchestrator:
             "stock", "share price", "market price", "weather", "temperature", "forecast",
             "news today", "latest news", "crypto", "exchange rate", "sensex", "nifty", "nasdaq",
             "bse", "nse", "closing summary", "market summary", "past week", "weekly summary",
-            "market trend", "market today"
+            "market trend", "market today", "fii", "dii", "institutional", "vix", "volatility", "pcr", "put call ratio"
         ]
         needs_live_data = any(domain in msg_lower for domain in live_domains)
 
