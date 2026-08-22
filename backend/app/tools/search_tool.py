@@ -290,15 +290,25 @@ class SearchTool:
                         cp_fmt = f"{cp:.2f}" if cp is not None else str(current_price)
                         pc_fmt = f"{pc:.2f}" if pc is not None else "N/A"
 
-                        return (
+                        card = (
                             f"Live Financial Ticker Card ({long_name} / Symbol: {symbol}):\n"
                             f"- Current Share Price: {currency} {cp_fmt}{diff_str}{pct_str}\n"
                             f"- Previous Close: {currency} {pc_fmt}\n"
                             f"- Day's Range: {range_str}\n"
                             f"- 52-Week High / Low: {ft_str}\n"
-                            f"INSTRUCTION TO LLM: Present this stock data in a clean, executive Google AI Overview format. "
-                            f"Include a short summary sentence, Key Stock Statistics bullet points, and an inviting follow-up question."
                         )
+
+                        tavily_key = os.getenv("TAVILY_API_KEY", "")
+                        if tavily_key:
+                            fund_snippets = await self._search_tavily(f"{query} stock P/E ratio market cap ROE debt equity fundamental ratios screener", tavily_key)
+                            if fund_snippets:
+                                card += f"\nFundamental Ratios & Financial Overview:\n{fund_snippets}\n"
+
+                        card += (
+                            f"INSTRUCTION TO LLM: Present this stock data in a clean, executive Google AI Overview format. "
+                            f"Include a short summary sentence, Key Stock Statistics & Fundamental Ratios bullet points, and an inviting follow-up question."
+                        )
+                        return card
         except Exception as e:
             logger.warning("Live Yahoo Finance lookup failed for %s: %s", symbol, e)
         return None
