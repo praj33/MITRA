@@ -142,10 +142,24 @@ class SearchTool:
         except Exception as exc:
             logger.warning("Live weather lookup failed: %s", exc)
     async def _resolve_ticker_symbol(self, query: str) -> Optional[str]:
-        """Dynamically resolve any company name to its exact stock ticker symbol via Yahoo Search API."""
+        """Dynamically resolve any index or company name to its exact stock ticker symbol via Yahoo Search API."""
+        q_lower = query.lower()
+        if any(term in q_lower for term in ["nifty 50", "nifty fifty", "nifty"]):
+            if "bank" not in q_lower:
+                return "^NSEI"
+            return "^NSEBANK"
+        if "sensex" in q_lower:
+            return "^BSESN"
+        if "bank nifty" in q_lower or "banknifty" in q_lower:
+            return "^NSEBANK"
+        if "dow" in q_lower:
+            return "^DJI"
+        if "nasdaq" in q_lower:
+            return "^IXIC"
+
         try:
             import httpx, re
-            clean_q = re.sub(r"\b(stock|share|price|today|live|quote|chart|nse|bse|ticker)\b", "", query, flags=re.IGNORECASE).strip()
+            clean_q = re.sub(r"\b(stock|share|price|today|live|quote|chart|nse|bse|ticker|fifty|50)\b", "", query, flags=re.IGNORECASE).strip()
             if not clean_q:
                 clean_q = query.strip()
             search_url = f"https://query2.finance.yahoo.com/v1/finance/search?q={urllib.parse.quote(clean_q)}&quotesCount=5"
@@ -251,7 +265,7 @@ class SearchTool:
                             f"- {r.get('title')}: {self._clean_text(r.get('content', ''))}"
                             for r in results[:4]
                         ]
-                        return "Live Web Search Context:\n" + "\n".join(snippets)
+                        return "Web Information Intelligence Summary:\n" + "\n".join(snippets)
         except Exception as e:
             logger.warning("Tavily API call failed: %s", e)
         return None
@@ -274,7 +288,7 @@ class SearchTool:
                             f"- {r.get('title')}: {self._clean_text(r.get('content', ''))}"
                             for r in results[:4]
                         ]
-                        return "In-House Live Web Search Context:\n" + "\n".join(snippets)
+                        return "Web Information Intelligence Summary:\n" + "\n".join(snippets)
         except Exception as e:
             logger.warning("SearXNG search call failed (%s): %s", base_url, e)
         return None
@@ -297,7 +311,7 @@ class SearchTool:
                         if text:
                             snippets.append(f"- {text}")
                     if snippets:
-                        return "Live Web Search Context:\n" + "\n".join(snippets)
+                        return "Web Information Intelligence Summary:\n" + "\n".join(snippets)
         except Exception as e:
             logger.warning("DuckDuckGo search failed: %s", e)
         return None
