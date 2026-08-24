@@ -10,7 +10,11 @@ Supports:
 from fastapi import APIRouter, Form
 from fastapi.responses import Response
 import httpx
-from gtts import gTTS
+try:
+    from gtts import gTTS
+    GTTS_AVAILABLE = True
+except ImportError:
+    GTTS_AVAILABLE = False
 import base64
 import tempfile
 import subprocess
