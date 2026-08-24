@@ -1,334 +1,283 @@
-import React, { useState, useEffect, useRef, useCallback } from 'react';
-import { AssistantResponse, ConversationMessage, Conversation } from './types';
-import ChatSidebar from './components/ChatSidebar';
-import { apiService } from './services/api';
-import MessageInput from './components/MessageInput';
-import ChatMessage from './components/ChatMessage';
-import Toast from './components/Toast';
-import ConnectionStatus from './components/ConnectionStatus';
-import LanguageDropdown from './components/LanguageDropdown';
-import { AuthProvider, useAuth } from './contexts/AuthContext';
-import { LanguageProvider } from './contexts/LanguageContext';
-import Login from './components/auth/Login';
-import Signup from './components/auth/Signup';
+import React, { useEffect, useState, useCallback } from 'react';
+import { motion } from 'framer-motion';
+import Sidebar from './components/shell/Sidebar';
+import TopBar from './components/shell/TopBar';
+import ConversationCenter from './components/shell/ConversationCenter';
+import ContextPanel from './components/shell/ContextPanel';
+import InputBar from './components/shell/InputBar';
+import SettingsModal from './components/shell/SettingsModal';
+import AuthModal from './components/shell/AuthModal';
+import { FocusTimerModal } from './components/modals/FocusTimerModal';
+import { CommandPaletteModal } from './components/modals/CommandPaletteModal';
+import { MemoryDashboardModal } from './components/modals/MemoryDashboardModal';
+import { VoiceTalkModal } from './components/modals/VoiceTalkModal';
+import { MemoryMindMapModal } from './components/modals/MemoryMindMapModal';
+import InstallPwaBanner from './components/shell/InstallPwaBanner';
+import Toast, { showToast } from './components/shell/Toast';
+import CalendarPage from './components/pages/CalendarPage';
+import TasksPage from './components/pages/TasksPage';
+import RemindersPage from './components/pages/RemindersPage';
+import WorkflowsPage from './components/pages/WorkflowsPage';
+import KnowledgePage from './components/pages/KnowledgePage';
+import AnalyticsPage from './components/pages/AnalyticsPage';
+import { useCompanionStore } from './store/companion.store';
+import { CompanionService } from './services/companion.service';
+import { cn } from './lib/utils';
+import { LayoutDashboard, Calendar, CheckSquare, PlayCircle, TrendingUp } from 'lucide-react';
 
-function AppContent() {
-  const { isAuthenticated, isLoading: authLoading, user, logout } = useAuth();
-  const [showLogin, setShowLogin] = useState(true);
-  
-  // Load conversations from localStorage on mount
-  const [conversations, setConversations] = useState<Conversation[]>(() => {
-    try {
-      const saved = localStorage.getItem('chatHistory');
-      return saved ? JSON.parse(saved) : [];
-    } catch { 
-      return []; 
-    }
-  });
-  
-  const [currentConversationId, setCurrentConversationId] = useState<string | null>(null);
-  const [isSidebarOpen, setIsSidebarOpen] = useState(window.innerWidth >= 1024);
-  const [messages, setMessages] = useState<ConversationMessage[]>([]);
-  const [isLoading, setIsLoading] = useState(false);
-  const [toast, setToast] = useState<{ message: string; type: 'success' | 'info' | 'warning' | 'error' } | null>(null);
-  const messagesEndRef = useRef<HTMLDivElement>(null);
-  const hasScrolledRef = useRef(false);
+const useIsMobile = () => {
+  const setIsMobile = useCompanionStore(s => s.setIsMobile);
+  useEffect(() => {
+    const check = () => setIsMobile(window.innerWidth < 1024);
+    check();
+    window.addEventListener('resize', check);
+    return () => window.removeEventListener('resize', check);
+  }, [setIsMobile]);
+};
 
-  // Auto-scroll to bottom when new messages arrive
-  const scrollToBottom = useCallback(() => {
-    if (!hasScrolledRef.current && messagesEndRef.current) {
-      messagesEndRef.current.scrollIntoView({ behavior: 'smooth' });
-      hasScrolledRef.current = true;
-      // Reset after animation completes
-      setTimeout(() => {
-        hasScrolledRef.current = false;
-      }, 500);
+const speakAudioResponse = async (text: string) => {
+  if (!text) return;
+  try {
+    const apiUrl = process.env.REACT_APP_API_URL || 'http://localhost:8000';
+    const apiKey = process.env.REACT_APP_API_KEY || '';
+    const res = await fetch(`${apiUrl}/api/tts`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'X-API-Key': apiKey },
+      body: JSON.stringify({ text, language: 'en' }),
+    });
+    const data = await res.json();
+    if (data.audio_base64) {
+      const audio = new Audio(`data:audio/${data.audio_format || 'wav'};base64,${data.audio_base64}`);
+      audio.setAttribute('playsinline', 'true');
+      await audio.play();
+      return;
     }
+  } catch (err) {
+    console.warn('TTS service unavailable, falling back to Web Speech API:', err);
+  }
+
+  if ('speechSynthesis' in window) {
+    window.speechSynthesis.cancel();
+    if (window.speechSynthesis.paused) window.speechSynthesis.resume();
+    const utterance = new SpeechSynthesisUtterance(text);
+    utterance.lang = 'en-US';
+    utterance.rate = 1.0;
+    utterance.pitch = 1.0;
+    window.speechSynthesis.speak(utterance);
+  }
+};
+
+const mobileNavItems = [
+  { id: 'chat',      label: 'Chat',      icon: LayoutDashboard },
+  { id: 'analytics', label: 'Analytics', icon: TrendingUp },
+  { id: 'calendar',  label: 'Calendar',  icon: Calendar },
+  { id: 'tasks',     label: 'Tasks',     icon: CheckSquare },
+  { id: 'workflows', label: 'Workflows', icon: PlayCircle },
+];
+
+const MobileBottomNav: React.FC<{
+  active: string;
+  onSelect: (id: string) => void;
+}> = ({ active, onSelect }) => {
+  return (
+    <nav className="fixed bottom-0 left-0 right-0 z-50 grid grid-cols-5 items-center w-full bg-white/80 dark:bg-iosGray-900/80 backdrop-blur-xl border-t border-iosGray-200/50 dark:border-iosGray-800/50 py-1.5 px-0.5 select-none lg:hidden">
+      {mobileNavItems.map(item => {
+        const Icon = item.icon;
+        const isActive = active === item.id;
+        return (
+          <button
+            key={item.id}
+            onClick={() => onSelect(item.id)}
+            className={cn(
+              "flex flex-col items-center justify-center py-1 px-1 transition-all relative cursor-pointer min-h-[44px]",
+              isActive ? "text-iosBlue-500 font-semibold" : "text-iosGray-500 hover:text-iosGray-700"
+            )}
+            aria-label={item.label}
+          >
+            <Icon size={18} className={cn("transition-transform mb-0.5", isActive && "scale-110 text-iosBlue-500")} />
+            <span className="text-[10px] tracking-tight truncate w-full text-center">{item.label}</span>
+            {isActive && (
+              <motion.div
+                layoutId="activeTabIndicator"
+                className="absolute bottom-0 w-5 h-0.5 bg-iosBlue-500 rounded-full"
+              />
+            )}
+          </button>
+        );
+      })}
+    </nav>
+  );
+};
+
+const App: React.FC = () => {
+  const {
+    userId, sidebar, contextPanel, isMobile, authModalOpen, setAuthModalOpen,
+    setStatus, setSessionId, setUserName, setMemory, setAuth,
+    addMessage, addNotification, addContextItem,
+  } = useCompanionStore();
+
+  const [activeSection, setActiveSection] = useState('chat');
+  const [settingsOpen, setSettingsOpen] = useState(false);
+  const [focusOpen, setFocusOpen] = useState(false);
+  const [cmdOpen, setCmdOpen] = useState(false);
+  const [memoryOpen, setMemoryOpen] = useState(false);
+  const [voiceTalkOpen, setVoiceTalkOpen] = useState(false);
+  const [mindMapOpen, setMindMapOpen] = useState(false);
+
+  useEffect(() => {
+    (window as any).__MITRA_SETTINGS__ = () => setSettingsOpen(true);
   }, []);
 
   useEffect(() => {
-    scrollToBottom();
-  }, [messages, scrollToBottom]);
-
-  // Save conversations to localStorage
-  useEffect(() => {
-    localStorage.setItem('chatHistory', JSON.stringify(conversations));
-  }, [conversations]);
-
-  // Sync current messages with active conversation
-  useEffect(() => {
-    if (!currentConversationId) return;
-
-    setConversations(prev => prev.map(c => {
-      if (c.id === currentConversationId) {
-        return {
-          ...c,
-          messages: messages,
-          title: c.title === 'New Chat' && messages.length > 0
-            ? messages[0].userMessage.slice(0, 30) + (messages[0].userMessage.length > 30 ? '...' : '')
-            : c.title,
-          timestamp: new Date().toISOString()
-        };
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'k') {
+        e.preventDefault();
+        setCmdOpen(prev => !prev);
       }
-      return c;
-    }));
-  }, [messages, currentConversationId]);
-
-  const handleNewChat = useCallback(() => {
-    setMessages([]);
-    setCurrentConversationId(null);
-    if (window.innerWidth < 1024) setIsSidebarOpen(false);
+    };
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
   }, []);
 
-  const handleSelectChat = useCallback((id: string) => {
-    const convo = conversations.find(c => c.id === id);
-    if (convo) {
-      setMessages(convo.messages);
-      setCurrentConversationId(id);
-      if (window.innerWidth < 1024) setIsSidebarOpen(false);
-    }
-  }, [conversations]);
+  useIsMobile();
 
-  const handleDeleteChat = useCallback((id: string, e: React.MouseEvent) => {
-    e.stopPropagation();
-    setConversations(prev => prev.filter(c => c.id !== id));
-    if (currentConversationId === id) {
-      handleNewChat();
-    }
-  }, [currentConversationId, handleNewChat]);
+  const sidebarCollapsed = sidebar === 'collapsed';
+  const contextHidden = contextPanel === 'closed';
 
-  const handleSendMessage = useCallback(async (userMessage: string) => {
-    // Initialize conversation if needed
-    let activeId = currentConversationId;
-    if (!activeId) {
-      activeId = `conv-${Date.now()}`;
-      const newConv: Conversation = {
-        id: activeId,
-        title: 'New Chat',
-        messages: [],
-        timestamp: new Date().toISOString()
-      };
-      setConversations(prev => [newConv, ...prev]);
-      setCurrentConversationId(activeId);
-    }
+  useEffect(() => {
+    const init = async () => {
+      const existingToken = localStorage.getItem('mitra_auth_token');
+      if (existingToken) {
+        try {
+          const res = await CompanionService.getMe(existingToken);
+          if (res?.user) setAuth(res.user, existingToken);
+        } catch { /* Token expired */ }
+      }
 
-    const messageId = `msg-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
-    const timestamp = new Date().toISOString();
+      const activeUserId = useCompanionStore.getState().userId;
 
-    // Add user message immediately
-    const newMessage: ConversationMessage = {
-      id: messageId,
-      userMessage: userMessage,
-      assistantResponse: null,
-      timestamp,
-      isLoading: true,
+      try {
+        const { facts } = await CompanionService.getMemory(activeUserId);
+        if (facts?.name) setUserName(facts.name);
+        setMemory(facts);
+
+        addContextItem({
+          id: 'ctx_cal_1', type: 'calendar',
+          title: "Today's Calendar", subtitle: 'No events yet',
+          timestamp: new Date().toISOString(),
+        });
+        addContextItem({
+          id: 'ctx_task_1', type: 'task',
+          title: 'Pending Tasks', subtitle: 'Open task board to see all',
+          timestamp: new Date().toISOString(),
+        });
+
+        addNotification({
+          type: 'success', title: 'Mitra is ready',
+          body: 'Your AI companion is active and connected.', read: false,
+        });
+        showToast('success', 'Mitra Connected', 'All systems operational');
+      } catch {
+        // API fallback
+      }
     };
+    init();
+  }, []);
 
-    setMessages((prev) => [...prev, newMessage]);
-    setIsLoading(true);
-    setToast({ message: 'Message sent', type: 'success' });
+  const handleSend = useCallback(async (message: string, _isVoice = false) => {
+    setActiveSection('chat');
+    addMessage({ role: 'user', content: message });
+    setStatus('thinking');
 
     try {
-      const response = await apiService.sendMessage({
-        message: userMessage,
-        platform: 'web',
-        device_context: 'desktop',
+      const resp = await CompanionService.chat(userId, message);
+      setStatus('active');
+      if (resp.session_id) setSessionId(resp.session_id);
+
+      addMessage({
+        role: 'assistant',
+        content: resp.message,
+        intent: resp.intent,
+        capabilityResult: resp.capability_result || null,
+        suggestedActions: resp.suggested_actions || [],
       });
 
-      // Update message with response
-      setMessages((prev) =>
-        prev.map((msg) =>
-          msg.id === messageId
-            ? {
-                ...msg,
-                assistantResponse: response,
-                isLoading: false,
-                error: response.status === 'error' ? response.error : undefined,
-              }
-            : msg
-        )
-      );
-    } catch (error) {
-      const errorMessage = error instanceof Error ? error.message : 'An unexpected error occurred';
-
-      const errorResponse: AssistantResponse = {
-        status: 'error',
-        data: {},
-        error: errorMessage,
-      };
-
-      setMessages((prev) =>
-        prev.map((msg) =>
-          msg.id === messageId
-            ? {
-                ...msg,
-                assistantResponse: errorResponse,
-                isLoading: false,
-                error: errorMessage,
-              }
-            : msg
-        )
-      );
-    } finally {
-      setIsLoading(false);
+      if (resp.capability_result?.data) {
+        addContextItem({
+          id: `ctx_cap_${Date.now()}`,
+          type: (resp.capability_result.capability === 'calendar' ? 'calendar' :
+                 resp.capability_result.capability === 'email'    ? 'email'    :
+                 resp.capability_result.capability === 'task'     ? 'task'     : 'note'),
+          title: resp.capability_result.summary,
+          subtitle: resp.capability_result.capability,
+          timestamp: new Date().toISOString(),
+        });
+        showToast(
+          resp.capability_result.status === 'success' ? 'success' : 'info',
+          resp.capability_result.summary,
+          resp.capability_result.capability
+        );
+      }
+    } catch (err) {
+      setStatus('error');
+      addMessage({
+        role: 'assistant',
+        content: "I ran into a small issue - could you try again? I'm working on it.",
+      });
+      setTimeout(() => setStatus('active'), 3000);
     }
-  }, [currentConversationId]);
+  }, [userId, addMessage, addContextItem, setStatus, setSessionId, setActiveSection]);
 
-  // Show auth loading state
-  if (authLoading) {
-    return (
-      <div className="min-h-screen flex items-center justify-center bg-gradient-to-b from-iosGray-100 to-white dark:from-black dark:to-iosGray-900">
-        <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-iosBlue-500"></div>
-      </div>
-    );
-  }
+  useEffect(() => { (window as any).__MITRA_SEND__ = handleSend; }, [handleSend]);
+  useEffect(() => { (window as any).__MITRA_SETTINGS__ = () => setSettingsOpen(true); }, []);
+  useEffect(() => { (window as any).__MITRA_FOCUS__ = () => setFocusOpen(prev => !prev); }, []);
+  useEffect(() => { (window as any).__MITRA_SEARCH__ = () => setCmdOpen(true); }, []);
+  useEffect(() => { (window as any).__MITRA_MEMORY__ = () => setMemoryOpen(prev => !prev); }, []);
+  useEffect(() => { (window as any).__MITRA_VOICE_TALK__ = () => setVoiceTalkOpen(prev => !prev); }, []);
+  useEffect(() => { (window as any).__MITRA_MINDMAP__ = () => setMindMapOpen(prev => !prev); }, []);
+  useEffect(() => { (window as any).__MITRA_NAV__ = setActiveSection; }, [setActiveSection]);
 
-  // Show login/signup when not authenticated
-  if (!isAuthenticated) {
-    return showLogin ? (
-      <Login onToggleForm={() => setShowLogin(false)} />
-    ) : (
-      <Signup onToggleForm={() => setShowLogin(true)} />
-    );
-  }
+  const handleChatNavigate = useCallback((msg: string) => {
+    setActiveSection('chat');
+    handleSend(msg);
+  }, [handleSend]);
 
   return (
-    <div className="h-screen flex overflow-hidden bg-gradient-to-b from-iosGray-100 to-white dark:from-black dark:to-iosGray-900">
-      <ChatSidebar
-        isOpen={isSidebarOpen}
-        onClose={() => setIsSidebarOpen(false)}
-        conversations={conversations}
-        activeId={currentConversationId}
-        onSelect={handleSelectChat}
-        onNewChat={handleNewChat}
-        onDelete={handleDeleteChat}
-      />
+    <div className={cn(
+      'h-screen flex overflow-hidden bg-gradient-to-b from-iosGray-100 to-white dark:from-black dark:to-iosGray-900 font-sf',
+      sidebarCollapsed && 'lg:pl-16',
+      contextHidden && 'lg:pr-0'
+    )}>
+      <TopBar />
+      <Sidebar activeSection={activeSection} onSectionChange={setActiveSection} />
 
-      <div className={`flex-1 flex flex-col min-w-0 transition-all duration-300 ${isSidebarOpen ? 'lg:pl-[280px]' : ''}`}>
-        {/* Connection Status */}
-        <ConnectionStatus />
-
-        {/* Toast Notification */}
-        {toast && (
-          <Toast
-            message={toast.message}
-            type={toast.type}
-            onClose={() => setToast(null)}
-          />
-        )}
-
-        {/* Header */}
-        <header className="sticky top-0 z-40 backdrop-blur-xl bg-white/70 dark:bg-iosGray-900/70 border-b border-iosGray-200/50 dark:border-iosGray-800/50">
-          <div className="px-4 sm:px-6 py-4">
-            <div className="flex items-center justify-between">
-              <div className="flex items-center gap-3">
-                {/* Toggle sidebar button - shows on all screens when sidebar is closed on desktop */}
-                <button
-                  onClick={() => setIsSidebarOpen(!isSidebarOpen)}
-                  className={`p-2 -ml-2 rounded-xl hover:bg-black/5 dark:hover:bg-white/10 transition-colors ${isSidebarOpen ? 'lg:hidden' : ''}`}
-                  aria-label={isSidebarOpen ? "Close sidebar" : "Open sidebar"}
-                  title={isSidebarOpen ? "Close sidebar" : "Open sidebar"}
-                >
-                  <svg className="w-6 h-6 text-iosGray-600 dark:text-iosGray-300" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 6h16M4 12h16M4 18h16" />
-                  </svg>
-                </button>
-                <div>
-                  <div className="flex items-center gap-2">
-                    <span className="inline-block w-2.5 h-2.5 bg-iosBlue-500 rounded-full animate-pulse"></span>
-                    <h1 className="text-xl sm:text-2xl font-semibold text-iosGray-900 dark:text-white font-sf">
-                      Mitra
-                    </h1>
-                  </div>
-                  <p className="text-xs text-iosGray-500 dark:text-iosGray-500 font-sf">
-                    AI Being
-                  </p>
-                </div>
-              </div>
-              
-              <div className="flex items-center gap-2 sm:gap-4">
-                <LanguageDropdown />
-                <div className="flex items-center gap-2 sm:gap-3">
-                  <div className="text-right hidden sm:block">
-                    <div className="text-sm font-medium text-iosGray-900 dark:text-white font-sf truncate max-w-[150px]">{user?.name}</div>
-                    <div className="text-xs text-iosGray-500 dark:text-iosGray-500 font-sf truncate max-w-[150px]">{user?.email}</div>
-                  </div>
-                  <button
-                    onClick={logout}
-                    className="p-2 rounded-xl hover:bg-black/5 dark:hover:bg-white/10 transition-colors text-iosGray-600 dark:text-iosGray-300"
-                    title="Logout"
-                    aria-label="Logout"
-                  >
-                    <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1" />
-                    </svg>
-                  </button>
-                </div>
-              </div>
-            </div>
-          </div>
-        </header>
-
-        {/* Main Content Area */}
-        <main className="flex-1 overflow-y-auto">
-          <div className="px-4 py-6 max-w-5xl mx-auto">
-            {messages.length === 0 ? (
-              <div className="text-center py-16 sm:py-24">
-                <div className="inline-block p-6 sm:p-8 backdrop-blur-xl bg-white/60 dark:bg-iosGray-800/60 rounded-3xl mb-6 shadow-ios-lg border border-white/20 dark:border-iosGray-700/30">
-                  <svg
-                    className="w-16 h-16 sm:w-20 sm:h-20 text-iosBlue-500 mx-auto"
-                    fill="none"
-                    stroke="currentColor"
-                    viewBox="0 0 24 24"
-                  >
-                    <path
-                      strokeLinecap="round"
-                      strokeLinejoin="round"
-                      strokeWidth={1.5}
-                      d="M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z"
-                    />
-                  </svg>
-                </div>
-                <h2 className="text-2xl sm:text-3xl font-semibold text-iosGray-900 dark:text-white mb-3 font-sf">
-                  Start a conversation
-                </h2>
-                <p className="text-iosGray-600 dark:text-iosGray-400 mb-8 max-w-md mx-auto font-sf px-4">
-                  I'm your unified AI assistant with multi-agent capabilities, safety enforcement, and intelligent routing.
-                </p>
-              </div>
-            ) : (
-              <div className="space-y-3 pb-32">
-                {messages.map((message) => (
-                  <ChatMessage
-                    key={message.id}
-                    userMessage={message.userMessage}
-                    assistantResponse={message.assistantResponse}
-                    timestamp={message.timestamp}
-                    isLoading={message.isLoading}
-                    error={message.error}
-                  />
-                ))}
-                <div ref={messagesEndRef} />
-              </div>
-            )}
-          </div>
-        </main>
-
-        {/* Message Input */}
-        <MessageInput onSendMessage={handleSendMessage} isLoading={isLoading} />
+      <div className={cn("flex-1 flex flex-col min-w-0 transition-all duration-300", activeSection === 'chat' ? 'overflow-hidden' : 'overflow-y-auto pb-24 sm:pb-20')}>
+        {activeSection === 'chat' && <ConversationCenter />}
+        {activeSection === 'analytics' && <AnalyticsPage onChatNavigate={handleChatNavigate} />}
+        {activeSection === 'calendar' && <CalendarPage onChatNavigate={handleChatNavigate} />}
+        {activeSection === 'tasks' && <TasksPage onChatNavigate={handleChatNavigate} />}
+        {activeSection === 'reminders' && <RemindersPage onChatNavigate={handleChatNavigate} />}
+        {activeSection === 'workflows' && <WorkflowsPage onChatNavigate={handleChatNavigate} />}
+        {activeSection === 'knowledge' && <KnowledgePage onChatNavigate={handleChatNavigate} />}
       </div>
+
+      {activeSection === 'chat' && <InputBar onSend={handleSend} />}
+
+      <ContextPanel />
+
+      {isMobile && <MobileBottomNav active={activeSection} onSelect={setActiveSection} />}
+
+      <CommandPaletteModal isOpen={cmdOpen} onClose={() => setCmdOpen(false)} />
+      <MemoryDashboardModal isOpen={memoryOpen} onClose={() => setMemoryOpen(false)} />
+      <VoiceTalkModal isOpen={voiceTalkOpen} onClose={() => setVoiceTalkOpen(false)} />
+      <MemoryMindMapModal isOpen={mindMapOpen} onClose={() => setMindMapOpen(false)} />
+      <FocusTimerModal isOpen={focusOpen} onClose={() => setFocusOpen(false)} />
+      <SettingsModal open={settingsOpen} onClose={() => setSettingsOpen(false)} />
+      <AuthModal open={authModalOpen} onClose={() => setAuthModalOpen(false)} />
+      <InstallPwaBanner />
+      <Toast />
     </div>
   );
-}
-
-function App() {
-  return (
-    <LanguageProvider>
-      <AuthProvider>
-        <AppContent />
-      </AuthProvider>
-    </LanguageProvider>
-  );
-}
+};
 
 export default App;

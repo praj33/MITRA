@@ -1,6 +1,5 @@
 import os
 import logging
-import secrets
 import time
 from datetime import datetime, timedelta
 from typing import Optional
@@ -11,25 +10,9 @@ from fastapi.security import APIKeyHeader, HTTPBearer, HTTPAuthorizationCredenti
 from jose import JWTError, jwt
 from pydantic import BaseModel
 
-# Import structured logger
-from .logging import get_logger
-logger = get_logger(__name__)
-
 # Environment variables
 API_KEY = os.getenv("API_KEY")
-
-def _get_jwt_secret() -> str:
-    """Get JWT secret from env. Generates and warns if not configured."""
-    secret = os.getenv("JWT_SECRET_KEY") or os.getenv("JWT_SECRET")
-    if not secret:
-        secret = secrets.token_hex(32)
-        logger.critical(
-            "JWT_SECRET_KEY not set! Generated ephemeral secret. "
-            "Tokens will be INVALID after restart. Set JWT_SECRET_KEY in .env immediately."
-        )
-    return secret
-
-JWT_SECRET_KEY = _get_jwt_secret()
+JWT_SECRET_KEY = os.getenv("JWT_SECRET_KEY") or os.getenv("JWT_SECRET") or "your-secret-key"
 JWT_ALGORITHM = os.getenv("JWT_ALGORITHM", "HS256")
 JWT_ACCESS_TOKEN_EXPIRE_MINUTES = int(os.getenv("JWT_ACCESS_TOKEN_EXPIRE_MINUTES", "60"))
 
@@ -37,26 +20,13 @@ JWT_ACCESS_TOKEN_EXPIRE_MINUTES = int(os.getenv("JWT_ACCESS_TOKEN_EXPIRE_MINUTES
 api_key_header = APIKeyHeader(name="X-API-Key", auto_error=False)
 bearer_scheme = HTTPBearer(auto_error=False)
 
-# Rate limiting - Redis-backed with in-memory fallback
-_rate_limit_store: dict = {}
-_redis_client = None
+# Rate limiting store (in-memory)
+# NOTE: For production with multiple instances, use Redis or similar distributed store
+rate_limit_store = defaultdict(list)
 
-def _get_redis():
-    """Lazy-init Redis connection for distributed rate limiting."""
-    global _redis_client
-    redis_url = os.getenv("REDIS_URL", "").strip()
-    if not redis_url:
-        return None
-    if _redis_client is None:
-        try:
-            import redis
-            _redis_client = redis.from_url(redis_url, decode_responses=True, socket_timeout=2)
-            _redis_client.ping()
-            logger.info("Redis rate limiter connected")
-        except Exception as e:
-            logger.warning(f"Redis unavailable, falling back to in-memory rate limiting: {e}")
-            _redis_client = False  # Mark as failed, don't retry
-    return _redis_client if _redis_client is not False else None
+# Import structured logger
+from .logging import get_logger
+logger = get_logger(__name__)
 
 class TokenData(BaseModel):
     username: Optional[str] = None
@@ -108,32 +78,14 @@ def authenticate_user(api_key: str = Depends(api_key_header), token: TokenData =
     raise HTTPException(status_code=401, detail="Authentication failed")
 
 def rate_limit(request: Request, max_requests: int = 100, window_seconds: int = 60):
-    """Rate limit using Redis (distributed) with in-memory fallback (single instance)."""
+    # Handle cases where client info might be missing
     client_ip = request.client.host if request.client else "unknown"
     current_time = time.time()
-
-    redis = _get_redis()
-    if redis:
-        try:
-            key = f"ratelimit:{client_ip}:{int(current_time // window_seconds)}"
-            count = redis.incr(key)
-            if count == 1:
-                redis.expire(key, window_seconds)
-            if count > max_requests:
-                raise HTTPException(status_code=429, detail="Rate limit exceeded")
-            return
-        except HTTPException:
-            raise
-        except Exception as e:
-            logger.warning(f"Redis rate limit failed, falling back to in-memory: {e}")
-
-    # In-memory fallback
-    if client_ip not in _rate_limit_store:
-        _rate_limit_store[client_ip] = []
-    _rate_limit_store[client_ip] = [t for t in _rate_limit_store[client_ip] if current_time - t < window_seconds]
-    if len(_rate_limit_store[client_ip]) >= max_requests:
+    # Clean old entries
+    rate_limit_store[client_ip] = [t for t in rate_limit_store[client_ip] if current_time - t < window_seconds]
+    if len(rate_limit_store[client_ip]) >= max_requests:
         raise HTTPException(status_code=429, detail="Rate limit exceeded")
-    _rate_limit_store[client_ip].append(current_time)
+    rate_limit_store[client_ip].append(current_time)
 
 def audit_log(request: Request, user: str = None):
     """Log security events using structured logging"""

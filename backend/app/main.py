@@ -54,6 +54,49 @@ from app.mitra_system_health import get_system_health_snapshot
 from app.core.monitoring import init_monitoring, init_prometheus_metrics
 
 # -------------------------------------------------
+# Companion / Runtime / Extended routers (from praj33)
+# -------------------------------------------------
+try:
+    from app.api.companion_api import router as companion_router
+except ImportError:
+    companion_router = None
+
+try:
+    from app.api.workflow_api import router as workflow_router
+except ImportError:
+    workflow_router = None
+
+try:
+    from app.api.notifications_api import router as notifications_router
+except ImportError:
+    notifications_router = None
+
+try:
+    from app.api.presence_api import router as presence_router
+except ImportError:
+    presence_router = None
+
+try:
+    from app.routers.whatsapp_inbound import router as whatsapp_inbound_router
+except ImportError:
+    whatsapp_inbound_router = None
+
+try:
+    from app.routers.email_inbound import router as email_inbound_router
+except ImportError:
+    email_inbound_router = None
+
+try:
+    from app.routers.telephony_inbound import router as telephony_inbound_router
+except ImportError:
+    telephony_inbound_router = None
+
+try:
+    from app.routers.pages import router as pages_router
+except ImportError:
+    pages_router = None
+
+# -------------------------------------------------
 # Logging
 # -------------------------------------------------
 setup_logging()
@@ -270,6 +313,24 @@ app.include_router(metrics_router)
 app.include_router(ecosystem_router)
 app.include_router(tantra_router)
 
+# Companion / Runtime routers
+if companion_router:
+    app.include_router(companion_router)
+if workflow_router:
+    app.include_router(workflow_router)
+if notifications_router:
+    app.include_router(notifications_router)
+if presence_router:
+    app.include_router(presence_router)
+if whatsapp_inbound_router:
+    app.include_router(whatsapp_inbound_router)
+if email_inbound_router:
+    app.include_router(email_inbound_router)
+if telephony_inbound_router:
+    app.include_router(telephony_inbound_router)
+if pages_router:
+    app.include_router(pages_router)
+
 # -------------------------------------------------
 # Direct LLM Test Endpoint (bypasses broken routers package)
 # -------------------------------------------------
@@ -292,7 +353,7 @@ async def call_external_llm(request: _LLMRequest):
 @app.get("/")
 async def root():
     return {
-        "message": "AI Assistant Backend API v3.0.0",
+        "message": "MITRA AI Command Center API v3.0.0",
         "status": "running",
         "endpoints": {
             "health": "/health",
@@ -301,7 +362,14 @@ async def root():
             "auth_login": "/api/auth/login",
             "auth_me": "/api/auth/me",
             "assistant": "/api/assistant",
+            "assistant_stream": "/api/assistant/stream",
             "mitra_evaluate": "/api/mitra/evaluate",
+            "companion_capabilities": "/api/companion/capabilities",
+            "companion_process": "/api/companion/process",
+            "workflow_create": "/api/workflow/create",
+            "notifications": "/api/notifications",
+            "presence": "/api/presence",
+            "tantra_status": "/api/tantra/status",
             "replay": "/api/replay/{trace_id}",
             "replay_stages": "/api/replay/{trace_id}/stages",
             "replay_compare": "/api/replay/compare",
@@ -315,8 +383,23 @@ async def root():
             "ecosystem_health": "/api/ecosystem/health",
             "ecosystem_query": "/api/ecosystem/query",
             "ecosystem_execute": "/api/ecosystem/execute",
+            "runtime_status": "/api/runtime/status",
+            "runtime_capabilities": "/api/runtime/capabilities",
+            "runtime_health": "/api/runtime/health",
+            "runtime_sessions": "/api/runtime/sessions",
         },
         "version": "3.0.0",
+        "modules": {
+            "core": "active",
+            "tantra": "active",
+            "companion": "active" if companion_router else "unavailable",
+            "workflow": "active" if workflow_router else "unavailable",
+            "notifications": "active" if notifications_router else "unavailable",
+            "presence": "active" if presence_router else "unavailable",
+            "whatsapp_inbound": "active" if whatsapp_inbound_router else "unavailable",
+            "email_inbound": "active" if email_inbound_router else "unavailable",
+            "telephony_inbound": "active" if telephony_inbound_router else "unavailable",
+        },
         "timestamp": datetime.utcnow().isoformat() + "Z",
     }
 

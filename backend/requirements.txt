@@ -16,6 +16,9 @@ python-dateutil==2.8.2
 langdetect==1.0.9
 SpeechRecognition==3.10.4
 pydub==0.25.1
+gTTS>=2.3.0
+jsonschema>=4.17.0
+sentry-sdk[fastapi]>=1.14.0
 # Enterprise runtime dependencies
 opentelemetry-api==1.27.0
 opentelemetry-sdk==1.27.0

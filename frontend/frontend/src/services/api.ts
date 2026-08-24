@@ -1,5 +1,48 @@
 import { AssistantRequest, AssistantResponse, Task } from '../types';
 
+interface CompanionGreetingResponse {
+  greeting: string;
+  user_id: string;
+}
+
+interface CompanionMemoryResponse {
+  user_id: string;
+  facts: Record<string, unknown>;
+  recent_summaries: unknown[];
+}
+
+interface CompanionSessionResponse {
+  session_id: string;
+  user_id: string;
+  platform: string;
+  device: string;
+  started_at: string;
+  last_active: string;
+  turn_count: number;
+  capabilities_used: string[];
+}
+
+interface CompanionCapabilitiesResponse {
+  capabilities: Array<{
+    name: string;
+    description: string;
+    intents: string[];
+  }>;
+}
+
+interface PresenceResponse {
+  user_id: string;
+  status: string;
+  product_id: string | null;
+  last_seen: string | null;
+}
+
+interface HeartbeatResponse {
+  status: string;
+  user_id: string;
+  presence: string;
+}
+
 const getBaseUrl = () => {
   const url = process.env.REACT_APP_API_URL || 'http://localhost:8000';
   if (url.startsWith('http')) return url;
@@ -9,6 +52,10 @@ const getBaseUrl = () => {
 const API_BASE_URL = getBaseUrl();
 const API_KEY = process.env.REACT_APP_API_KEY || '';
 const getToken = (): string | null => localStorage.getItem('authToken');
+
+// Module-level session ID — set once after getSession resolves, reused for
+// every subsequent sendMessage call so the backend maintains conversation state.
+let _sessionId: string | null = null;
 
 class ApiService {
   private getHeaders(): HeadersInit {
@@ -39,50 +86,33 @@ class ApiService {
     }
   }
 
+  /** Store the session ID returned by getSession so it is reused across all chat turns. */
+  setSessionId(id: string): void {
+    _sessionId = id;
+  }
+
+  getStoredSessionId(): string | null {
+    return _sessionId;
+  }
+
   /**
-   * Send a message to the assistant API endpoint.
-   * 
-   * Request format (v3.0.0 contract):
-   * - version: "3.0.0"
-   * - input: { message: string, summarized_payload: null }
-   * - context: { platform: string, device: string, session_id: null, voice_input: boolean }
-   * 
-   * Response format (v3.0.0 contract):
-   * - version: "3.0.0"
-   * - status: "success" | "error"
-   * - result: { type, response, task?, enforcement?, safety? }
-   * - processed_at: string
+   * Send a message to the production companion chat endpoint.
+   * Preserves the existing frontend-facing interface while mapping the
+   * production response into the existing AssistantResponse contract.
    */
   async sendMessage(request: AssistantRequest): Promise<AssistantResponse> {
     try {
-      // Build request payload for AI-BEING-FINAL backend (V3.0.0 Contract)
-      // The backend expects a unified single endpoint /api/assistant
-      const preferredLanguage = localStorage.getItem('mitra_language') || 'en';
-
-      const requestPayload = {
-        version: "3.0.0",
-        input: {
-          message: request.message,
-          summarized_payload: null
-        },
-        context: {
-          platform: request.platform || 'web',
-          device: request.device_context || 'desktop',
-          voice_input: request.voice_input || false,
-          session_id: 'default',
-          preferred_language: preferredLanguage
-        }
-      };
-
-      // Add timeout to prevent hanging
       const controller = new AbortController();
       const timeoutId = setTimeout(() => controller.abort(), 90000); // 90 second timeout
 
-      // Call the correct endpoint: /api/assistant
-      const response = await fetch(`${API_BASE_URL}/api/assistant`, {
+      // Include session_id when available so the backend maintains conversation continuity.
+      const body: Record<string, unknown> = { message: request.message };
+      if (_sessionId) body.session_id = _sessionId;
+
+      const response = await fetch(`${API_BASE_URL}/api/companion/chat`, {
         method: 'POST',
         headers: this.getHeaders(),
-        body: JSON.stringify(requestPayload),
+        body: JSON.stringify(body),
         signal: controller.signal,
       });
 
@@ -98,64 +128,41 @@ class ApiService {
       }
 
       const json = await response.json();
-
-      if (json.status === 'error') {
-        throw new Error(json.error?.message || json.error || 'Backend returned an error');
-      }
-
-      // MAPPING: Convert Backend V3 Response to Frontend AssistantResponse
-      // Backend returns: { version, status, result: { type, response, task, enforcement, safety }, processed_at }
-
-      const result = json.result;
-      const isWorkflow = result.type === 'workflow';
-      const mitra = result.mitra || {};
-      const enforcement = result.enforcement || mitra.enforcement_output || {};
-      const policyDecision = mitra.policy_decision || {};
-      const safety = result.safety || {
-        decision: policyDecision.decision === 'BLOCK'
-          ? 'hard_deny'
-          : policyDecision.decision === 'REWRITE'
-            ? 'soft_rewrite'
-            : 'allow',
-        level: policyDecision.decision === 'BLOCK'
-          ? 'blocked'
-          : policyDecision.decision === 'REWRITE'
-            ? 'soft_risk'
-            : 'safe',
-        confidence: typeof policyDecision.confidence === 'number' ? policyDecision.confidence : 1.0,
-        score: typeof policyDecision.confidence === 'number' ? policyDecision.confidence : 1.0,
-      };
+      const responseText = typeof json.message === 'string'
+        ? json.message
+        : typeof json.response === 'string'
+          ? json.response
+          : 'Message processed successfully.';
 
       return {
         status: 'success',
         data: {
           intent: {
-            intent: isWorkflow ? 'task_creation' : 'general',
+            intent: 'general',
             confidence: 1.0,
           },
           enforcement: {
-            decision: (enforcement.decision || 'ALLOW').toLowerCase(),
-            reason: enforcement.reason || enforcement.reason_code || null,
-            trace_id: enforcement.trace_id || mitra.trace_id || json.trace_id || undefined,
-          } as any,
+            decision: 'allow',
+            reason: undefined,
+            trace_id: json.trace_id || undefined,
+          },
           safety: {
-            score: safety.score || safety.confidence || 1.0,
-            confidence: safety.confidence || safety.score || 1.0,
-            level: safety.level || 'safe',
-            flags: safety.level ? [safety.level] : []
-          } as any,
-          task: result.task,
+            score: 1.0,
+            confidence: 1.0,
+            level: 'safe',
+          },
+          task: undefined,
           decision: {
             final_decision: 'response_generated',
-            response: result.response,
-            task_created: isWorkflow ? result.task : undefined,
+            response: responseText,
+            task_created: undefined,
           },
           execution: {
             status: 'completed',
             stage: 'response_generation',
             error: undefined,
           },
-          processed_at: json.processed_at || new Date().toISOString(),
+          processed_at: new Date().toISOString(),
         },
       };
     } catch (error) {
@@ -173,93 +180,116 @@ class ApiService {
     }
   }
 
-  async getTasks(): Promise<Task[]> {
-    try {
-      const response = await fetch(`${API_BASE_URL}/api/tasks`, {
-        method: 'GET',
-        headers: this.getHeaders(),
-      });
-      if (!response.ok) return [];
-      const data = await response.json();
-      return Array.isArray(data) ? data : data.tasks || [];
-    } catch {
-      return [];
+  async getGreeting(userId: string): Promise<CompanionGreetingResponse> {
+    const response = await fetch(`${API_BASE_URL}/api/companion/greeting/${encodeURIComponent(userId)}`, {
+      method: 'GET',
+      headers: this.getHeaders(),
+    });
+
+    if (!response.ok) {
+      throw new Error(`Failed to get greeting: ${response.statusText}`);
     }
+
+    return await response.json() as CompanionGreetingResponse;
   }
 
-  async updateTaskStatus(taskId: string, status: string): Promise<Task> {
-    const response = await fetch(`${API_BASE_URL}/api/tasks/${taskId}`, {
-      method: 'PUT',
+  async getMemory(userId: string): Promise<CompanionMemoryResponse> {
+    const response = await fetch(`${API_BASE_URL}/api/companion/memory/${encodeURIComponent(userId)}`, {
+      method: 'GET',
       headers: this.getHeaders(),
-      body: JSON.stringify({ status }),
     });
-    if (!response.ok) throw new Error(`Failed to update task: ${response.statusText}`);
-    return await response.json();
+
+    if (!response.ok) {
+      throw new Error(`Failed to get memory: ${response.statusText}`);
+    }
+
+    return await response.json() as CompanionMemoryResponse;
+  }
+
+  async getSession(userId: string): Promise<CompanionSessionResponse> {
+    const response = await fetch(`${API_BASE_URL}/api/companion/session/${encodeURIComponent(userId)}`, {
+      method: 'GET',
+      headers: this.getHeaders(),
+    });
+
+    if (!response.ok) {
+      throw new Error(`Failed to get session: ${response.statusText}`);
+    }
+
+    return await response.json() as CompanionSessionResponse;
+  }
+
+  async getCapabilities(): Promise<CompanionCapabilitiesResponse> {
+    const response = await fetch(`${API_BASE_URL}/api/companion/capabilities`, {
+      method: 'GET',
+      headers: this.getHeaders(),
+    });
+
+    if (!response.ok) {
+      throw new Error(`Failed to get capabilities: ${response.statusText}`);
+    }
+
+    return await response.json() as CompanionCapabilitiesResponse;
+  }
+
+  async getPresence(userId: string): Promise<PresenceResponse> {
+    const response = await fetch(`${API_BASE_URL}/api/v1/presence/${encodeURIComponent(userId)}`, {
+      method: 'GET',
+      headers: this.getHeaders(),
+    });
+
+    if (!response.ok) {
+      throw new Error(`Failed to get presence: ${response.statusText}`);
+    }
+
+    return await response.json() as PresenceResponse;
+  }
+
+  async sendHeartbeat(userId: string): Promise<HeartbeatResponse> {
+    const response = await fetch(`${API_BASE_URL}/api/v1/presence/heartbeat`, {
+      method: 'POST',
+      headers: this.getHeaders(),
+      body: JSON.stringify({ user_id: userId }),
+    });
+
+    if (!response.ok) {
+      throw new Error(`Failed to send heartbeat: ${response.statusText}`);
+    }
+
+    return await response.json() as HeartbeatResponse;
+  }
+
+  async getTasks(): Promise<Task[]> {
+    // STUB: Backend v3.0.0 does not support independent task fetching
+    console.warn('getTasks: Not supported by current backend version');
+    return [];
+  }
+
+  async updateTaskStatus(taskId: number, status: string): Promise<Task> {
+    // STUB: Backend v3.0.0 does not support task updates
+    throw new Error('Task updates not supported by this backend');
   }
 
 
 
   /**
-   * Web Search API - delegates to backend for search
+   * Web Search API
+   * Search the web with a query
    */
   async search(request: import('../types').SearchRequest): Promise<import('../types').SearchResponse> {
-    try {
-      const response = await fetch(`${API_BASE_URL}/api/search`, {
-        method: 'POST',
-        headers: this.getHeaders(),
-        body: JSON.stringify(request),
-      });
-      if (!response.ok) {
-        // Fallback: use assistant to answer search queries
-        const assistantResponse = await this.sendMessage({
-          message: `Search for: ${request.query}`,
-          platform: 'web',
-        });
-        return {
-          query: request.query,
-          results: [{
-            title: 'Search Result',
-            url: '',
-            snippet: assistantResponse.data?.decision?.response || 'No results found',
-            relevance: 1.0,
-          }],
-        };
-      }
-      return await response.json();
-    } catch {
-      return { query: request.query, results: [] };
-    }
+    // STUB: Search not supported
+    console.warn('Search API not supported by this backend');
+    return { query: request.query, results: [] };
   }
 
   /**
-   * Web Research API - delegates to backend for deep research
+   * Web Research API
+   * Perform deep research on a topic
    */
   async research(request: import('../types').ResearchRequest): Promise<import('../types').ResearchResponse> {
-    try {
-      const response = await fetch(`${API_BASE_URL}/api/research`, {
-        method: 'POST',
-        headers: this.getHeaders(),
-        body: JSON.stringify(request),
-      });
-      if (!response.ok) {
-        // Fallback: use assistant for research queries
-        const assistantResponse = await this.sendMessage({
-          message: `Research this topic thoroughly: ${request.query}`,
-          platform: 'web',
-        });
-        return {
-          topic: request.query,
-          summary: assistantResponse.data?.decision?.response || 'Research not available',
-          key_findings: [],
-          sources: [],
-          depth: 1,
-        };
-      }
-      return await response.json();
-    } catch (error) {
-      if (error instanceof Error) throw error;
-      throw new Error('Research failed');
-    }
+    // STUB: Research not supported
+    console.warn('Research API not supported by this backend');
+    throw new Error('Deep Research is not available in this environment.');
   }
 
 
@@ -315,78 +345,59 @@ class ApiService {
 
   /**
    * System Information API
+   * Get system information
    */
   async getSystemInfo(): Promise<import('../types').SystemInfo> {
     try {
-      const response = await fetch(`${API_BASE_URL}/health/system`, {
+      const response = await fetch(`${API_BASE_URL}/api/system/info`, {
         method: 'GET',
         headers: this.getHeaders(),
       });
-      if (!response.ok) throw new Error(`Failed to get system info: ${response.statusText}`);
-      const data = await response.json();
-      return {
-        platform: data.platform || 'unknown',
-        python_version: data.python_version || 'unknown',
-        working_directory: data.working_directory || 'unknown',
-        available_space: data.available_space || 'unknown',
-        memory_usage: data.memory_usage || { total: 0, available: 0, percent: 0, used: 0 },
-      };
+
+      if (!response.ok) {
+        throw new Error(`Failed to get system info: ${response.statusText}`);
+      }
+
+      return await response.json();
     } catch (error) {
-      if (error instanceof Error) throw error;
+      if (error instanceof Error) {
+        throw error;
+      }
       throw new Error('Failed to get system info');
     }
   }
 
   /**
    * System Statistics API
+   * Get system statistics
    */
   async getSystemStats(): Promise<import('../types').SystemStats> {
     try {
-      const response = await fetch(`${API_BASE_URL}/api/metrics/system`, {
+      const response = await fetch(`${API_BASE_URL}/api/system/stats`, {
         method: 'GET',
         headers: this.getHeaders(),
       });
-      if (!response.ok) throw new Error(`Failed to get system stats: ${response.statusText}`);
-      const data = await response.json();
-      return {
-        memory_stats: data.memory_stats || { total_entries: 0, users: 0 },
-        task_queue_status: data.task_queue_status || { pending: 0, running: 0, completed: 0 },
-        safety_stats: data.safety_stats || { total_evaluations: 0, blocked_count: 0 },
-        policy_violations: data.policy_violations || { total: 0 },
-        performance_metrics: data.performance_metrics || 0,
-      };
+
+      if (!response.ok) {
+        throw new Error(`Failed to get system stats: ${response.statusText}`);
+      }
+
+      return await response.json();
     } catch (error) {
-      if (error instanceof Error) throw error;
+      if (error instanceof Error) {
+        throw error;
+      }
       throw new Error('Failed to get system stats');
     }
   }
 
   /**
    * Performance Insights API
+   * Get performance metrics and recommendations
    */
   async getPerformanceInsights(): Promise<import('../types').PerformanceInsights> {
-    try {
-      const response = await fetch(`${API_BASE_URL}/api/metrics`, {
-        method: 'GET',
-        headers: this.getHeaders(),
-      });
-      if (!response.ok) throw new Error(`Failed to get performance insights: ${response.statusText}`);
-      const data = await response.json();
-      return {
-        performance_metrics: data.performance_metrics || {
-          total_interactions: 0,
-          successful_interactions: 0,
-          average_response_time: 0,
-          average_satisfaction: 0,
-          improvement_areas: [],
-        },
-        patterns: data.patterns || [],
-        recommendations: data.recommendations || [],
-      };
-    } catch (error) {
-      if (error instanceof Error) throw error;
-      throw new Error('Failed to get performance insights');
-    }
+    // STUB: Analytics not supported
+    throw new Error('Analytics not supported');
   }
 
   /**
@@ -410,84 +421,6 @@ class ApiService {
     } catch (error) {
       console.error('TTS API error:', error);
       throw error;
-    }
-  }
-
-  /**
-   * Stream a message via SSE for real-time responses
-   */
-  async sendMessageStream(
-    request: AssistantRequest,
-    onChunk: (chunk: any) => void,
-    onDone: () => void,
-    onError: (error: Error) => void,
-  ): Promise<void> {
-    try {
-      const preferredLanguage = localStorage.getItem('mitra_language') || 'en';
-      const requestPayload = {
-        version: "3.0.0",
-        input: {
-          message: request.message,
-          summarized_payload: null
-        },
-        context: {
-          platform: request.platform || 'web',
-          device: request.device_context || 'desktop',
-          voice_input: request.voice_input || false,
-          session_id: 'default',
-          preferred_language: preferredLanguage
-        }
-      };
-
-      const response = await fetch(`${API_BASE_URL}/api/assistant/stream`, {
-        method: 'POST',
-        headers: this.getHeaders(),
-        body: JSON.stringify(requestPayload),
-      });
-
-      if (!response.ok) {
-        throw new Error(`Stream request failed: ${response.status}`);
-      }
-
-      const reader = response.body?.getReader();
-      if (!reader) throw new Error('No response body');
-
-      const decoder = new TextDecoder();
-      let buffer = '';
-
-      while (true) {
-        const { done, value } = await reader.read();
-        if (done) break;
-
-        buffer += decoder.decode(value, { stream: true });
-        const lines = buffer.split('\n');
-        buffer = lines.pop() || '';
-
-        for (const line of lines) {
-          if (line.startsWith('event: ')) {
-            const eventType = line.slice(7).trim();
-            if (eventType === 'done') {
-              onDone();
-              return;
-            }
-            if (eventType === 'error') {
-              onError(new Error('Stream error event'));
-              return;
-            }
-          }
-          if (line.startsWith('data: ')) {
-            try {
-              const data = JSON.parse(line.slice(6));
-              onChunk(data);
-            } catch {
-              // Ignore non-JSON lines
-            }
-          }
-        }
-      }
-      onDone();
-    } catch (error) {
-      onError(error instanceof Error ? error : new Error('Stream failed'));
     }
   }
 

@@ -5,9 +5,9 @@ Implements threat detection patterns from Document 14 (Threat Model)
 
 from typing import Dict, List, Any
 from datetime import datetime
-from utils.logger import get_logger
+import logging
 
-logger = get_logger(__name__)
+logger = logging.getLogger(__name__)
 
 class BucketThreatModel:
     """Centralized threat detection and validation"""
