@@ -249,8 +249,8 @@ async def security_middleware(request: Request, call_next):
         response = await call_next(request)
         return response
 
-    # Auth endpoints manage their own bearer-token validation
-    if request.url.path.startswith("/api/auth"):
+    # Auth & Integration endpoints manage their own validation
+    if request.url.path.startswith("/api/auth") or request.url.path.startswith("/api/integrations"):
         response = await call_next(request)
         return response
 
