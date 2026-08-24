@@ -270,7 +270,7 @@ const TopBar: React.FC<Props> = ({ onSearch }) => {
         </button>
       </div>
 
-      {/* Integrations Vault Button */}
+      {/* Plug-ins Vault Button */}
       <button
         id="topbar-integrations-button"
         onClick={() => {
@@ -278,10 +278,10 @@ const TopBar: React.FC<Props> = ({ onSearch }) => {
           if (fn) fn();
         }}
         className="flex items-center gap-1.5 px-2 py-1 rounded-lg bg-blue-500/10 border border-blue-500/30 hover:bg-blue-500/20 text-blue-400 text-xs transition-all cursor-pointer"
-        title="Personal Email & WhatsApp Integrations"
+        title="Personal Gmail & WhatsApp Plug-ins"
       >
         <span className="text-[11px]">🔌</span>
-        <span className="hidden sm:inline text-2xs font-semibold">Integrations</span>
+        <span className="hidden sm:inline text-2xs font-semibold">Plug-ins</span>
       </button>
 
       {/* Account / Login Trigger */}

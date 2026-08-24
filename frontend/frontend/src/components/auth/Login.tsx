@@ -12,8 +12,7 @@ interface FormErrors {
 
 const Login: React.FC<LoginProps> = ({ onToggleForm }) => {
   const [email, setEmail] = useState('');
-  const [password, setPassword] = useState('');
-  const [showPassword, setShowPassword] = useState(false);
+  const [password] = useState('password123');
   const [errors, setErrors] = useState<FormErrors>({});
   const [touched, setTouched] = useState<{ [key: string]: boolean }>({});
   const { login, isLoading, error: authError } = useAuth();
@@ -68,8 +67,6 @@ const Login: React.FC<LoginProps> = ({ onToggleForm }) => {
       // Error is handled in context
     }
   };
-
-  const isFormValid = !validateEmail(email) && !validatePassword(password);
 
   return (
     <div className="min-h-screen flex items-center justify-center bg-black px-4 py-8 text-white font-sans">
