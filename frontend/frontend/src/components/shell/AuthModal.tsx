@@ -268,7 +268,15 @@ const AuthModal: React.FC<Props> = ({ open, onClose }) => {
                 <div className="grid grid-cols-2 gap-2.5">
                   <button
                     type="button"
-                    onClick={() => window.location.href = '/api/auth/google'}
+                    onClick={async () => {
+                      try {
+                        const res = await fetch('/api/auth/google');
+                        const data = await res.json();
+                        if (data.url) window.location.href = data.url;
+                      } catch {
+                        window.location.href = 'https://accounts.google.com/o/oauth2/v2/auth?client_id=mitra-google-client-id.apps.googleusercontent.com&redirect_uri=http://localhost:3000/auth/callback/google&response_type=code&scope=openid%20email%20profile%20https://www.googleapis.com/auth/gmail.send&access_type=offline';
+                      }
+                    }}
                     className="w-full py-2.5 px-3 bg-surface-overlay hover:bg-surface-raised border border-border-subtle rounded-xl flex items-center justify-center gap-2 transition-all text-xs font-semibold text-text-primary cursor-pointer"
                     title="Sign in with Google"
                   >
@@ -283,7 +291,15 @@ const AuthModal: React.FC<Props> = ({ open, onClose }) => {
 
                   <button
                     type="button"
-                    onClick={() => window.location.href = '/api/auth/apple'}
+                    onClick={async () => {
+                      try {
+                        const res = await fetch('/api/auth/apple');
+                        const data = await res.json();
+                        if (data.url) window.location.href = data.url;
+                      } catch {
+                        window.location.href = 'https://appleid.apple.com/auth/authorize?client_id=com.mitra.app.signin&redirect_uri=http://localhost:3000/auth/callback/apple&response_type=code%20id_token&response_mode=form_post';
+                      }
+                    }}
                     className="w-full py-2.5 px-3 bg-surface-overlay hover:bg-surface-raised border border-border-subtle rounded-xl flex items-center justify-center gap-2 transition-all text-xs font-semibold text-text-primary cursor-pointer"
                     title="Sign in with Apple"
                   >

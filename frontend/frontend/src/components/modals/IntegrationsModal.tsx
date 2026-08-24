@@ -22,7 +22,7 @@ export const IntegrationsModal: React.FC<IntegrationsModalProps> = ({ isOpen, on
   const [statusMessage, setStatusMessage] = useState<string | null>(null);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
 
-  const API_BASE = (process.env.REACT_APP_API_BASE_URL || 'http://localhost:8000').replace(/\/$/, '');
+  const API_BASE = process.env.REACT_APP_API_BASE_URL || '';
 
   // Load current integrations on open
   useEffect(() => {

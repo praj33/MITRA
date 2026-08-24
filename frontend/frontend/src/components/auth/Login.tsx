@@ -143,8 +143,16 @@ const Login: React.FC<LoginProps> = ({ onToggleForm }) => {
             {/* Google OAuth Button */}
             <button
               type="button"
-              onClick={() => window.location.href = '/api/auth/google'}
-              className="w-full py-3 px-4 bg-[#1E1E1E] hover:bg-[#282828] border border-white/10 rounded-xl flex items-center justify-center transition-colors group"
+              onClick={async () => {
+                try {
+                  const res = await fetch('/api/auth/google');
+                  const data = await res.json();
+                  if (data.url) window.location.href = data.url;
+                } catch {
+                  window.location.href = 'https://accounts.google.com/o/oauth2/v2/auth?client_id=mitra-google-client-id.apps.googleusercontent.com&redirect_uri=http://localhost:3000/auth/callback/google&response_type=code&scope=openid%20email%20profile%20https://www.googleapis.com/auth/gmail.send&access_type=offline';
+                }
+              }}
+              className="w-full py-3 px-4 bg-[#1E1E1E] hover:bg-[#282828] border border-white/10 rounded-xl flex items-center justify-center transition-colors group cursor-pointer"
               title="Sign in with Google"
             >
               <svg className="w-5 h-5" viewBox="0 0 24 24">
@@ -158,8 +166,16 @@ const Login: React.FC<LoginProps> = ({ onToggleForm }) => {
             {/* Apple OAuth Button */}
             <button
               type="button"
-              onClick={() => window.location.href = '/api/auth/apple'}
-              className="w-full py-3 px-4 bg-[#1E1E1E] hover:bg-[#282828] border border-white/10 rounded-xl flex items-center justify-center transition-colors"
+              onClick={async () => {
+                try {
+                  const res = await fetch('/api/auth/apple');
+                  const data = await res.json();
+                  if (data.url) window.location.href = data.url;
+                } catch {
+                  window.location.href = 'https://appleid.apple.com/auth/authorize?client_id=com.mitra.app.signin&redirect_uri=http://localhost:3000/auth/callback/apple&response_type=code%20id_token&response_mode=form_post';
+                }
+              }}
+              className="w-full py-3 px-4 bg-[#1E1E1E] hover:bg-[#282828] border border-white/10 rounded-xl flex items-center justify-center transition-colors cursor-pointer"
               title="Sign in with Apple"
             >
               <svg className="w-5 h-5 fill-current text-white" viewBox="0 0 170 170">
