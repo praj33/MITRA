@@ -21,6 +21,7 @@ import RemindersPage from './components/pages/RemindersPage';
 import WorkflowsPage from './components/pages/WorkflowsPage';
 import KnowledgePage from './components/pages/KnowledgePage';
 import AnalyticsPage from './components/pages/AnalyticsPage';
+import Login from './components/auth/Login';
 import { useCompanionStore } from './store/companion.store';
 import { CompanionService } from './services/companion.service';
 import { cn } from './lib/utils';
@@ -125,7 +126,9 @@ const App: React.FC = () => {
     addMessage, addNotification, addContextItem,
   } = useCompanionStore();
 
-  const [activeSection, setActiveSection] = useState('chat');
+  const [activeSection, setActiveSection] = useState(() => {
+    return (window.location.pathname === '/login' || window.location.hash === '#login') ? 'login' : 'chat';
+  });
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [focusOpen, setFocusOpen] = useState(false);
   const [cmdOpen, setCmdOpen] = useState(false);
@@ -300,6 +303,7 @@ const App: React.FC = () => {
         {activeSection === 'reminders' && <RemindersPage onChatNavigate={handleChatNavigate} />}
         {activeSection === 'workflows' && <WorkflowsPage onChatNavigate={handleChatNavigate} />}
         {activeSection === 'knowledge' && <KnowledgePage onChatNavigate={handleChatNavigate} />}
+        {activeSection === 'login' && <Login onToggleForm={() => setActiveSection('chat')} />}
       </div>
 
       {/* Bottom Chat Bar — grid-area 'input' */}
