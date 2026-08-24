@@ -12,6 +12,7 @@ import { CommandPaletteModal } from './components/modals/CommandPaletteModal';
 import { MemoryDashboardModal } from './components/modals/MemoryDashboardModal';
 import { VoiceTalkModal } from './components/modals/VoiceTalkModal';
 import { MemoryMindMapModal } from './components/modals/MemoryMindMapModal';
+import { IntegrationsModal } from './components/modals/IntegrationsModal';
 import InstallPwaBanner from './components/shell/InstallPwaBanner';
 import Toast, { showToast } from './components/shell/Toast';
 import CalendarPage from './components/pages/CalendarPage';
@@ -131,9 +132,11 @@ const App: React.FC = () => {
   const [memoryOpen, setMemoryOpen] = useState(false);
   const [voiceTalkOpen, setVoiceTalkOpen] = useState(false);
   const [mindMapOpen, setMindMapOpen] = useState(false);
+  const [integrationsOpen, setIntegrationsOpen] = useState(false);
 
   useEffect(() => {
     (window as any).__MITRA_SETTINGS__ = () => setSettingsOpen(true);
+    (window as any).__MITRA_INTEGRATIONS__ = () => setIntegrationsOpen(true);
   }, []);
 
   // Global Ctrl+K / Cmd+K listener
@@ -330,6 +333,9 @@ const App: React.FC = () => {
 
       {/* Auth Modal */}
       <AuthModal open={authModalOpen} onClose={() => setAuthModalOpen(false)} />
+
+      {/* Integrations Modal */}
+      <IntegrationsModal isOpen={integrationsOpen} onClose={() => setIntegrationsOpen(false)} />
 
       {/* Native PWA Install Banner */}
       <InstallPwaBanner />
