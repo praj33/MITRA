@@ -12,7 +12,11 @@ import subprocess
 import tempfile
 import os
 
-from gtts import gTTS
+try:
+    from gtts import gTTS
+    GTTS_AVAILABLE = True
+except ImportError:
+    GTTS_AVAILABLE = False
 
 from app.core.assistant_orchestrator import handle_assistant_request
 from app.voice.stt_engine import get_stt_service
