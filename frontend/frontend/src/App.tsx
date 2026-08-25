@@ -14,6 +14,7 @@ import { VoiceTalkModal } from './components/modals/VoiceTalkModal';
 import { MemoryMindMapModal } from './components/modals/MemoryMindMapModal';
 import InstallPwaBanner from './components/shell/InstallPwaBanner';
 import Toast, { showToast } from './components/shell/Toast';
+import { FloatingOrb } from './components/shell/FloatingOrb';
 import CalendarPage from './components/pages/CalendarPage';
 import TasksPage from './components/pages/TasksPage';
 import RemindersPage from './components/pages/RemindersPage';
@@ -336,6 +337,9 @@ const App: React.FC = () => {
 
       {/* Global Toast Notifications */}
       <Toast />
+
+      {/* Floating Orb Companion */}
+      <FloatingOrb />
     </div>
   );
 };

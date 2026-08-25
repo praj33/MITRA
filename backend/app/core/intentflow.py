@@ -22,6 +22,13 @@ class IntentFlow:
             'instagram': ['instagram', 'insta', 'send dm'],
             'ems': ['ems', 'ems task'],
             'device': ['device', 'desktop', 'mobile', 'tablet', 'xr'],
+            'news': [
+                'news', 'samachar', 'headlines', 'articles', 'press', 'media',
+                'latest update', 'breaking news', 'top stories', 'current events',
+                'khabar', 'khabre', 'batao samachar', 'news batao', 'aaj ki khabar',
+                'what happened', 'what is happening', 'news from', 'article from',
+                'http://', 'https://'
+            ],
             'general': []  # fallback
         }
 
@@ -44,7 +51,10 @@ class IntentFlow:
         has_personal_context = any(k in text_lower for k in ("my ", "on my", "for me", "i have", "due"))
 
         if any(text_lower.startswith(p) for p in info_prefixes) and not has_personal_context:
-            return 'general'
+            # Bypass general fallback if the query contains news-related terms (e.g. "what is happening")
+            news_keywords = self.intent_patterns.get('news', [])
+            if not any(k in text_lower for k in news_keywords):
+                return 'general'
 
         for intent, keywords in self.intent_patterns.items():
             if intent == 'general':

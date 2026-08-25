@@ -10,25 +10,17 @@
   "enforcement_gated": true,
   "result": {
     "status": "success",
-    "event_id": "sim_evt_20260309073407",
-    "action": "create_event",
+    "action_type": "calendar",
+    "summary": "Calendar event created: 'Team Meeting' for 2026-08-21 (No time set).",
     "event": {
-      "summary": "Team Meeting",
-      "description": "",
-      "location": "",
-      "start": {
-        "dateTime": "2026-03-08T15:00:00",
-        "timeZone": "Asia/Kolkata"
-      },
-      "end": {
-        "dateTime": "2026-03-08T16:00:00",
-        "timeZone": "Asia/Kolkata"
-      }
+      "id": "ev_83b28872",
+      "title": "Team Meeting",
+      "start": "2026-08-21",
+      "end": "2026-08-21",
+      "has_time": false
     },
-    "method": "calendar_simulation",
     "trace_id": "test_trace_002",
-    "timestamp": "2026-03-09T07:34:07.082256",
-    "platform": "calendar",
-    "note": "Simulation mode \u2014 set GOOGLE_CALENDAR_ACCESS_TOKEN for live execution"
+    "timestamp": "2026-08-21T06:33:29.890033",
+    "service": "execution_service"
   }
 }

@@ -31,19 +31,55 @@ export class DockController {
   }
 
   setMode(mode, save = true) {
-    this.currentMode = mode;
+    const validMode = (mode === 'left' || mode === 'right' || mode === 'floating') ? mode : 'floating';
+    this.currentMode = validMode;
     this.shell.classList.remove('docked-left', 'docked-right', 'floating');
     
-    if (mode === 'left') {
+    const clearPositionStyles = () => {
+      this.shell.style.removeProperty('inset');
+      this.shell.style.top = '';
+      this.shell.style.left = '';
+      this.shell.style.bottom = '';
+      this.shell.style.right = '';
+    };
+
+    if (validMode === 'left') {
       this.shell.classList.add('docked-left');
-    } else if (mode === 'right') {
+      clearPositionStyles();
+    } else if (validMode === 'right') {
       this.shell.classList.add('docked-right');
+      clearPositionStyles();
     } else {
       this.shell.classList.add('floating');
+      clearPositionStyles();
+      const lastPos = contextStore.getPosition();
+      if (lastPos && lastPos.left != null && lastPos.top != null) {
+        const parsedLeft = parseFloat(lastPos.left);
+        const parsedTop = parseFloat(lastPos.top);
+        if (!isNaN(parsedLeft) && !isNaN(parsedTop)) {
+          const safeLeft = Math.min(Math.max(0, parsedLeft), Math.max(0, window.innerWidth - 80));
+          const safeTop = Math.min(Math.max(0, parsedTop), Math.max(0, window.innerHeight - 80));
+          this.shell.style.left = `${safeLeft}px`;
+          this.shell.style.top = `${safeTop}px`;
+          this.shell.style.bottom = 'auto';
+          this.shell.style.right = 'auto';
+        } else {
+          this.shell.style.top = '24px';
+          this.shell.style.left = 'auto';
+          this.shell.style.bottom = 'auto';
+          this.shell.style.right = '24px';
+        }
+      } else {
+        this.shell.style.top = '24px';
+        this.shell.style.left = 'auto';
+        this.shell.style.bottom = 'auto';
+        this.shell.style.right = '24px';
+      }
+      this.shell.style.position = 'fixed';
     }
 
     if (save) {
-      contextStore.setDockMode(mode);
+      contextStore.setDockMode(validMode);
     }
   }
 }

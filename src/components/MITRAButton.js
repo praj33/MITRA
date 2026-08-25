@@ -1,11 +1,13 @@
 import { NotificationBadge } from './NotificationBadge.js';
 import { eventBus } from '../services/eventBus.js';
+import { renderAvatarElement } from '../services/avatarHelper.js';
+import { contextStore } from '../services/contextStore.js';
 
 export class MITRAButton {
   constructor(onClickCallback) {
     this.element = document.createElement('div');
     this.element.className = 'mitra-fab';
-    this.element.title = 'Open MITRA Companion';
+    this.element.title = 'Open MITRA Companion (Right-click to change avatar)';
     
     // SVG icon for the button
     this.element.innerHTML = `
@@ -15,10 +17,75 @@ export class MITRAButton {
     this.badge = new NotificationBadge(eventBus);
     this.element.appendChild(this.badge.element);
 
-    this.element.addEventListener('click', () => {
+    let startX = 0;
+    let startY = 0;
+    let hasDragged = false;
+
+    this.element.addEventListener('pointerdown', (e) => {
+      if (e.button !== 0) return;
+      startX = e.clientX;
+      startY = e.clientY;
+      hasDragged = false;
+
+      const onPointerMove = (moveEvent) => {
+        if (Math.abs(moveEvent.clientX - startX) > 5 || Math.abs(moveEvent.clientY - startY) > 5) {
+          hasDragged = true;
+        }
+      };
+
+      const onPointerUp = () => {
+        window.removeEventListener('pointermove', onPointerMove);
+        window.removeEventListener('pointerup', onPointerUp);
+      };
+
+      window.addEventListener('pointermove', onPointerMove);
+      window.addEventListener('pointerup', onPointerUp);
+    });
+
+    this.element.addEventListener('click', (e) => {
+      if (hasDragged) {
+        e.preventDefault();
+        e.stopPropagation();
+        return;
+      }
       eventBus.emit('chat.opened', {});
       if (onClickCallback) onClickCallback();
     });
+
+    // Right-click to change companion avatar
+    this.element.addEventListener('contextmenu', (e) => {
+      e.preventDefault();
+      eventBus.emit('avatar.request_change');
+    });
+
+    // Listen for avatar updates
+    eventBus.on('avatar.changed', (data) => {
+      this.updateAvatar(data.avatar);
+    });
+
+    // Initial avatar rendering
+    const initialAvatar = contextStore.getAvatar();
+    if (initialAvatar) {
+      this.updateAvatar(initialAvatar);
+    }
+  }
+
+  updateAvatar(avatarUrl) {
+    const existing = this.element.querySelector('.mitra-avatar-media');
+    if (existing) {
+      existing.remove();
+    }
+
+    const svg = this.element.querySelector('svg');
+    if (avatarUrl) {
+      if (svg) svg.style.display = 'none';
+      const avatarEl = renderAvatarElement(avatarUrl);
+      if (avatarEl) {
+        this.element.appendChild(avatarEl);
+      }
+    } else {
+      if (svg) svg.style.display = 'block';
+    }
   }
 
   setThinking(isThinking) {

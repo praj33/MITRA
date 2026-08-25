@@ -206,9 +206,87 @@ class CompanionOrchestrator:
                 intent=intent, params=params, trace_id=ctx.trace_id
             )
             if capability_result and capability_result.status == "success":
-                response_text = personality_engine.build_capability_confirm(
-                    capability_result.summary
-                )
+                if capability_result.capability == "samachar":
+                    # Generate a conversational news response using LLM with returned data
+                    cap_data = capability_result.data or {}
+                    scraped_info = cap_data.get("scraped_data", {})
+                    vetting_info = cap_data.get("vetting_results", {})
+                    summary_info = cap_data.get("summary", {})
+                    article_title = scraped_info.get("title") or "News Intelligence Update"
+                    article_author = scraped_info.get("author")
+                    if isinstance(article_author, dict):
+                        article_author = article_author.get("name")
+                    article_author = article_author or "News Desk"
+                    article_summary = summary_info.get("text") or cap_data.get("result") or "No summary."
+                    credibility_rating = vetting_info.get("credibility_rating") or "High"
+                    authenticity_score = vetting_info.get("authenticity_score")
+                    score_str = f"{authenticity_score}/100" if authenticity_score is not None else "95/100"
+
+                    system_prompt = (
+                        "You are Mitra, a real-time AI companion. "
+                        "A news retrieval tool (Samachar) was invoked to answer the user's query.\n"
+                        "Use the following scraped data and summary to formulate a thoughtful, conversational answer "
+                        "summarizing the news for the user. Mention the article title/source and credibility context briefly if relevant.\n\n"
+                        f"[SAMACHAR RETRIEVED DATA]:\n"
+                        f"- Article Title: {article_title}\n"
+                        f"- Author/Source: {article_author}\n"
+                        f"- Credibility Rating: {credibility_rating} (Score: {score_str})\n"
+                        f"- Summary/Content: {article_summary}\n"
+                    )
+                    
+                    # Patterns that indicate LLM synthesis failed and returned a fallback template or raw search output
+                    _TEMPLATE_PATTERNS = (
+                        "Real-time search completed for:",
+                        "Here is what I found for your query:",
+                        "I'm listening and working on fetching",
+                        "MITRA intelligence service is currently unavailable",
+                        "Web Information Intelligence Summary:",
+                    )
+
+                    def _is_template(text: str) -> bool:
+                        return any(p in text for p in _TEMPLATE_PATTERNS)
+
+                    # Clean deterministic fallback formatted cleanly when LLM synthesis is unavailable
+                    clean_summary = article_summary
+                    if "Web Information Intelligence Summary:" in clean_summary:
+                        clean_summary = clean_summary.replace("Web Information Intelligence Summary:", "").strip()
+                        lines = [l.strip() for l in clean_summary.split("\n") if l.strip()]
+                        cleaned_bullets = []
+                        for line in lines:
+                            line_str = line[2:].strip() if line.startswith("- ") else line
+                            cleaned_bullets.append(f"• {line_str}")
+                        clean_summary = "\n\n".join(cleaned_bullets[:3])
+
+                    _deterministic_report = (
+                        f"Here's what I found regarding **{message}**:\n\n"
+                        f"**{article_title}**\n\n"
+                        f"{clean_summary}\n\n"
+                        f"• **Source / Author:** {article_author}\n"
+                        f"• **Source Credibility:** {credibility_rating}\n"
+                        f"• **Authenticity Score:** {score_str}"
+                    )
+
+                    try:
+                        messages = [
+                            {"role": "system", "content": system_prompt},
+                            {"role": "user", "content": message}
+                        ]
+                        response_text = await llm_bridge.call_llm_with_messages(
+                            model=self._config.llm_provider,
+                            messages=messages,
+                            temperature=0.7,
+                        )
+                        # If LLM returned a template/raw search fallback, use the clean deterministic report
+                        if _is_template(response_text):
+                            logger.info("LLM returned template response for samachar — using clean deterministic Samachar report")
+                            response_text = _deterministic_report
+                    except Exception as llm_exc:
+                        logger.warning("Failed to synthesize news with LLM: %s — using clean deterministic Samachar report", llm_exc)
+                        response_text = _deterministic_report
+                else:
+                    response_text = personality_engine.build_capability_confirm(
+                        capability_result.summary
+                    )
                 await companion_memory.log_capability_use(
                     user_id, capability_result.capability, intent, success=True
                 )

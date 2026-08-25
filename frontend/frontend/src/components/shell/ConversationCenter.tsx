@@ -3,7 +3,7 @@ import { motion, AnimatePresence } from 'framer-motion';
 import { useCompanionStore } from '../../store/companion.store';
 import ConversationCard from '../cards/ConversationCard';
 import { DailyBriefingCard } from '../cards/DailyBriefingCard';
-import { Zap } from 'lucide-react';
+import { MessageSquare } from 'lucide-react';
 
 const ThinkingIndicator = () => (
   <motion.div
@@ -39,32 +39,16 @@ const EmptyState: React.FC<{ onBriefingAction: (prompt: string) => void }> = ({ 
         transition={{ delay: 0.1 }}
         className="flex flex-col items-center justify-center py-6 gap-4 sm:gap-5 text-center px-5 sm:px-8 select-none"
       >
-        <div className="w-14 h-14 sm:w-16 sm:h-16 rounded-2xl bg-brand-muted border border-brand/30 flex items-center justify-center">
-          <Zap size={24} className="text-brand-light sm:hidden" />
-          <Zap size={28} className="text-brand-light hidden sm:block" />
+        <div className="w-20 h-20 sm:w-24 sm:h-24 rounded-3xl bg-surface-raised border border-border-subtle flex items-center justify-center shadow-glow">
+          <MessageSquare size={40} className="text-brand-light" />
         </div>
-        <div>
-          <h2 className="text-lg sm:text-xl font-semibold text-text-primary mb-1 sm:mb-1.5">
-            Good to see you, {displayName} 👋
+        <div className="mt-4">
+          <h2 className="text-xl sm:text-2xl font-bold text-text-primary mb-2">
+            Start a conversation
           </h2>
-          <p className="text-xs sm:text-sm text-text-muted max-w-xs leading-relaxed">
-            I'm Mitra — your AI companion. Ask me anything, run a workflow, or let me help you get things done.
+          <p className="text-sm sm:text-base text-text-muted max-w-md leading-relaxed mx-auto">
+            I'm your unified AI assistant with multi-agent capabilities, safety enforcement, and intelligent routing.
           </p>
-        </div>
-        <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 w-full max-w-sm mx-auto">
-          {[
-            'What\'s on my calendar today?',
-            'Summarize my tasks',
-            'Create a reminder',
-            'Run morning briefing',
-          ].map(s => (
-            <button key={s} onClick={() => {
-              const store = (window as any).__MITRA_SEND__;
-              if (store) store(s);
-            }} className="text-2xs px-3 py-2 rounded-xl border border-border-subtle text-text-muted bg-surface-overlay hover:border-brand/40 hover:text-brand-light transition-all cursor-pointer active:scale-95 text-center truncate">
-              {s}
-            </button>
-          ))}
         </div>
       </motion.div>
     </div>

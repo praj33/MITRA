@@ -59,6 +59,21 @@ export class EventBus {
       case 'health.changed':
         console.log(`%c[MITRA] Health Changed : ${data.status} (${time})`, 'color: #13c2c2; font-weight: bold;', data);
         break;
+      case 'capability.requested':
+        console.log(`%c[MITRA] Capability Requested : ${data.capability} (${time})`, 'color: #1890ff; font-weight: bold;', data);
+        break;
+      case 'capability.queued':
+        console.log(`%c[MITRA] Capability Queued : ${data.capability} (${time})`, 'color: #fa541c; font-weight: bold;', data);
+        break;
+      case 'capability.retrying':
+        console.log(`%c[MITRA] Capability Retrying : ${data.capability} (${time})`, 'color: #faad14; font-weight: bold;', data);
+        break;
+      case 'capability.cancelled':
+        console.log(`%c[MITRA] Capability Cancelled : ${data.capability} (${time})`, 'color: #d9363e; font-weight: bold;', data);
+        break;
+      case 'capability.timed_out':
+        console.log(`%c[MITRA] Capability Timed Out : ${data.capability} (${time})`, 'color: #d9363e; font-weight: bold;', data);
+        break;
       default:
         console.log(`[MITRA] Event: ${event}`, data);
     }

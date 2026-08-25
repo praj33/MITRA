@@ -54,34 +54,36 @@ export class ControlPlane {
       // ═══════════════════════════════════════════════════════════════════
       const preText = text.trim();
 
-      // ── TRANSLATE (MyMemory free API — no auth, no backend needed) ────
-      const tMatch = preText.match(/translate\s+[^\s].+?\s+(?:into|to|in)\s+([a-z]+)/i)
-        || preText.match(/translate\s+(.+)/i);
-      // Detect "translate X into Y" pattern
-      const tFull = preText.match(/translate\s+([\s\S]+?)\s+(?:into|to|in)\s+([a-z]+)\s*$/i);
-      if (tFull || (tMatch && /\b(into|to)\b/i.test(preText))) {
-        const targetLang = (tFull ? tFull[2] : (preText.match(/\b(?:into|to)\s+([a-z]+)/i)?.[1] || 'hindi')).toLowerCase().trim();
-        const rawSrc = tFull ? tFull[1].trim() : preText.replace(/translate\s+/i,'').replace(/\s+(?:into|to|in)\s+[a-z]+\s*$/i,'').trim();
-        const srcText = rawSrc.replace(/^['""'""]+|['""'""]+$/g, '').trim();
-        const langMap = {hindi:'hi',french:'fr',spanish:'es',german:'de',arabic:'ar',portuguese:'pt',russian:'ru',japanese:'ja',chinese:'zh',korean:'ko',italian:'it',dutch:'nl',turkish:'tr',polish:'pl',marathi:'mr',gujarati:'gu',bengali:'bn',tamil:'ta',telugu:'te',kannada:'kn',punjabi:'pa',urdu:'ur',english:'en'};
-        const tCode = langMap[targetLang] || targetLang.slice(0,2);
+      // ── TRANSLATE (MyMemory free API — catches "translate X into Y" AND "'X' into Y") ──
+      const langMap = {hindi:'hi',french:'fr',spanish:'es',german:'de',arabic:'ar',portuguese:'pt',russian:'ru',japanese:'ja',chinese:'zh',korean:'ko',italian:'it',dutch:'nl',turkish:'tr',polish:'pl',marathi:'mr',gujarati:'gu',bengali:'bn',tamil:'ta',telugu:'te',kannada:'kn',punjabi:'pa',urdu:'ur',english:'en'};
+      const allLangs = Object.keys(langMap).join('|');
+      // Pattern 1: "Translate 'X' into Y"  or  "Translate X to Y"
+      const tFull = preText.match(new RegExp(`translate\\s+([\\s\\S]+?)\\s+(?:into|to|in)\\s+(${allLangs})\\s*$`, 'i'));
+      // Pattern 2: "'X' into Y"  or  "X into Y"  — used after button prompt, no 'translate' keyword
+      const tShort = !tFull && preText.match(new RegExp(`^([\\s\\S]+?)\\s+(?:into|to|mein|ko)\\s+(${allLangs})\\s*$`, 'i'));
+      if (tFull || tShort) {
+        const m = tFull || tShort;
+        const rawSrc = m[1].trim().replace(/^['""'""]+|['""'""]+$/g, '').trim();
+        const targetLang = m[2].toLowerCase().trim();
+        const tCode = langMap[targetLang];
         try {
-          const tResp = await fetch(`https://api.mymemory.translated.net/get?q=${encodeURIComponent(srcText)}&langpair=en|${tCode}`);
+          const tResp = await fetch(`https://api.mymemory.translated.net/get?q=${encodeURIComponent(rawSrc)}&langpair=en|${tCode}`);
           const tJson = await tResp.json();
           const translated = tJson.responseData?.translatedText || tJson.matches?.[0]?.translation || '';
-          if (translated && translated !== srcText) {
+          if (translated && translated.trim() && translated !== rawSrc) {
             eventBus.emit('health.changed', { status: 'Healthy' });
             contextStore.addMessage('mitra', translated, { intent: 'translate' });
             eventBus.emit('capability.completed', {
               capability: 'translate',
               duration: '1.0s',
               result: translated,
-              data: { capability: 'translate', result: translated, translation: { text: translated, from: 'English', to: targetLang, original: srcText } }
+              data: { capability: 'translate', result: translated, translation: { text: translated, from: 'English', to: targetLang, original: rawSrc } }
             });
             return { status: 'ok' };
           }
-        } catch(e) { /* fall through to backend */ }
+        } catch(e) { /* fall through to backend if API fails */ }
       }
+
 
       // ── REMINDER (localStorage — backend executor broken on Render) ───
       if (/\b(remind|reminder|alert me|notify me)\b/i.test(preText)) {
@@ -545,44 +547,49 @@ export class ControlPlane {
     try {
       const userId = contextStore.getUserId() || 'anonymous';
 
-      // ── 1. REMINDER ──────────────────────────────────────────────────────────
+      // ── 1. REMINDER (localStorage — /api/pages/reminders/create returns 401 on Render) ──
       if (capabilityName === 'reminder') {
         const messageText = params.message || params.text || params.title || '';
         if (!messageText.trim()) {
           eventBus.emit('health.changed', { status: 'Healthy' });
-          eventBus.emit('notification.received', {
+          eventBus.emit('chat.mitra_message', {
             role: 'mitra',
             text: '⏰ Please tell me what to remind you about and when. For example: "Remind me to call mom in 1 hour"',
             intent: 'reminder_prompt'
           });
           return { status: 'executed', result: { status: 'prompt', summary: 'Reminder input needed.' } };
         }
-        const reminderTime = params.time || new Date(Date.now() + 3600000).toISOString();
-        const res = await fetch(`${getApiBaseUrl()}/api/pages/reminders/create`, {
-          method: 'POST',
-          headers: buildHeaders(),
-          body: JSON.stringify({ message: messageText, time: reminderTime }),
-        });
-        if (!res.ok) throw new Error(`Reminder creation failed: HTTP ${res.status}`);
-        const rData = await res.json();
-        const reminder = rData.reminder || {};
-        const timeStr = reminder.time ? new Date(reminder.time).toLocaleString() : reminderTime;
+        // Calculate delay
+        let delayMs = 3600000; // default 1 hour
+        if (params.time) {
+          const diff = new Date(params.time) - Date.now();
+          if (diff > 0) delayMs = diff;
+        }
+        const fireAt = new Date(Date.now() + delayMs).toISOString();
+        const remId = 'rem_' + Date.now();
+        try {
+          const stored = JSON.parse(localStorage.getItem('mitra_reminders') || '[]');
+          stored.push({ id: remId, message: messageText, time: fireAt, status: 'pending' });
+          localStorage.setItem('mitra_reminders', JSON.stringify(stored));
+          setTimeout(() => {
+            if (typeof Notification !== 'undefined' && Notification.permission === 'granted') {
+              new Notification('⏰ MITRA Reminder', { body: messageText });
+            }
+            eventBus.emit('notification.received', { title: '⏰ Reminder Fired!', text: `⏰ ${messageText}`, intent: 'reminder_alert' });
+          }, delayMs);
+        } catch(e) {}
+        const timeStr = new Date(fireAt).toLocaleString();
         eventBus.emit('health.changed', { status: 'Healthy' });
-        this.speakText(`Reminder set: ${messageText}`);
-        eventBus.emit('notification.received', {
-          title: '⏰ Reminder Set',
-          text: `Reminder scheduled: "${messageText}"`,
-          intent: 'reminder_created'
-        });
         return {
           status: 'executed',
           result: {
             status: 'success',
-            summary: `Reminder created: "${messageText}" at ${timeStr}`,
-            reminder: reminder
+            summary: `Reminder set: "${messageText}" — fires at ${timeStr}`,
+            reminder: { id: remId, message: messageText, time: fireAt, status: 'pending' }
           }
         };
       }
+
 
       // ── 2. CALENDAR — create or list ─────────────────────────────────────────
       if (capabilityName === 'calendar') {

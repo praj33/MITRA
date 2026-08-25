@@ -10,11 +10,19 @@ export class ActivityIndicator {
     this.dotEl = this.element.querySelector('.indicator-dot');
 
     if (eventBus) {
-      eventBus.on('capability.started', (data) => this.setStatus('Running Capability', 'running'));
-      eventBus.on('capability.finished', () => this.setStatus('Completed', 'completed'));
-      eventBus.on('capability.failed', () => this.setStatus('Failed', 'failed'));
-      eventBus.on('runtime.thinking', () => this.setStatus('Thinking', 'thinking'));
-      eventBus.on('runtime.idle', () => this.setStatus('Idle', 'idle'));
+      eventBus.on('capability.started',   (data) => this.setStatus('Capability Running', 'running'));
+      eventBus.on('capability.finished',  ()     => this.setStatus('Completed', 'completed'));
+      eventBus.on('capability.completed', ()     => this.setStatus('Completed', 'completed'));
+      eventBus.on('capability.failed',    ()     => this.setStatus('Failed', 'failed'));
+      eventBus.on('capability.timed_out', ()     => this.setStatus('Failed', 'failed'));
+      eventBus.on('capability.retrying',  ()     => this.setStatus('Retrying', 'thinking'));
+      eventBus.on('capability.queued',    ()     => this.setStatus('Waiting', 'thinking'));
+      eventBus.on('runtime.thinking',     ()     => this.setStatus('Thinking', 'thinking'));
+      eventBus.on('runtime.idle',         ()     => this.setStatus('Idle', ''));
+      eventBus.on('health.changed',       (data) => {
+        if (data.status === 'Executing') this.setStatus('Executing', 'running');
+        if (data.status === 'Waiting')   this.setStatus('Waiting', 'thinking');
+      });
     }
   }
 

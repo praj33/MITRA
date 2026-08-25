@@ -5,12 +5,10 @@
   "enforcement_gated": true,
   "result": {
     "status": "success",
-    "to": "12345",
-    "message": "Hello from gateway",
-    "method": "telegram_simulation",
+    "action_type": "telegram",
+    "summary": "Telegram message queued",
     "trace_id": "test_trace_001",
-    "timestamp": "2026-03-09T07:34:07.081256",
-    "platform": "telegram",
-    "note": "Simulation mode \u2014 set TELEGRAM_BOT_TOKEN for live execution"
+    "timestamp": "2026-08-21T06:33:29.888100",
+    "service": "execution_service"
   }
 }

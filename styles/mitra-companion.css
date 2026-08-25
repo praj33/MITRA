@@ -16,20 +16,31 @@
 
 #mitra-shell {
   position: fixed;
-  z-index: var(--mitra-z-index);
+  bottom: 24px;
+  right: 24px;
+  z-index: 999999;
   font-family: var(--mitra-font);
   color: var(--mitra-text);
   display: flex;
   flex-direction: column;
   gap: 16px;
-  pointer-events: none;
+  pointer-events: auto;
   transition: all var(--mitra-transition);
+}
+.mitra-controls {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.mitra-dock-controls {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  z-index: 1;
 }
 
 /* Docking Modes */
 #mitra-shell.floating {
-  bottom: 24px;
-  right: 24px;
   align-items: flex-end;
 }
 
@@ -148,7 +159,7 @@
   border: 1px solid var(--mitra-border);
   border-radius: var(--mitra-radius);
   box-shadow: var(--mitra-shadow);
-  display: flex;
+  display: none;
   flex-direction: column;
   overflow: hidden;
   pointer-events: auto;
@@ -160,6 +171,7 @@
 }
 
 .mitra-window.expanded {
+  display: flex;
   opacity: 1;
   transform: translateY(0) scale(1);
   visibility: visible;
@@ -193,12 +205,14 @@
 /* Dock Controls */
 .mitra-dock-controls {
   display: flex;
-  background: rgba(0,0,0,0.3);
-  border-radius: 8px;
-  padding: 2px;
+  align-items: center;
+  gap: 4px;
+  background: rgba(0,0,0,0.35);
+  border-radius: 12px;
+  padding: 6px 8px;
 }
 .mitra-btn {
-  background: none; border: none; color: var(--mitra-text-muted);
+  background: none; border: none; color: var(--mitra-text);
   cursor: pointer; padding: 6px; border-radius: 6px;
   display: flex; align-items: center; justify-content: center;
   transition: all 0.2s;
@@ -210,7 +224,16 @@
 .mitra-content { flex: 1; display: flex; flex-direction: column; overflow: hidden; position: relative; }
 
 /* Chat */
-.mitra-chat { flex: 1; padding: 20px; overflow-y: auto; display: flex; flex-direction: column; gap: 16px; }
+.mitra-chat {
+  flex: 1;
+  padding: 20px;
+  overflow-y: auto;
+  overflow-x: hidden;
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  box-sizing: border-box;
+}
 
 .chat-bubble {
   padding: 12px 16px;
@@ -220,6 +243,17 @@
   font-size: 14px;
   animation: slideUp 0.3s ease;
   position: relative;
+  overflow-wrap: anywhere;
+  word-break: break-word;
+  white-space: pre-wrap;
+  box-sizing: border-box;
+}
+
+.chat-bubble *, .capability-widget * {
+  max-width: 100%;
+  overflow-wrap: anywhere;
+  word-break: break-word;
+  box-sizing: border-box;
 }
 .chat-timestamp {
   font-size: 10px; color: var(--mitra-text-muted);
@@ -242,15 +276,23 @@
 .mitra-send svg { width: 18px; height: 18px; fill: currentColor; }
 
 /* Launcher */
-.mitra-launcher { position: absolute; top: 0; left: 0; right: 0; bottom: 0; background: rgba(20,20,24,0.95); backdrop-filter: blur(20px); z-index: 10; padding: 24px; display: flex; flex-direction: column; gap: 20px; opacity: 0; pointer-events: none; transition: 0.3s; transform: translateY(20px); overflow-y: auto; }
+.mitra-launcher { position: absolute; top: 0; left: 0; right: 0; bottom: 0; background: rgba(15, 15, 22, 0.96); backdrop-filter: blur(24px); -webkit-backdrop-filter: blur(24px); z-index: 10; padding: 20px; display: flex; flex-direction: column; gap: 16px; opacity: 0; pointer-events: none; transition: all 0.3s cubic-bezier(0.16, 1, 0.3, 1); transform: translateY(20px); overflow-y: auto; }
 .mitra-launcher.active { opacity: 1; pointer-events: auto; transform: translateY(0); }
-.launcher-header { font-size: 18px; font-weight: 600; display: flex; justify-content: space-between; align-items: center; }
-.launcher-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 12px; }
-.capability-card { background: rgba(255,255,255,0.05); border: 1px solid var(--mitra-border); border-radius: 12px; padding: 16px 8px; cursor: pointer; transition: 0.2s; display: flex; flex-direction: column; align-items: center; text-align: center; gap: 8px; }
-.capability-card:hover { background: rgba(255,255,255,0.1); border-color: var(--mitra-accent); transform: translateY(-2px); }
-.capability-icon { width: 36px; height: 36px; background: var(--mitra-accent); border-radius: 8px; display: flex; align-items: center; justify-content: center; }
-.capability-icon svg { width: 20px; height: 20px; fill: white; }
-.capability-title { font-size: 12px; font-weight: 500; }
+.launcher-header { font-size: 16px; font-weight: 700; display: flex; justify-content: space-between; align-items: center; color: #ffffff; letter-spacing: -0.2px; }
+.launcher-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px; }
+.capability-card { background: rgba(255, 255, 255, 0.04); border: 1px solid rgba(255, 255, 255, 0.08); border-radius: 14px; padding: 14px 8px; cursor: pointer; transition: all 0.25s ease; display: flex; flex-direction: column; align-items: center; text-align: center; gap: 8px; }
+.capability-card:hover { background: rgba(108, 92, 231, 0.18); border-color: rgba(108, 92, 231, 0.5); transform: translateY(-3px); box-shadow: 0 6px 16px rgba(108, 92, 231, 0.25); }
+.capability-icon { width: 40px; height: 40px; background: linear-gradient(135deg, var(--mitra-accent), #4a3aff); border-radius: 10px; display: flex; align-items: center; justify-content: center; box-shadow: 0 4px 12px rgba(107, 76, 255, 0.3); }
+.capability-icon svg { width: 22px; height: 22px; fill: white; }
+.capability-title { font-size: 12px; font-weight: 600; color: #ffffff; }
+
+/* Capability Rich Widget Formatting */
+.capability-widget { animation: slideUp 0.35s cubic-bezier(0.16, 1, 0.3, 1) !important; }
+.mitra-action-chip:hover { transform: scale(1.04); background: linear-gradient(135deg, rgba(108,92,231,0.5), rgba(0,230,118,0.35)) !important; border-color: rgba(255,255,255,0.4) !important; }
+
+/* Mic & Launcher Buttons */
+#btn-mic:hover { background: rgba(224, 86, 253, 0.2); color: #e056fd; }
+#btn-mic svg { fill: currentColor; }
 
 /* Health Panel */
 .mitra-health-panel { background: rgba(0,0,0,0.8); border-top: 1px solid var(--mitra-border); padding: 16px; font-size: 12px; }
@@ -282,4 +324,37 @@
   #mitra-shell.floating { bottom: 16px; right: 16px; }
   .mitra-window { width: calc(100vw - 32px); height: calc(100vh - 100px); max-height: none; }
   #mitra-shell.docked-left .mitra-window, #mitra-shell.docked-right .mitra-window { width: 100vw; }
+}
+
+/* Custom Avatar and Drag Cursors */
+.mitra-avatar-media {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  border-radius: 50%;
+  display: block;
+  pointer-events: none; /* Let clicks pass through to container */
+}
+
+.mitra-header {
+  cursor: grab;
+}
+
+.mitra-header:active {
+  cursor: grabbing;
+}
+
+.mitra-fab {
+  cursor: grab;
+  overflow: hidden; /* Constrain avatar element within boundary */
+}
+
+.mitra-fab:active {
+  cursor: grabbing;
+}
+
+.mitra-header-avatar {
+  border: 1px solid var(--mitra-border);
+  box-shadow: 0 0 4px rgba(255, 255, 255, 0.1);
+  background: rgba(0, 0, 0, 0.2);
 }
