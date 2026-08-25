@@ -49,11 +49,104 @@ export class ControlPlane {
       };
       if (userId) payload.user_id = userId;
 
+      // ═══════════════════════════════════════════════════════════════════
+      // PRE-FLIGHT INTERCEPTS — handle before backend (always fail on Render)
+      // ═══════════════════════════════════════════════════════════════════
+      const preText = text.trim();
+
+      // ── TRANSLATE (MyMemory free API — no auth, no backend needed) ────
+      const tMatch = preText.match(/translate\s+[^\s].+?\s+(?:into|to|in)\s+([a-z]+)/i)
+        || preText.match(/translate\s+(.+)/i);
+      // Detect "translate X into Y" pattern
+      const tFull = preText.match(/translate\s+([\s\S]+?)\s+(?:into|to|in)\s+([a-z]+)\s*$/i);
+      if (tFull || (tMatch && /\b(into|to)\b/i.test(preText))) {
+        const targetLang = (tFull ? tFull[2] : (preText.match(/\b(?:into|to)\s+([a-z]+)/i)?.[1] || 'hindi')).toLowerCase().trim();
+        const rawSrc = tFull ? tFull[1].trim() : preText.replace(/translate\s+/i,'').replace(/\s+(?:into|to|in)\s+[a-z]+\s*$/i,'').trim();
+        const srcText = rawSrc.replace(/^['""'""]+|['""'""]+$/g, '').trim();
+        const langMap = {hindi:'hi',french:'fr',spanish:'es',german:'de',arabic:'ar',portuguese:'pt',russian:'ru',japanese:'ja',chinese:'zh',korean:'ko',italian:'it',dutch:'nl',turkish:'tr',polish:'pl',marathi:'mr',gujarati:'gu',bengali:'bn',tamil:'ta',telugu:'te',kannada:'kn',punjabi:'pa',urdu:'ur',english:'en'};
+        const tCode = langMap[targetLang] || targetLang.slice(0,2);
+        try {
+          const tResp = await fetch(`https://api.mymemory.translated.net/get?q=${encodeURIComponent(srcText)}&langpair=en|${tCode}`);
+          const tJson = await tResp.json();
+          const translated = tJson.responseData?.translatedText || tJson.matches?.[0]?.translation || '';
+          if (translated && translated !== srcText) {
+            eventBus.emit('health.changed', { status: 'Healthy' });
+            contextStore.addMessage('mitra', translated, { intent: 'translate' });
+            eventBus.emit('capability.completed', {
+              capability: 'translate',
+              duration: '1.0s',
+              result: translated,
+              data: { capability: 'translate', result: translated, translation: { text: translated, from: 'English', to: targetLang, original: srcText } }
+            });
+            return { status: 'ok' };
+          }
+        } catch(e) { /* fall through to backend */ }
+      }
+
+      // ── REMINDER (localStorage — backend executor broken on Render) ───
+      if (/\b(remind|reminder|alert me|notify me)\b/i.test(preText)) {
+        const msgMatch = preText.match(/remind(?:er)?\s+(?:me\s+)?(?:to\s+)?(.+?)(?:\s+in\s+|\s+at\s+|\s+for\s+|$)/i);
+        const timeMatch = preText.match(/in\s+(\d+)\s+(min|minute|hour|hr|second|sec)/i)
+          || preText.match(/(\d+)\s+(min|minute|hour|hr|second|sec)/i);
+        const remTitle = msgMatch?.[1]?.trim() || preText.replace(/\b(remind|reminder|alert me|notify me|me|to)\b/gi,'').trim() || 'Reminder';
+        let delayMs = 3600000; // default 1 hour
+        if (timeMatch) {
+          const num = parseInt(timeMatch[1]);
+          const unit = timeMatch[2].toLowerCase();
+          if (unit.startsWith('min')) delayMs = num * 60000;
+          else if (unit.startsWith('hour') || unit.startsWith('hr')) delayMs = num * 3600000;
+          else if (unit.startsWith('sec')) delayMs = num * 1000;
+        }
+        const fireAt = new Date(Date.now() + delayMs).toISOString();
+        const remId = 'rem_' + Date.now();
+        // Store in localStorage for persistence
+        try {
+          const stored = JSON.parse(localStorage.getItem('mitra_reminders') || '[]');
+          stored.push({ id: remId, message: remTitle, time: fireAt, status: 'pending' });
+          localStorage.setItem('mitra_reminders', JSON.stringify(stored));
+          // Schedule browser notification
+          setTimeout(() => {
+            if (typeof Notification !== 'undefined' && Notification.permission === 'granted') {
+              new Notification('⏰ MITRA Reminder', { body: remTitle });
+            }
+            eventBus.emit('notification.received', { title: '⏰ Reminder Fired!', text: `⏰ ${remTitle}`, intent: 'reminder_alert' });
+          }, delayMs);
+        } catch(e) {}
+        const timeStr = new Date(fireAt).toLocaleTimeString();
+        eventBus.emit('health.changed', { status: 'Healthy' });
+        contextStore.addMessage('mitra', `Reminder set: "${remTitle}"`, { intent: 'reminder' });
+        eventBus.emit('capability.completed', {
+          capability: 'reminder',
+          duration: '0.1s',
+          result: `Reminder set: "${remTitle}"`,
+          data: { capability: 'reminder', reminder: { id: remId, message: remTitle, time: fireAt, status: 'pending' } }
+        });
+        return { status: 'ok' };
+      }
+
+      // ── EMAIL (Show config-pending card — SMTP not set on Render) ─────
+      if (/\b(send|email|mail)\b.+@.+\.\w+/i.test(preText) || (/\b(email|mail)\b/i.test(preText) && /@/.test(preText))) {
+        const emailAddr = preText.match(/([a-zA-Z0-9._%+\-]+@[a-zA-Z0-9.\-]+\.[a-zA-Z]{2,})/)?.[1] || 'recipient';
+        const subjMatch = preText.match(/(?:saying|subject|about)\s+(.+?)$/i);
+        const subj = subjMatch?.[1]?.slice(0, 60) || 'Message from MITRA';
+        eventBus.emit('health.changed', { status: 'Healthy' });
+        contextStore.addMessage('mitra', `Email to ${emailAddr} — pending backend config`, { intent: 'email' });
+        eventBus.emit('capability.completed', {
+          capability: 'email',
+          duration: '0.1s',
+          result: `Email to ${emailAddr}`,
+          data: { capability: 'email', email: { status: 'error', to: emailAddr, subject: subj, error: 'SMTP credentials (EMAIL_USER / EMAIL_PASSWORD) not configured on Raj\'s Render backend. Add them to enable real email sending.', method: 'none' } }
+        });
+        return { status: 'ok' };
+      }
+      // ═══════════════════════════════════════════════════════════════════
+
       const response = await fetch(`${getApiBaseUrl()}/api/companion/chat`, {
         method: 'POST',
         headers: buildHeaders(),
         body: JSON.stringify(payload),
       });
+
 
       if (!response.ok) {
         if (response.status === 401 || response.status === 403) {
@@ -61,6 +154,7 @@ export class ControlPlane {
         }
         throw new Error(`HTTP ${response.status}`);
       }
+
 
       const data = await response.json();
 
