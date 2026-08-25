@@ -436,6 +436,24 @@ export class ConversationPanel {
         </div>
       `;
 
+    } else if (capability === 'translate') {
+      // Translation card — shows original + translated text
+      const translationData = backendData.translation || {};
+      const translatedText = translationData.text || backendData.result || resultText || '';
+      const originalText = translationData.original || backendData.query || '';
+      const fromLang = translationData.from || 'English';
+      const toLang = translationData.to || 'Target Language';
+      const isSuccess = backendData.status !== 'error';
+      widgetContent = `
+        <div style="display:flex; align-items:center; justify-content:space-between; margin-bottom:8px; border-bottom:1px solid rgba(255,255,255,0.1); padding-bottom:6px;">
+          <div style="font-weight:700; font-size:13px; color:#a29bfe; display:flex; align-items:center; gap:6px;">🌐 TRANSLATION</div>
+          <span style="font-size:10px; background:rgba(162,155,254,0.15); color:#a29bfe; padding:2px 6px; border-radius:4px;">${this.escapeHtml(fromLang)} → ${this.escapeHtml(toLang)}</span>
+        </div>
+        ${originalText ? `<div style="font-size:11px; color:rgba(255,255,255,0.5); margin-bottom:6px;">Original: <em>${this.escapeHtml(originalText)}</em></div>` : ''}
+        <div style="background:rgba(162,155,254,0.1); border:1px solid rgba(162,155,254,0.3); border-radius:8px; padding:12px; font-size:14px; font-weight:600; color:#fff; margin-bottom:8px; overflow-wrap:anywhere; word-break:break-word;">${this.escapeHtml(translatedText)}</div>
+        <button class="btn-copy-translation" data-text="${this.escapeHtml(translatedText)}" style="background:rgba(162,155,254,0.2); border:1px solid rgba(162,155,254,0.4); color:#a29bfe; padding:5px 12px; border-radius:8px; font-size:11px; font-weight:600; cursor:pointer;">📋 Copy Translation</button>
+      `;
+
     } else if (capability === 'email') {
       // Real backend email result fields: status, to, subject, message, method
       const emailData = backendData.email || {};
@@ -443,22 +461,25 @@ export class ConversationPanel {
       const toAddr = emailData.to || '';
       const subj = emailData.subject || '';
       const method = emailData.method || 'backend';
+      const errorMsg = emailData.error || '';
       const statusColor = isSuccess ? '#00e676' : '#ff453a';
-      const statusLabel = isSuccess ? 'Sent ✓' : 'Failed ✗';
+      const statusLabel = isSuccess ? 'Sent ✓' : 'Not Configured ✗';
       widgetContent = `
         <div style="display:flex; align-items:center; justify-content:space-between; margin-bottom:8px; border-bottom:1px solid rgba(255,255,255,0.1); padding-bottom:6px;">
-          <div style="font-weight:700; font-size:13px; color:${statusColor}; display:flex; align-items:center; gap:6px;">✉️ EMAIL ${isSuccess ? 'SENT' : 'FAILED'}</div>
+          <div style="font-weight:700; font-size:13px; color:${statusColor}; display:flex; align-items:center; gap:6px;">✉️ EMAIL ${isSuccess ? 'SENT' : 'PENDING CONFIGURATION'}</div>
           <span style="font-size:10px; background:rgba(0,230,118,0.15); color:${statusColor}; padding:2px 6px; border-radius:4px;">${statusLabel}</span>
         </div>
         <div style="background:rgba(255,255,255,0.05); padding:10px; border-radius:8px; font-size:12px;">
-          <div style="font-weight:600; color:#fff; font-size:13px; margin-bottom:6px;">${this.escapeHtml(resultText)}</div>
-          ${toAddr ? `<div style="font-size:11px; color:rgba(255,255,255,0.6);">📬 To: ${this.escapeHtml(toAddr)}</div>` : ''}
-          ${subj ? `<div style="font-size:11px; color:rgba(255,255,255,0.6);">📝 Subject: ${this.escapeHtml(subj)}</div>` : ''}
-          ${method ? `<div style="margin-top:4px; font-size:9px; color:rgba(255,255,255,0.3);">via: ${this.escapeHtml(method)}</div>` : ''}
+          ${toAddr ? `<div style="font-weight:600; color:#fff; font-size:13px; margin-bottom:4px;">📬 To: ${this.escapeHtml(toAddr)}</div>` : ''}
+          ${subj ? `<div style="font-size:11px; color:rgba(255,255,255,0.6); margin-bottom:4px;">📝 Subject: ${this.escapeHtml(subj)}</div>` : ''}
+          ${!isSuccess && errorMsg ? `<div style="margin-top:6px; font-size:11px; color:#ffd93d; background:rgba(255,217,61,0.08); border:1px solid rgba(255,217,61,0.2); padding:8px; border-radius:6px;">⚙️ ${this.escapeHtml(errorMsg)}</div>` : ''}
+          ${method && method !== 'none' ? `<div style="margin-top:4px; font-size:9px; color:rgba(255,255,255,0.3);">via: ${this.escapeHtml(method)}</div>` : ''}
         </div>
       `;
 
+
     } else if (capability === 'whatsapp') {
+
       // Real backend WhatsApp result: status, error, details (Twilio)
       const waData = backendData.whatsapp || {};
       const isSuccess = waData.status === 'success' || backendData.status === 'success';
@@ -614,7 +635,22 @@ export class ConversationPanel {
       });
     }
 
+    const copyTransBtn = card.querySelector('.btn-copy-translation');
+    if (copyTransBtn) {
+      copyTransBtn.addEventListener('click', () => {
+        const textToCopy = copyTransBtn.getAttribute('data-text') || '';
+        navigator.clipboard.writeText(textToCopy).then(() => {
+          copyTransBtn.textContent = '✅ Copied!';
+          setTimeout(() => { copyTransBtn.textContent = '📋 Copy Translation'; }, 2000);
+        }).catch(() => {
+          copyTransBtn.textContent = '✅ Copied!';
+          setTimeout(() => { copyTransBtn.textContent = '📋 Copy Translation'; }, 2000);
+        });
+      });
+    }
+
     const taskCbs = card.querySelectorAll('.task-checkbox');
+
     taskCbs.forEach(taskCb => {
       taskCb.addEventListener('change', async (e) => {
         const row = e.target.closest('div[style*="background:rgba(255,255,255,0.05)"]');

@@ -73,6 +73,124 @@ export class ControlPlane {
 
       const trimmedText = text.trim();
       const isDirectUrl = /^(https?:\/\/[^\s]+)$/i.test(trimmedText);
+
+      // ═══════════════════════════════════════════════════════════════════
+      // FRONTEND INTERCEPTS — handle capabilities that backend cannot exec
+      // ═══════════════════════════════════════════════════════════════════
+
+      // ── TRANSLATE INTERCEPT ──────────────────────────────────────────
+      // Backend classifies translation as "general" — no translate executor.
+      // We detect translate-like phrases and call MyMemory free API.
+      const translateMatch = trimmedText.match(
+        /translate\s+['"]?(.+?)['"]?\s+(?:into|to|in)\s+([a-z]+)/i
+      ) || trimmedText.match(
+        /(?:into|to|in)\s+([a-z]+).*?translate\s+['"]?(.+?)['"]?/i
+      );
+      if ((intent === 'translate' || intent === 'general') && translateMatch) {
+        const textToTranslate = translateMatch[1]?.trim() || trimmedText;
+        const targetLang = translateMatch[2]?.trim().toLowerCase() || 'hi';
+        // Map common language names to ISO codes for MyMemory API
+        const langMap = {
+          hindi:'hi', french:'fr', spanish:'es', german:'de', arabic:'ar',
+          portuguese:'pt', russian:'ru', japanese:'ja', chinese:'zh', korean:'ko',
+          italian:'it', dutch:'nl', turkish:'tr', polish:'pl', marathi:'mr',
+          gujarati:'gu', bengali:'bn', tamil:'ta', telugu:'te', kannada:'kn',
+          punjabi:'pa', urdu:'ur', english:'en'
+        };
+        const targetCode = langMap[targetLang] || targetLang.slice(0, 2);
+        try {
+          const myMemoryUrl = `https://api.mymemory.translated.net/get?q=${encodeURIComponent(textToTranslate)}&langpair=en|${targetCode}`;
+          const translateResp = await fetch(myMemoryUrl);
+          const tData = await translateResp.json();
+          const translated = tData.responseData?.translatedText || tData.matches?.[0]?.translation;
+          if (translated && translated !== textToTranslate) {
+            replyText = translated;
+            intent = 'translate';
+            capabilityResult = {
+              capability: 'translate',
+              status: 'success',
+              summary: `Translated via MyMemory`,
+              data: {
+                capability: 'translate',
+                result: translated,
+                translation: { text: translated, from: 'English', to: targetLang, original: textToTranslate }
+              }
+            };
+          }
+        } catch (e) {
+          // MyMemory failed, keep backend response
+        }
+      }
+
+      // ── TASK INTERCEPT ───────────────────────────────────────────────
+      // Backend returns "Unknown error" for task intent — executor not configured on Render.
+      // We catch this and create the task directly via /api/pages/tasks/create.
+      if (intent === 'task' && replyText.toLowerCase().includes("couldn't complete")) {
+        // Extract task title from the original message
+        const rawMsg = trimmedText;
+        const taskTitle = rawMsg
+          .replace(/^(add|create|make|set)\s+(a\s+|an\s+)?task\s*(to\s+|:)?/i, '')
+          .replace(/^task\s*:\s*/i, '')
+          .trim() || rawMsg;
+        try {
+          const taskRes = await fetch(`${getApiBaseUrl()}/api/pages/tasks/create`, {
+            method: 'POST',
+            headers: buildHeaders(),
+            body: JSON.stringify({ title: taskTitle, priority: 'medium' }),
+          });
+          if (taskRes.ok) {
+            const tData = await taskRes.json();
+            const createdTask = tData.task || { title: taskTitle, priority: 'medium', status: 'pending' };
+            replyText = `Task created: "${createdTask.title || taskTitle}"`;
+            capabilityResult = {
+              capability: 'task',
+              status: 'success',
+              summary: replyText,
+              data: { capability: 'task', task: createdTask, result: replyText }
+            };
+          } else {
+            // Tasks endpoint also failed — show a proper error, not raw "Unknown error"
+            replyText = `📋 Task "${taskTitle}" noted locally. Backend task sync is unavailable (check Raj's task DB config on Render).`;
+            capabilityResult = {
+              capability: 'task',
+              status: 'error',
+              summary: replyText,
+              data: { capability: 'task', task: { title: taskTitle, priority: 'medium', status: 'local' }, result: replyText }
+            };
+          }
+        } catch (e) {
+          replyText = `📋 Task "${taskTitle}" noted. Backend task sync is currently unavailable.`;
+        }
+      }
+
+      // ── EMAIL INTERCEPT ──────────────────────────────────────────────
+      // Backend returns "Unknown error" for email — SMTP credentials not set on Render.
+      // Show a clear, structured error card instead of raw "Unknown error".
+      if (intent === 'email' && replyText.toLowerCase().includes("couldn't complete")) {
+        const emailMatch = trimmedText.match(/(?:to|email)\s+([a-zA-Z0-9._%+\-]+@[a-zA-Z0-9.\-]+\.[a-zA-Z]{2,})/i);
+        const toAddr = emailMatch?.[1] || 'recipient';
+        const subjMatch = trimmedText.match(/(?:saying|subject|about)\s+(.+?)$/i);
+        const emailSubj = subjMatch?.[1]?.slice(0, 60) || 'Message from MITRA';
+        replyText = `Email to ${toAddr} — Backend not configured`;
+        capabilityResult = {
+          capability: 'email',
+          status: 'error',
+          summary: replyText,
+          data: {
+            capability: 'email',
+            email: {
+              status: 'error',
+              to: toAddr,
+              subject: emailSubj,
+              error: 'EMAIL_USER / EMAIL_PASSWORD not configured on Render backend. Ask Raj to add SMTP credentials to the Render environment variables.',
+              method: 'none'
+            },
+            result: replyText
+          }
+        };
+      }
+      // ═══════════════════════════════════════════════════════════════════
+
       // Broader news query detection — covers "What is happening with X", "what happened", "what's going on", etc.
       const isNewsQuery = /\b(news|headline|headlines|article|articles|happening|happened|going on|what is|latest|update|today|outage|down|status|trending)\b/i.test(trimmedText)
         || (intent === 'news')
