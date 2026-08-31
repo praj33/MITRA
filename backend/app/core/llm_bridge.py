@@ -303,14 +303,14 @@ class LLMBridge:
             search_tool = SearchTool()
             search_res = await search_tool.run(user_msg)
             if search_res and "Real-time search completed for:" not in search_res and "Live market feeds active" not in search_res:
-                cleaned = search_res.replace("Web Information Intelligence Summary:", "").strip()
+                cleaned = search_res.replace("Web Information Intelligence Summary:", "").replace("📰 [LIVE WEB SEARCH RESULTS]:", "").strip()
                 lines = [l.strip() for l in cleaned.split("\n") if l.strip()]
                 bullets = []
                 for line in lines:
-                    bullet_text = line[2:].strip() if line.startswith("- ") else line
+                    bullet_text = line[2:].strip() if line.startswith("• ") or line.startswith("- ") else line
                     bullets.append(f"• {bullet_text}")
                 formatted_summary = "\n\n".join(bullets[:3]) if bullets else cleaned
-                return f"Here is what I found for your query:\n\n{formatted_summary}"
+                return f"Here is the information found for your query:\n\n{formatted_summary}"
         except Exception as e:
             logger.warning(f"Rule-based live search fallback failed: {e}")
 
