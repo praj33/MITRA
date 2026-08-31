@@ -1,18 +1,20 @@
 """
 uniguru_capability.py — Mitra UniGuru Knowledge Capability
 
-UPGRADED: Now uses the embedded UniGuru RuleEngine locally instead of
-calling an external HTTP API. Falls back to LLM if the engine is unavailable.
+UPGRADED: Now uses live UniGuru HTTP/API contract via UniGuruAdapter first.
+Falls back to embedded RuleEngine, then to LLM bridge if unavailable.
 """
 from __future__ import annotations
 from typing import Any, Dict, List, Optional
+import logging
+import os
+
 from app.capabilities.base_capability import BaseCapability, CapabilityResult
 from app.core.llm_bridge import llm_bridge
-import logging
 
 logger = logging.getLogger(__name__)
 
-# Lazy-load the embedded engine to avoid import-time crashes
+# Lazy-load the embedded engine as secondary fallback
 _rule_engine = None
 
 def _get_rule_engine():
@@ -34,7 +36,7 @@ class UniGuruCapability(BaseCapability):
 
     @property
     def description(self) -> str:
-        return "Answer educational and knowledge questions via the embedded UniGuru engine."
+        return "Answer educational and knowledge questions via the UniGuru live HTTP contract or embedded engine."
 
     @property
     def supported_intents(self) -> List[str]:
@@ -43,9 +45,47 @@ class UniGuruCapability(BaseCapability):
     async def execute(
         self, intent: str, params: Dict[str, Any], trace_id: Optional[str] = None
     ) -> CapabilityResult:
-        message = params.get("message", "")
+        message = params.get("message", params.get("query", ""))
 
-        # ── Try embedded UniGuru RuleEngine first ──
+        # ── 1. Try Live UniGuruAdapter (HTTP/API contract) ──
+        try:
+            from app.ecosystem.adapter_registry import AdapterRegistry
+            from app.ecosystem.base_adapter import IntegrationRequest
+
+            registry = AdapterRegistry()
+            uniguru_adapter = registry.get_adapter("UniGuru")
+            if uniguru_adapter is not None and os.getenv("UNIGURU_API_URL"):
+                req = IntegrationRequest(
+                    source_product="mitra",
+                    target_product="UniGuru",
+                    action="query",
+                    payload={"query": message},
+                    trace_id=trace_id or "uniguru_trace_001",
+                )
+                resp = await uniguru_adapter.query(req)
+                if resp.success:
+                    return CapabilityResult(
+                        capability=self.name,
+                        intent=intent,
+                        status="success",
+                        summary=f"Knowledge response from UniGuru Live HTTP API ({resp.latency_ms:.1f}ms).",
+                        data={
+                            "answer": resp.data.get("answer", resp.data),
+                            "query": message,
+                            "knowledge_evidence": resp.data.get("evidence", "Verified Knowledge Base v2.2"),
+                            "source": "uniguru_live_api",
+                            "latency_ms": resp.latency_ms,
+                        },
+                        trace_id=trace_id,
+                        actions=[
+                            {"label": "Go deeper", "action": "explain_more"},
+                            {"label": "Give an example", "action": "give_example"},
+                        ],
+                    )
+        except Exception as exc:
+            logger.warning("UniGuruAdapter live API query failed: %s", exc)
+
+        # ── 2. Try embedded UniGuru RuleEngine ──
         engine = _get_rule_engine()
         if engine is not None:
             try:
@@ -89,12 +129,10 @@ class UniGuruCapability(BaseCapability):
                         },
                         trace_id=trace_id,
                     )
-                # decision == "forward" → fall through to LLM
-                logger.info("UniGuru forwarded query to LLM: %s", result.get("reason"))
             except Exception as exc:
                 logger.warning("UniGuru engine error, falling back to LLM: %s", exc)
 
-        # ── Fallback: LLM-based knowledge answer ──
+        # ── 3. Fallback: LLM-based knowledge answer ──
         try:
             messages = [
                 {

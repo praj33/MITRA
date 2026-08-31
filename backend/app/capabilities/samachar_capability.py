@@ -28,13 +28,13 @@ class SamacharCapability(BaseCapability):
         return "Retrieves structured news, headlines, articles, and media intelligence."
 
     @property
-    def intents(self) -> list[str]:
+    def supported_intents(self) -> list[str]:
         return ["news", "samachar", "headlines", "articles", "press", "media"]
 
-    async def execute(self, params: Dict[str, Any]) -> CapabilityResult:
+    async def execute(self, intent: str, params: Dict[str, Any], trace_id: str | None = None) -> CapabilityResult:
         query = params.get("message") or params.get("query") or "latest news"
         user_id = params.get("user_id", "anonymous")
-        trace_id = params.get("trace_id", "trc_unknown")
+        t_id = trace_id or params.get("trace_id", "trc_unknown")
 
         logger.info("Executing Samachar capability for query='%s' user_id=%s trace_id=%s", query, user_id, trace_id)
 

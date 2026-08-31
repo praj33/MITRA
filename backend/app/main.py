@@ -167,6 +167,16 @@ async def lifespan(app: FastAPI):
         except Exception as e:
             logger.error(f"Failed to start reminder scheduler: {e}")
 
+    # Initialize Ecosystem Adapters & Mitra Capabilities
+    try:
+        from app.ecosystem.adapter_registry import register_all_adapters
+        from app.capabilities import register_all_capabilities
+        register_all_adapters()
+        register_all_capabilities()
+        logger.info("Ecosystem adapters and Mitra capabilities registered successfully.")
+    except Exception as exc:
+        logger.warning("Failed initializing capabilities/adapters: %s", exc)
+
     try:
         _register_telegram_webhook()
     except Exception as e:
@@ -249,8 +259,9 @@ async def security_middleware(request: Request, call_next):
         response = await call_next(request)
         return response
 
-    # Auth & Integration endpoints manage their own validation
-    if request.url.path.startswith("/api/auth") or request.url.path.startswith("/api/integrations"):
+    # Public endpoints manage their own validation
+    public_prefixes = ("/api/auth", "/api/integrations", "/api/ecosystem", "/api/companion", "/api/replay", "/api/metrics", "/api/tantra")
+    if any(request.url.path.startswith(prefix) for prefix in public_prefixes):
         response = await call_next(request)
         return response
 
