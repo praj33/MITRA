@@ -53,18 +53,22 @@ class MitraNavbar extends HTMLElement {
 
     const links = [
       { label: 'Dashboard', href: `${root}dashboard.html` },
+      { label: 'Samachar',  href: `${root}pages/samachar.html` },
       { label: 'UniGuru',   href: `${root}pages/uniguru.html` },
       { label: 'Gurukul',   href: `${root}pages/gurukul.html` },
       { label: 'Samruddhi',href: `${root}pages/samruddhi.html` },
       { label: 'SETU',     href: `${root}pages/setu.html` },
+      { label: 'Artha',    href: `${root}pages/artha.html` },
     ];
 
     const activeLabel = (() => {
       if (currentPath.includes('dashboard')) return 'Dashboard';
+      if (currentPath.includes('samachar'))  return 'Samachar';
       if (currentPath.includes('uniguru'))   return 'UniGuru';
       if (currentPath.includes('gurukul'))   return 'Gurukul';
       if (currentPath.includes('samruddhi')) return 'Samruddhi';
       if (currentPath.includes('setu'))      return 'SETU';
+      if (currentPath.includes('artha'))     return 'Artha';
       return '';
     })();
 
