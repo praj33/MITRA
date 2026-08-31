@@ -308,13 +308,15 @@ export class ControlPlane {
       }
       // ═══════════════════════════════════════════════════════════════════
 
-      // Broader news query detection — covers "What is happening with X", "what happened", "what's going on", etc.
-      const isNewsQuery = /\b(news|headline|headlines|article|articles|happening|happened|going on|what is|latest|update|today|outage|down|status|trending)\b/i.test(trimmedText)
+      // Explicit news query detection (urls, news keywords, or backend samachar capability)
+      const isNewsQuery = isDirectUrl 
+        || /\b(news|headline|headlines|samachar|khabar|breaking news)\b/i.test(trimmedText)
         || (intent === 'news')
+        || (capabilityResult && capabilityResult.capability === 'samachar')
         || /Web Information Intelligence/i.test(replyText);
 
       // Canonical Samachar capability response formatting
-      if (isDirectUrl || isNewsQuery || intent === 'news') {
+      if (isNewsQuery) {
         intent = 'news';
         if (!capabilityResult && replyText) {
           const cleanSummary = replyText.replace(/^Web Information Intelligence Summary:\s*/i, '').trim();
