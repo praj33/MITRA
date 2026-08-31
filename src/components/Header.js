@@ -75,14 +75,22 @@ export class Header {
     if (!dot) return;
     const titleText = `Status: ${status}${latency ? ' (' + latency + ')' : ''}`;
     dot.setAttribute('title', titleText);
+
+    const sLower = (status || '').toLowerCase();
     
-    if (status === 'Healthy') {
+    if (sLower === 'healthy' || sLower === 'success' || sLower === 'recovered') {
       dot.style.background = '#00e676';
       dot.style.boxShadow = '0 0 8px #00e676';
-    } else if (status === 'Busy' || status === 'Connecting') {
+    } else if (sLower === 'executing' || sLower === 'busy') {
+      dot.style.background = '#e056fd';
+      dot.style.boxShadow = '0 0 8px #e056fd';
+    } else if (sLower === 'connecting') {
       dot.style.background = '#ffb700';
       dot.style.boxShadow = '0 0 8px #ffb700';
-    } else if (status === 'Error' || status === 'Service Unavailable') {
+    } else if (sLower === 'offline' || sLower === 'disconnected') {
+      dot.style.background = '#ff9500';
+      dot.style.boxShadow = '0 0 8px #ff9500';
+    } else if (sLower === 'error' || sLower === 'failed' || sLower === 'service unavailable') {
       dot.style.background = '#ff3b30';
       dot.style.boxShadow = '0 0 8px #ff3b30';
     } else {

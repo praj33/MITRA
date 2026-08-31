@@ -1,36 +1,73 @@
-import sys, io, urllib.request, json
+import asyncio
+import json
+import sys
+import os
 
-sys.stdout = io.TextIOWrapper(sys.stdout.buffer, encoding='utf-8', errors='replace')
+sys.path.insert(0, os.path.dirname(__file__))
 
-def run_test(label, msg):
-    data = json.dumps({'message': msg, 'user_id': 'test_user', 'session_id': 'test_session'}).encode()
-    req = urllib.request.Request(
-        'http://127.0.0.1:8000/api/companion/chat',
-        data=data,
-        headers={'Content-Type': 'application/json'}
-    )
-    try:
-        res = urllib.request.urlopen(req, timeout=45)
-        resp = json.loads(res.read().decode('utf-8'))
-        cap = (resp.get('capability_result') or {})
-        cap_data = cap.get('data') or {}
-        resolved_url = cap_data.get('url') or 'N/A'
-        msg_text = resp.get('message', '')
+from app.capabilities.samachar_capability import SamacharCapability
+
+async def run_tests():
+    cap = SamacharCapability()
+    test_cases = [
+        ("TEST A: General News Query", {"message": "Show me latest AI news"}),
+        ("TEST B: Specific BBC Live News URL", {"message": "https://www.bbc.com/news/live/cr0qxd1y219kt"})
+    ]
+
+    all_passed = True
+
+    for label, params in test_cases:
+        print(f"\n==================================================")
+        print(f"{label}")
+        print(f"INPUT: {params['message']}")
+        print(f"==================================================")
+        res = await cap.execute(intent="news", params=params)
+        print(f"CAPABILITY RESULT STATUS: {res.status}")
+        data = res.data or {}
+        article = data.get("article", {})
         
-        output = [
-            f"=== {label} ===",
-            f"User Query:          '{msg}'",
-            f"Intent:              {resp.get('intent')}",
-            f"Resolved URL:        {resolved_url}",
-            f"Samachar API Status: {res.status} OK",
-            f"Final MITRA Output:\n{msg_text[:400].strip()}",
-            "--------------------------------------------------"
-        ]
-        print("\n".join(output), flush=True)
-    except Exception as e:
-        print(f"=== {label} ===\nUser Query: '{msg}'\nERROR: {e}\n--------------------------------------------------", flush=True)
+        print(f"RESOLVED URL: {data.get('url')}")
+        print(f"TITLE: {article.get('title')}")
+        print(f"SOURCE: {article.get('source')}")
+        print(f"AUTHOR: {article.get('author')}")
+        print(f"SUMMARY PARAGRAPHS:\n{article.get('summary')}")
+        print(f"KEY POINTS: {article.get('key_points')}")
+        
+        # Regression Assertions
+        title = (article.get('title') or "").lower()
+        author = (article.get('author') or "").lower()
+        summary = article.get('summary') or ""
+        
+        # 1. Title must NOT be generic
+        invalid_titles = ["live now", "industries", "more news", "recently live", "latest news", "homepage"]
+        if any(inv in title for inv in invalid_titles):
+            print(f"[FAIL] Generic title detected: '{article.get('title')}'")
+            all_passed = False
+        else:
+            print("[PASS] TITLE VALIDATION PASSED")
 
-print("Starting Samachar Capability Test Suite...\n", flush=True)
-run_test("TEST 1: Direct Article URL", "https://www.bbc.com/news/articles/cx272np7vgyo")
-run_test("TEST 2: Natural Language - Latest News", "latest news")
-run_test("TEST 3: Natural Language - AI News", "What is happening with AI today?")
+        # 2. Author must NOT be metadata noise
+        invalid_authors = ["risk report", "industries", "navigation"]
+        if any(inv in author for inv in invalid_authors):
+            print(f"[FAIL] Noise author detected: '{article.get('author')}'")
+            all_passed = False
+        else:
+            print("[PASS] AUTHOR VALIDATION PASSED")
+
+        # 3. Summary length check
+        paragraphs = [p for p in summary.split("\n\n") if p.strip()]
+        if len(paragraphs) > 4 or len(paragraphs) < 1:
+            print(f"[FAIL] Invalid paragraph count ({len(paragraphs)})")
+            all_passed = False
+        else:
+            print(f"[PASS] SUMMARY PARAGRAPH COUNT PASSED ({len(paragraphs)} paragraphs)")
+
+    print(f"\n==================================================")
+    if all_passed:
+        print("[SUCCESS] ALL REGRESSION TESTS PASSED CLEANLY!")
+    else:
+        print("[FAILURE] REGRESSION TESTS FAILED!")
+    print(f"==================================================")
+
+if __name__ == "__main__":
+    asyncio.run(run_tests())

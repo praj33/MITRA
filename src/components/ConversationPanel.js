@@ -604,9 +604,87 @@ export class ConversationPanel {
           </div>
           <div style="font-size:11px; font-weight:600; color:#a29bfe; margin-bottom:4px;">Summary:</div>
           <div style="background:rgba(0,0,0,0.3); border:1px solid rgba(255,255,255,0.1); padding:10px; border-radius:8px; font-size:12px; font-family:inherit; color:#e0e0e0; max-height:180px; overflow-y:auto; white-space:pre-wrap; overflow-wrap:anywhere; word-break:break-word;">${this.escapeHtml(summaryText)}</div>
-          ${directUrl}
         `;
       }
+
+    } else if (capability === 'uniguru') {
+      const isLlmFallback = backendData.source === 'llm_fallback' || !backendData.evidence;
+      const verStatus = backendData.verification_status || (isLlmFallback ? 'LLM_FALLBACK' : 'VERIFIED');
+      const answerText = backendData.answer || backendData.result || resultText || '';
+
+      let evidenceBox = '';
+      if (backendData.evidence) {
+        const tbId = backendData.evidence.textbook_id || backendData.textbook_id || 'balbharti_k12';
+        const pages = Array.isArray(backendData.evidence.page_numbers)
+          ? backendData.evidence.page_numbers.join(', ')
+          : (backendData.evidence.page_numbers || 'N/A');
+        const srcHash = backendData.evidence.source_hash ? String(backendData.evidence.source_hash).slice(0, 12) + '...' : 'Verified';
+        const linHash = backendData.evidence.lineage_hash ? String(backendData.evidence.lineage_hash).slice(0, 12) + '...' : 'Verified';
+
+        evidenceBox = `
+          <div style="background:rgba(0,230,118,0.06); border:1px solid rgba(0,230,118,0.2); padding:10px; border-radius:8px; margin-top:8px; font-size:11px;">
+            <div style="font-weight:700; color:#00e676; margin-bottom:4px; font-size:11px;">📚 KOSHA EVIDENCE CITATION</div>
+            <div style="display:grid; grid-template-columns:1fr 1fr; gap:6px; color:rgba(255,255,255,0.8);">
+              <div>📖 <strong>Textbook:</strong> ${this.escapeHtml(tbId)}</div>
+              <div>📄 <strong>Pages:</strong> ${this.escapeHtml(String(pages))}</div>
+              <div>🔑 <strong>Source Hash:</strong> ${this.escapeHtml(srcHash)}</div>
+              <div>🔗 <strong>Lineage Hash:</strong> ${this.escapeHtml(linHash)}</div>
+            </div>
+          </div>
+        `;
+      } else {
+        evidenceBox = `
+          <div style="background:rgba(255,183,0,0.06); border:1px solid rgba(255,183,0,0.2); padding:6px 10px; border-radius:6px; margin-top:8px; font-size:10px; color:#ffb700; display:flex; align-items:center; gap:6px;">
+            <span>ℹ️ Standard Knowledge Response (LLM Bridge Fallback Mode — Kosha RAG REST API awaiting backend endpoint)</span>
+          </div>
+        `;
+      }
+
+      widgetContent = `
+        <div style="display:flex; align-items:center; justify-content:space-between; margin-bottom:8px; border-bottom:1px solid rgba(255,255,255,0.1); padding-bottom:6px;">
+          <div style="font-weight:700; font-size:13px; color:#6c5ce7; display:flex; align-items:center; gap:6px;">🎓 UNIGURU KNOWLEDGE</div>
+          <span style="font-size:10px; background:${isLlmFallback ? 'rgba(255,183,0,0.15)' : 'rgba(0,230,118,0.15)'}; color:${isLlmFallback ? '#ffb700' : '#00e676'}; padding:2px 6px; border-radius:4px;">${this.escapeHtml(verStatus)}</span>
+        </div>
+        <div style="background:rgba(0,0,0,0.3); border:1px solid rgba(255,255,255,0.1); padding:10px; border-radius:8px; font-size:12px; color:#e0e0e0; max-height:220px; overflow-y:auto; white-space:pre-wrap;">${this.escapeHtml(answerText)}</div>
+        ${evidenceBox}
+      `;
+
+    } else if (capability === 'setu') {
+      const provTag = backendData.source_context?.connected_company_id || 'bc_bright_connection_001';
+
+      let bodyContent = '';
+      if (backendData.data && backendData.data.products && Array.isArray(backendData.data.products)) {
+        const rows = backendData.data.products.map(p => `
+          <tr>
+            <td style="padding:4px 6px; border-bottom:1px solid rgba(255,255,255,0.05);">${this.escapeHtml(p.sku || p.name)}</td>
+            <td style="padding:4px 6px; border-bottom:1px solid rgba(255,255,255,0.05); text-align:right;">₹${p.price || 0}</td>
+            <td style="padding:4px 6px; border-bottom:1px solid rgba(255,255,255,0.05); text-align:right; font-weight:700; color:${(p.stock_quantity || 0) < 10 ? '#ff453a' : '#00e676'};">${p.stock_quantity || 0}</td>
+          </tr>
+        `).join('');
+        bodyContent = `
+          <table style="width:100%; border-collapse:collapse; font-size:11px; margin-top:6px;">
+            <thead><tr style="color:#a1a1aa; border-bottom:1px solid rgba(255,255,255,0.1); text-align:left;"><th>Item</th><th style="text-align:right;">Price</th><th style="text-align:right;">Stock</th></tr></thead>
+            <tbody>${rows}</tbody>
+          </table>
+        `;
+      } else {
+        bodyContent = `
+          <div style="background:rgba(255,255,255,0.04); padding:10px; border-radius:6px; font-size:11px; color:#e0e0e0;">
+            ${this.escapeHtml(resultText || 'SETU Operational Gateway Response')}
+          </div>
+          <div style="margin-top:6px; font-size:10px; color:#a1a1aa;">
+            ℹ️ SETU Integration Gateway Interface (Pending live backend contract registration)
+          </div>
+        `;
+      }
+
+      widgetContent = `
+        <div style="display:flex; align-items:center; justify-content:space-between; margin-bottom:8px; border-bottom:1px solid rgba(255,255,255,0.1); padding-bottom:6px;">
+          <div style="font-weight:700; font-size:13px; color:#ffb700; display:flex; align-items:center; gap:6px;">🔌 SETU OPERATIONAL GATEWAY</div>
+          <span style="font-size:10px; background:rgba(255,183,0,0.15); color:#ffb700; padding:2px 6px; border-radius:4px;">${this.escapeHtml(provTag)}</span>
+        </div>
+        ${bodyContent}
+      `;
 
     } else {
       widgetContent = `

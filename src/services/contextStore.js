@@ -192,6 +192,21 @@ export class ContextStore {
     eventBus.emit('position.changed', { position });
   }
 
+  // ─── Host App & Page Context ────────────────────────────────────────────────
+  getHostApp() {
+    const pathname = typeof window !== 'undefined' ? window.location.pathname || '' : '';
+    if (pathname.includes('/pages/samachar')) return 'samachar';
+    if (pathname.includes('/pages/uniguru')) return 'uniguru';
+    if (pathname.includes('/pages/gurukul')) return 'gurukul';
+    if (pathname.includes('/pages/samruddhi')) return 'samruddhi';
+    if (pathname.includes('/pages/setu')) return 'setu';
+    return 'dashboard';
+  }
+
+  getCurrentPage() {
+    return typeof window !== 'undefined' ? window.location.pathname || 'index.html' : 'index.html';
+  }
+
   getPosition() {
     return this.state.position || null;
   }

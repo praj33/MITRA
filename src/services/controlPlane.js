@@ -36,16 +36,36 @@ export class ControlPlane {
    *  - platform (string, default "web")
    *  - device (string, default "browser")
    */
+  getHostContext() {
+    const pathname = typeof window !== 'undefined' ? window.location.pathname || '' : '';
+    let hostApp = 'dashboard';
+    if (pathname.includes('/pages/samachar')) hostApp = 'samachar';
+    else if (pathname.includes('/pages/uniguru')) hostApp = 'uniguru';
+    else if (pathname.includes('/pages/gurukul')) hostApp = 'gurukul';
+    else if (pathname.includes('/pages/samruddhi')) hostApp = 'samruddhi';
+    else if (pathname.includes('/pages/setu')) hostApp = 'setu';
+
+    return {
+      host_app: hostApp,
+      current_page: pathname || 'index.html'
+    };
+  }
+
   async sendMessage(text) {
-    eventBus.emit('health.changed', { status: 'Busy' });
+    eventBus.emit('health.changed', { status: 'Connecting' });
     try {
       const userId = contextStore.getUserId();
+      const hostCtx = this.getHostContext();
 
       // Build payload strictly adhering to OpenAPI `CompanionChatRequest`
       const payload = {
         message: text,
         platform: 'web',
-        device: 'browser'
+        device: 'browser',
+        page_context: {
+          host_app: hostCtx.host_app,
+          current_page: hostCtx.current_page
+        }
       };
       if (userId) payload.user_id = userId;
 
@@ -143,6 +163,7 @@ export class ControlPlane {
       }
       // ═══════════════════════════════════════════════════════════════════
 
+      eventBus.emit('health.changed', { status: 'Executing' });
       const response = await fetch(`${getApiBaseUrl()}/api/companion/chat`, {
         method: 'POST',
         headers: buildHeaders(),
@@ -498,7 +519,8 @@ export class ControlPlane {
 
       return data;
     } catch (err) {
-      eventBus.emit('health.changed', { status: 'Error' });
+      const isOffline = err.message.includes('Failed to fetch') || err.message.includes('NetworkError');
+      eventBus.emit('health.changed', { status: isOffline ? 'Offline' : 'Error' });
       eventBus.emit('notification.received', {
         role: 'mitra',
         text: 'Error communicating with backend: ' + err.message,
