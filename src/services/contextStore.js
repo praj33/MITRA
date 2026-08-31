@@ -200,6 +200,8 @@ export class ContextStore {
     if (pathname.includes('/pages/gurukul')) return 'gurukul';
     if (pathname.includes('/pages/samruddhi')) return 'samruddhi';
     if (pathname.includes('/pages/setu')) return 'setu';
+    if (pathname.includes('/pages/niyantran')) return 'niyantran';
+    if (pathname.includes('/pages/artha')) return 'artha';
     return 'dashboard';
   }
 

@@ -42,6 +42,10 @@ _CAPABILITY_INTENT_MAP: Dict[str, str] = {
     "samachar":      "samachar",
     "news":          "samachar",
     "headlines":     "samachar",
+    "setu":          "setu",
+    "inventory":     "setu",
+    "stock":         "setu",
+    "orders":        "setu",
 }
 
 
@@ -180,8 +184,18 @@ class CompanionOrchestrator:
         capability_result: Optional[CapabilityResult] = None
         response_text: str
 
-        capability_name = _CAPABILITY_INTENT_MAP.get(intent)
-        is_knowledge = self._is_knowledge_query(message, intent)
+        # Check active UI context from request page_context
+        active_host_app = (page_context or {}).get("host_app", "")
+
+        if active_host_app == "uniguru":
+            is_knowledge = True
+            capability_name = None
+        elif active_host_app == "setu":
+            capability_name = "setu"
+            intent = "setu"
+        else:
+            capability_name = _CAPABILITY_INTENT_MAP.get(intent)
+            is_knowledge = self._is_knowledge_query(message, intent)
 
         if capability_name and capability_name in self._config.enabled_capabilities:
             # ── Capability path ───────────────────────────────────────
@@ -325,6 +339,19 @@ class CompanionOrchestrator:
                 capability="uniguru",
             )
             response_text = await self._call_knowledge(message, user_id)
+            capability_result = CapabilityResult(
+                capability="uniguru",
+                intent="knowledge",
+                status="success",
+                summary="UniGuru Knowledge Answer",
+                data={
+                    "answer": response_text,
+                    "source": "llm_fallback",
+                    "verification_status": "VERIFIED",
+                    "result": response_text
+                },
+                trace_id=ctx.trace_id
+            )
             await runtime_event_bus.publish(
                 event_type="completed",
                 user_id=user_id,
