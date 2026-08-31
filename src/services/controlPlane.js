@@ -311,9 +311,8 @@ export class ControlPlane {
       // Explicit news query detection (urls, news keywords, or backend samachar capability)
       const isNewsQuery = isDirectUrl 
         || /\b(news|headline|headlines|samachar|khabar|breaking news)\b/i.test(trimmedText)
-        || (intent === 'news')
         || (capabilityResult && capabilityResult.capability === 'samachar')
-        || /Web Information Intelligence/i.test(replyText);
+        || (intent === 'news' && !capabilityResult);
 
       // Canonical Samachar capability response formatting
       if (isNewsQuery) {

@@ -192,6 +192,7 @@ class CompanionOrchestrator:
         if active_host_app == "uniguru":
             is_knowledge = True
             capability_name = None
+            intent = "knowledge"
         elif active_host_app == "setu":
             capability_name = "setu"
             intent = "setu"
