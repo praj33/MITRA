@@ -46,6 +46,8 @@ _CAPABILITY_INTENT_MAP: Dict[str, str] = {
     "inventory":     "setu",
     "stock":         "setu",
     "orders":        "setu",
+    "uniguru":       "uniguru",
+    "knowledge":     "uniguru",
 }
 
 
@@ -193,6 +195,7 @@ class CompanionOrchestrator:
         elif active_host_app == "setu":
             capability_name = "setu"
             intent = "setu"
+            is_knowledge = False
         else:
             capability_name = _CAPABILITY_INTENT_MAP.get(intent)
             is_knowledge = self._is_knowledge_query(message, intent)

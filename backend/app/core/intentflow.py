@@ -22,6 +22,8 @@ class IntentFlow:
             'instagram': ['instagram', 'insta', 'send dm'],
             'ems': ['ems', 'ems task'],
             'device': ['device', 'desktop', 'mobile', 'tablet', 'xr'],
+            'setu': ['setu', 'inventory', 'stock', 'order', 'orders', 'tea leaves', 'tally', 'supply'],
+            'uniguru': ['uniguru', 'newton', 'laws of motion', 'energy', 'physics', 'science', 'math', 'equation', 'formula', 'concept'],
             'news': [
                 'news', 'samachar', 'headlines', 'articles', 'press', 'media',
                 'latest update', 'breaking news', 'top stories', 'current events',
