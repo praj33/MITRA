@@ -39,6 +39,7 @@ _CAPABILITY_INTENT_MAP: Dict[str, str] = {
     "balance":       "samruddhi",
     "trades":        "samruddhi",
     "transactions":  "samruddhi",
+    "artha":         "samruddhi",
     "samachar":      "samachar",
     "news":          "samachar",
     "headlines":     "samachar",
@@ -196,6 +197,10 @@ class CompanionOrchestrator:
         elif active_host_app == "setu":
             capability_name = "setu"
             intent = "setu"
+            is_knowledge = False
+        elif active_host_app == "artha":
+            capability_name = "samruddhi"
+            intent = "portfolio"
             is_knowledge = False
         else:
             capability_name = _CAPABILITY_INTENT_MAP.get(intent)
