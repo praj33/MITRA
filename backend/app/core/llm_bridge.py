@@ -7,6 +7,9 @@ import time
 from collections import OrderedDict
 from typing import Dict, List, Optional, Any
 
+import dotenv
+dotenv.load_dotenv()
+
 try:
     from openai import AsyncOpenAI
 except ImportError:
@@ -424,13 +427,13 @@ class LLMBridge:
             (m["content"] for m in reversed(messages) if m["role"] == "user"), ""
         ).lower().strip()
 
-        # Greetings
+        # 1. How are you & variations / typos
+        if re.search(r"how (are|r) (you|yoiu|yoo|u|ya|yall|y'all)|how('s| is) it going|what('s|s) up|wbu", user_msg):
+            return "Hey there! I'm doing great, thank you for asking! I'm fully focused and ready to assist you. What can I help you with today?"
+
+        # 2. Plain Greetings
         if re.search(r"\b(hi|hello|hey|good morning|good evening|good afternoon|namaste|hlo|helo)\b", user_msg):
             return "Hey there! I'm Mitra, your AI companion. I'm here and ready to help. What's on your mind?"
-
-        # How are you & variations / typos
-        if re.search(r"how (are|r) (you|yoiu|yoo|u|ya|yall|y'all)|how('s| is) it going|what('s|s) up|wbu", user_msg):
-            return "I'm doing great, thank you for asking! I'm fully focused and ready to assist you. What can I help you with today?"
 
         # Capital city questions
         capitals = {
