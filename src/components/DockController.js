@@ -64,16 +64,16 @@ export class DockController {
           this.shell.style.bottom = 'auto';
           this.shell.style.right = 'auto';
         } else {
-          this.shell.style.top = '24px';
-          this.shell.style.left = 'auto';
-          this.shell.style.bottom = 'auto';
+          this.shell.style.bottom = '24px';
           this.shell.style.right = '24px';
+          this.shell.style.top = 'auto';
+          this.shell.style.left = 'auto';
         }
       } else {
-        this.shell.style.top = '24px';
-        this.shell.style.left = 'auto';
-        this.shell.style.bottom = 'auto';
+        this.shell.style.bottom = '24px';
         this.shell.style.right = '24px';
+        this.shell.style.top = 'auto';
+        this.shell.style.left = 'auto';
       }
       this.shell.style.position = 'fixed';
     }
