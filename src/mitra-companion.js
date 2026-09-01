@@ -13,11 +13,13 @@ class MitraCompanion extends HTMLElement {
   }
 
   async connectedCallback() {
-    window.__mitra_event_bus = eventBus;
-    this.render();
-
-    // Connect runtime after rendering UI
-    await runtimeService.connectAll();
+    try {
+      window.__mitra_event_bus = eventBus;
+      this.render();
+      await runtimeService.connectAll();
+    } catch (err) {
+      console.warn('[MITRA Error Boundary] Caught companion lifecycle error:', err);
+    }
   }
 
   render() {

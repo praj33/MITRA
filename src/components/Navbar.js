@@ -59,7 +59,6 @@ class MitraNavbar extends HTMLElement {
       { label: 'Samruddhi',href: `${root}pages/samruddhi.html` },
       { label: 'SETU',     href: `${root}pages/setu.html` },
       { label: 'Artha',    href: `${root}pages/artha.html` },
-      { label: 'Niyantran',href: `${root}pages/niyantran.html` },
     ];
 
     const activeLabel = (() => {
@@ -70,7 +69,6 @@ class MitraNavbar extends HTMLElement {
       if (currentPath.includes('samruddhi')) return 'Samruddhi';
       if (currentPath.includes('setu'))      return 'SETU';
       if (currentPath.includes('artha'))     return 'Artha';
-      if (currentPath.includes('niyantran')) return 'Niyantran';
       return '';
     })();
 
