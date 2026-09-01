@@ -281,7 +281,7 @@ class LLMBridge:
                 raise ValueError("GROQ_API_KEY not configured")
         # Try requested model first if provided, else configured model
         base_model = requested_model if (requested_model and requested_model not in ("groq", "llama")) else self.groq_model
-        models_to_try = [base_model, "llama-3.1-8b-instant", "groq/compound"]
+        models_to_try = [base_model, "groq/compound", "openai/gpt-oss-120b", "llama-3.3-70b-versatile", "llama-3.1-8b-instant"]
         # Remove duplicates preserving order
         models_to_try = list(dict.fromkeys(models_to_try))
         
