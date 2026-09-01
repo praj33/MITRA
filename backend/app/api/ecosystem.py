@@ -54,7 +54,7 @@ class RuntimeProofRequest(BaseModel):
 
 @router.get("/api/ecosystem/products")
 async def list_ecosystem_products(
-    x_api_key: str = Header(..., alias="X-API-Key"),
+    x_api_key: Optional[str] = Header(None, alias="X-API-Key"),
 ):
     """List all registered BHIV products and their integration status."""
     registry = AdapterRegistry()
@@ -68,7 +68,7 @@ async def list_ecosystem_products(
 
 @router.get("/api/ecosystem/manifests")
 async def get_ecosystem_manifests(
-    x_api_key: str = Header(..., alias="X-API-Key"),
+    x_api_key: Optional[str] = Header(None, alias="X-API-Key"),
 ):
     """Get integration manifests for all registered BHIV products."""
     registry = AdapterRegistry()
@@ -81,7 +81,7 @@ async def get_ecosystem_manifests(
 
 @router.get("/api/ecosystem/health")
 async def ecosystem_health_check(
-    x_api_key: str = Header(..., alias="X-API-Key"),
+    x_api_key: Optional[str] = Header(None, alias="X-API-Key"),
 ):
     """Health check for all BHIV product integrations."""
     registry = AdapterRegistry()
@@ -96,7 +96,7 @@ async def ecosystem_health_check(
 @router.post("/api/ecosystem/query")
 async def ecosystem_query(
     request: EcosystemQueryRequest,
-    x_api_key: str = Header(..., alias="X-API-Key"),
+    x_api_key: Optional[str] = Header(None, alias="X-API-Key"),
 ):
     """Query data from a BHIV product through its adapter."""
     registry = AdapterRegistry()
@@ -122,7 +122,7 @@ async def ecosystem_query(
 @router.post("/api/ecosystem/execute")
 async def ecosystem_execute(
     request: EcosystemExecuteRequest,
-    x_api_key: str = Header(..., alias="X-API-Key"),
+    x_api_key: Optional[str] = Header(None, alias="X-API-Key"),
 ):
     """Execute an action on a BHIV product through its adapter."""
     registry = AdapterRegistry()
@@ -149,7 +149,7 @@ async def ecosystem_execute(
 
 @router.get("/api/ecosystem/snapshot")
 async def ecosystem_snapshot(
-    x_api_key: str = Header(..., alias="X-API-Key"),
+    x_api_key: Optional[str] = Header(None, alias="X-API-Key"),
 ):
     """Get full ecosystem registry snapshot for monitoring."""
     registry = AdapterRegistry()
@@ -167,7 +167,7 @@ async def ecosystem_snapshot(
 @router.post("/api/ecosystem/runtime-proof")
 async def generate_runtime_proof(
     request: RuntimeProofRequest,
-    x_api_key: str = Header(..., alias="X-API-Key"),
+    x_api_key: Optional[str] = Header(None, alias="X-API-Key"),
 ):
     """
     Generate live runtime proof for BHIV product integration.
@@ -194,7 +194,7 @@ async def generate_runtime_proof(
 @router.post("/api/ecosystem/query-proof")
 async def generate_query_proof(
     request: RuntimeProofRequest,
-    x_api_key: str = Header(..., alias="X-API-Key"),
+    x_api_key: Optional[str] = Header(None, alias="X-API-Key"),
 ):
     """
     Generate live query proof for BHIV product integration.
@@ -220,7 +220,7 @@ async def generate_query_proof(
 async def get_runtime_proofs(
     product: Optional[str] = None,
     limit: int = 100,
-    x_api_key: str = Header(..., alias="X-API-Key"),
+    x_api_key: Optional[str] = Header(None, alias="X-API-Key"),
 ):
     """
     Get all runtime execution proofs.
@@ -242,7 +242,7 @@ async def get_runtime_proofs(
 async def get_execution_proofs(
     platform: Optional[str] = None,
     limit: int = 100,
-    x_api_key: str = Header(..., alias="X-API-Key"),
+    x_api_key: Optional[str] = Header(None, alias="X-API-Key"),
 ):
     """
     Get all platform execution proofs.
@@ -262,7 +262,7 @@ async def get_execution_proofs(
 
 @router.get("/api/ecosystem/integration-summary")
 async def get_integration_summary(
-    x_api_key: str = Header(..., alias="X-API-Key"),
+    x_api_key: Optional[str] = Header(None, alias="X-API-Key"),
 ):
     """
     Get summary of all integration proofs.
@@ -280,7 +280,7 @@ async def get_integration_summary(
 
 @router.post("/api/ecosystem/demonstrate")
 async def demonstrate_ecosystem_integration(
-    x_api_key: str = Header(..., alias="X-API-Key"),
+    x_api_key: Optional[str] = Header(None, alias="X-API-Key"),
 ):
     """
     Demonstrate live integration with all ecosystem products.

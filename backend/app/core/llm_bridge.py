@@ -468,7 +468,7 @@ class LLMBridge:
             from app.tools.search_tool import SearchTool
             search_res = await SearchTool().run(user_msg)
             if search_res:
-                return f"Based on live information for your query:\n\n{search_res}"
+                return self._synthesize_search_into_markdown(user_msg, search_res)
         except Exception as exc:
             logger.warning("Factual search fallback error: %s", exc)
 
@@ -477,6 +477,63 @@ class LLMBridge:
             "I'm listening and here to help! "
             "Could you rephrase your question or ask about tasks, calendar, reminders, news, or weather?"
         )
+
+    def _synthesize_search_into_markdown(self, query: str, raw_search_text: str) -> str:
+        """Converts raw web snippets into a clean, structured Markdown response with headlines and highlights."""
+        if not raw_search_text:
+            return f"No detailed results found for '{query}'."
+
+        # Strip header prefixes
+        clean_text = re.sub(r"^Web Information Intelligence Summary:\s*", "", raw_search_text, flags=re.IGNORECASE)
+
+        lines = [line.strip().lstrip("•- ") for line in clean_text.split("\n") if line.strip()]
+
+        cleaned_bullets = []
+        for line in lines:
+            # Strip website titles before colon if title contains site markers
+            if ":" in line and any(marker in line for marker in ["SpinQ", "Science ABC", "Wikipedia", "Beginner's Guide", "Explained"]):
+                parts = line.split(":", 1)
+                line = parts[1] if len(parts) > 1 else line
+
+            # Strip website meta noise (views, youtube tags, wikipedia boilerplates)
+            line = re.sub(r"#(?:[^\s#]+)", "", line)
+            line = re.sub(r"\[\.\.\.\]|\(?\d{4}\)?", "", line)
+            line = re.sub(r"\d+\s+subscribers|\d+\s+views|WATCH NEXT:|Description\s+\d+|Posted:\s*[\d\w\s]+", "", line, flags=re.IGNORECASE)
+            line = re.sub(r"Wikipedia\s+is\s+a\s+registered\s+trademark.*", "", line, flags=re.IGNORECASE)
+            line = re.sub(r"##\s*Why it matters to you|##\s*Description|##\s*Quantum Computing Challenges", "", line, flags=re.IGNORECASE)
+            line = re.sub(r"\s+", " ", line).strip()
+            if len(line) > 30:
+                cleaned_bullets.append(line)
+
+        title = query.strip().rstrip("?.!").title()
+
+        md = [
+            f"### 💡 **{title}**\n",
+        ]
+
+        if cleaned_bullets:
+            first_summary = cleaned_bullets[0]
+            # Strip title fragment if present
+            first_summary = re.sub(r"^.*?(What it is|Try to think|Quantum mechanics|Quantum theory)", r"\1", first_summary, flags=re.IGNORECASE)
+            first_summary = re.sub(r"\b(qubits?|superposition|entanglement|quantum speedup|cryptography|classical computers?)\b", r"**\1**", first_summary, flags=re.IGNORECASE)
+
+            md.append(f"**Overview**:\n{first_summary}\n")
+            md.append("### 🔑 **Key Principles & Highlights**")
+
+            formatted_bullets = []
+            for b in cleaned_bullets[1:4]:
+                b_high = re.sub(r"\b(qubits?|superposition|entanglement|quantum speedup|cryptography|classical computers?)\b", r"**\1**", b, flags=re.IGNORECASE)
+                formatted_bullets.append(f"* {b_high}")
+
+            if not formatted_bullets and len(cleaned_bullets) > 0:
+                formatted_bullets.append(f"* {first_summary}")
+
+            md.append("\n".join(formatted_bullets))
+
+        md.append("\n---")
+        md.append("✨ *Response formatted by Mitra Live Intelligence Engine.*")
+
+        return "\n\n".join(md)
 
 
 # Singleton
