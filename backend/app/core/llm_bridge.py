@@ -70,6 +70,7 @@ class LLMBridge:
             self._http_client = httpx.AsyncClient(
                 timeout=httpx.Timeout(15.0, connect=5.0),
                 limits=httpx.Limits(max_keepalive_connections=10, max_connections=20),
+                follow_redirects=True,
             )
         return self._http_client
 
@@ -370,7 +371,7 @@ class LLMBridge:
         return result.choices[0].message["content"] or ""
 
     async def _call_uniguru(self, messages: list) -> str:
-        """Live UniGuru v2 API — POST /new_query with full context preservation."""
+        """Live UniGuru v2 API — POST /query or /new_query with full context preservation."""
         client = self._get_http_client()
         
         # Preserve full context (System prompt, active DOM map, and conversation turns)
@@ -387,22 +388,34 @@ class LLMBridge:
             headers["X-API-Key"] = self.uniguru_key
             headers["Authorization"] = f"Bearer {self.uniguru_key}"
 
-        resp = await client.post(
-            self.uniguru_url,
-            json={"query": full_context_query},
-            headers=headers,
-        )
-        if resp.status_code == 200:
-            data = resp.json()
-            return (
-                data.get("answer")
-                or data.get("response")
-                or data.get("result")
-                or data.get("output")
-                or str(data)
-            )
-        logger.warning("UniGuru HTTP %s: %s", resp.status_code, resp.text[:200])
-        raise ValueError(f"UniGuru HTTP {resp.status_code}")
+        base_url = self.uniguru_url.rstrip('/')
+        endpoints_to_try = [f"{base_url}/query", f"{base_url}/new_query", base_url]
+
+        last_exc = None
+        for ep in endpoints_to_try:
+            try:
+                resp = await client.post(
+                    ep,
+                    json={"query": full_context_query},
+                    headers=headers,
+                )
+                if resp.status_code == 200:
+                    data = resp.json()
+                    return (
+                        data.get("answer")
+                        or data.get("response")
+                        or data.get("result")
+                        or data.get("output")
+                        or str(data)
+                    )
+                logger.info("UniGuru endpoint %s returned %s", ep, resp.status_code)
+            except Exception as exc:
+                last_exc = exc
+                continue
+
+        if last_exc:
+            raise last_exc
+        raise ValueError("UniGuru call failed on all candidate endpoints")
 
     async def _rule_based_response(self, messages: list) -> str:
         """Smart rule-based fallback — always returns something useful."""
