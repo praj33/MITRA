@@ -103,17 +103,35 @@ class LLMBridge:
         )
 
     def _sanitize_llm_output(self, text: str) -> str:
-        """Centralized sanitizer to ensure no model or fallback ever returns raw search/debug dumps."""
+        """Centralized sanitizer to ensure output is clean, human-readable, and free of broken markdown symbols, hashtags, or orphan bullets."""
         if not text:
             return ""
+        
+        # 1. Strip debug prefixes & prompt leaks
         text = re.sub(r"^Based on live information for your query:\s*", "", text, flags=re.IGNORECASE).strip()
         text = re.sub(r"INSTRUCTION TO LLM:.*", "", text, flags=re.DOTALL).strip()
+        
+        # 2. Clean raw web search headers if present
         if text.startswith("Live Web Search Context:") or text.startswith("Web Search Intelligence:"):
             parts = re.split(r"\n\s*•\s+.*", text)
             synth = [p.strip() for p in parts if p.strip() and not p.strip().startswith("Live Web Search Context:") and not p.strip().startswith("Web Search Intelligence:")]
             if synth:
                 text = "\n\n".join(synth)
-        return text.strip()
+
+        # 3. Strip orphan bullet symbols sitting alone on lines (e.g. "•\n", "*\n", "- \n")
+        text = re.sub(r"^\s*[•\*\-★]\s*$", "", text, flags=re.MULTILINE)
+
+        # 4. Clean up social media hashtag clutter (e.g. "#science #tech")
+        text = re.sub(r"\s+#(?:[^\s#]+)", "", text)
+        text = re.sub(r"^\s*#{4,}\s*", "### ", text, flags=re.MULTILINE)
+
+        # 5. Fix broken/double asterisks (e.g. "****" -> "")
+        text = re.sub(r"\*{4,}", "**", text)
+        
+        # 6. Normalize linebreaks (max 2 consecutive newlines for clean paragraph flow)
+        text = re.sub(r"\n{3,}", "\n\n", text).strip()
+
+        return text
 
     # ── full chat-history call (companion primary path) ───────────
     async def call_llm_with_messages(
@@ -524,7 +542,7 @@ class LLMBridge:
         title = query.strip().rstrip("?.!").title()
 
         md = [
-            f"### 💡 **{title}**\n",
+            f"### **{title}**",
         ]
 
         if cleaned_bullets:
@@ -533,21 +551,21 @@ class LLMBridge:
             first_summary = re.sub(r"^.*?(What it is|Try to think|Quantum mechanics|Quantum theory)", r"\1", first_summary, flags=re.IGNORECASE)
             first_summary = re.sub(r"\b(qubits?|superposition|entanglement|quantum speedup|cryptography|classical computers?)\b", r"**\1**", first_summary, flags=re.IGNORECASE)
 
-            md.append(f"**Overview**:\n{first_summary}\n")
-            md.append("### 🔑 **Key Principles & Highlights**")
+            md.append(f"**Overview**:\n{first_summary}")
+            md.append("**Key Highlights**:")
 
             formatted_bullets = []
             for b in cleaned_bullets[1:4]:
                 b_high = re.sub(r"\b(qubits?|superposition|entanglement|quantum speedup|cryptography|classical computers?)\b", r"**\1**", b, flags=re.IGNORECASE)
-                formatted_bullets.append(f"* {b_high}")
+                formatted_bullets.append(f"• {b_high}")
 
             if not formatted_bullets and len(cleaned_bullets) > 0:
-                formatted_bullets.append(f"* {first_summary}")
+                formatted_bullets.append(f"• {first_summary}")
 
             md.append("\n".join(formatted_bullets))
 
-        md.append("\n---")
-        md.append("✨ *Response formatted by Mitra Live Intelligence Engine.*")
+        md.append("---")
+        md.append("*Response formatted by Mitra Live Intelligence Engine.*")
 
         return "\n\n".join(md)
 
