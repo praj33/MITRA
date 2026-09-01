@@ -425,11 +425,11 @@ class LLMBridge:
         ).lower().strip()
 
         # Greetings
-        if re.search(r"\b(hi|hello|hey|good morning|good evening|good afternoon|namaste)\b", user_msg):
+        if re.search(r"\b(hi|hello|hey|good morning|good evening|good afternoon|namaste|hlo|helo)\b", user_msg):
             return "Hey there! I'm Mitra, your AI companion. I'm here and ready to help. What's on your mind?"
 
-        # How are you
-        if re.search(r"how are (you|u)|how('s| is) it going|what's up", user_msg):
+        # How are you & variations / typos
+        if re.search(r"how (are|r) (you|yoiu|yoo|u|ya|yall|y'all)|how('s| is) it going|what('s|s) up|wbu", user_msg):
             return "I'm doing great, thank you for asking! I'm fully focused and ready to assist you. What can I help you with today?"
 
         # Capital city questions

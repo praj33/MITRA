@@ -342,7 +342,10 @@ class SearchTool:
 
                         tavily_key = os.getenv("TAVILY_API_KEY", "")
                         if tavily_key:
-                            fund_snippets = await self._search_tavily(f"{query} stock P/E ratio market cap ROE debt equity fundamental ratios screener", tavily_key)
+                            if symbol.startswith("^"):
+                                fund_snippets = await self._search_tavily(f"{long_name} stock market index news analysis today Indian equity market", tavily_key)
+                            else:
+                                fund_snippets = await self._search_tavily(f"{query} stock P/E ratio market cap ROE debt equity fundamental ratios screener", tavily_key)
                             if fund_snippets:
                                 card += f"\nFundamental Ratios & Financial Overview:\n{fund_snippets}\n"
 
