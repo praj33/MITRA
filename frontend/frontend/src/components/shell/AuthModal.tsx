@@ -240,7 +240,7 @@ const AuthModal: React.FC<Props> = ({ open, onClose }) => {
                   <button
                     type="submit"
                     disabled={loading}
-                    className="mt-2 w-full py-3 px-4 rounded-xl bg-brand hover:bg-brand-light text-white font-bold text-xs flex items-center justify-center gap-2 shadow-lg shadow-brand/20 transition-all disabled:opacity-50"
+                    className="mt-2 w-full py-3 px-4 rounded-xl bg-brand hover:bg-brand-light text-white font-bold text-xs flex items-center justify-center gap-2 shadow-lg shadow-brand/20 transition-all disabled:opacity-50 cursor-pointer"
                     style={{ backgroundColor: 'var(--brand)', color: '#ffffff' }}
                   >
                     {loading ? (
@@ -253,6 +253,62 @@ const AuthModal: React.FC<Props> = ({ open, onClose }) => {
                     )}
                   </button>
                 </form>
+
+                {/* OR Divider */}
+                <div className="relative my-2 flex items-center justify-center">
+                  <div className="absolute inset-0 flex items-center">
+                    <div className="w-full border-t border-border-subtle"></div>
+                  </div>
+                  <span className="relative px-3 bg-surface-elevated text-[10px] font-bold tracking-wider text-text-secondary uppercase">
+                    OR
+                  </span>
+                </div>
+
+                {/* Social OAuth Buttons */}
+                <div className="grid grid-cols-2 gap-2.5">
+                  <button
+                    type="button"
+                    onClick={async () => {
+                      try {
+                        const res = await fetch('/api/auth/google');
+                        const data = await res.json();
+                        if (data.url) window.location.href = data.url;
+                      } catch {
+                        window.location.href = 'https://accounts.google.com/o/oauth2/v2/auth?client_id=mitra-google-client-id.apps.googleusercontent.com&redirect_uri=http://localhost:3000/auth/callback/google&response_type=code&scope=openid%20email%20profile%20https://www.googleapis.com/auth/gmail.send&access_type=offline';
+                      }
+                    }}
+                    className="w-full py-2.5 px-3 bg-surface-overlay hover:bg-surface-raised border border-border-subtle rounded-xl flex items-center justify-center gap-2 transition-all text-xs font-semibold text-text-primary cursor-pointer"
+                    title="Sign in with Google"
+                  >
+                    <svg className="w-4 h-4" viewBox="0 0 24 24">
+                      <path fill="#4285F4" d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z" />
+                      <path fill="#34A853" d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z" />
+                      <path fill="#FBBC05" d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.06H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.94l2.85-2.22.81-.63z" />
+                      <path fill="#EA4335" d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.06l3.66 2.84c.87-2.6 3.3-4.52 6.16-4.52z" />
+                    </svg>
+                    <span>Google</span>
+                  </button>
+
+                  <button
+                    type="button"
+                    onClick={async () => {
+                      try {
+                        const res = await fetch('/api/auth/apple');
+                        const data = await res.json();
+                        if (data.url) window.location.href = data.url;
+                      } catch {
+                        window.location.href = 'https://appleid.apple.com/auth/authorize?client_id=com.mitra.app.signin&redirect_uri=http://localhost:3000/auth/callback/apple&response_type=code%20id_token&response_mode=form_post';
+                      }
+                    }}
+                    className="w-full py-2.5 px-3 bg-surface-overlay hover:bg-surface-raised border border-border-subtle rounded-xl flex items-center justify-center gap-2 transition-all text-xs font-semibold text-text-primary cursor-pointer"
+                    title="Sign in with Apple"
+                  >
+                    <svg className="w-4 h-4 fill-current text-white" viewBox="0 0 170 170">
+                      <path d="M150.37 130.25c-2.45 5.66-5.35 10.87-8.71 15.66-4.58 6.53-8.33 11.05-11.22 13.56-4.48 4.12-9.28 6.23-14.42 6.35-3.69 0-8.14-1.05-13.32-3.18-5.19-2.12-9.97-3.17-14.34-3.17-4.58 0-9.49 1.05-14.75 3.17-5.26 2.13-9.5 3.24-12.74 3.35-4.34.13-9.16-1.9-14.48-6.1-3.32-2.64-7.27-7.25-11.87-13.84-6.84-9.82-12.18-20.91-16.02-33.27-3.84-12.36-5.76-24.36-5.76-36 0-14.39 3.65-26.24 10.96-35.54 7.31-9.3 16.48-14.07 27.51-14.3 4.87 0 10.15 1.25 15.84 3.75 5.69 2.5 9.77 3.75 12.24 3.75 2.12 0 6.26-1.25 12.43-3.75 6.17-2.5 11.27-3.69 15.3-3.56 10.5.54 19.34 4.54 26.51 12.02-9.46 5.76-14.07 13.91-13.84 24.45.24 8.24 3.4 15.42 9.5 21.55 6.1 6.13 13.43 9.49 22 10.08-2.12 6.34-4.87 12.6-8.25 18.78zm-30.82-106.9c0 6.64-2.45 13.16-7.35 19.56-5.83 7.4-12.98 11.66-21.46 12.78-.12-1.04-.19-2.02-.19-2.94 0-6.64 2.54-13.3 7.62-19.98 5.08-6.68 12.26-10.99 21.54-12.93.12 1.05.19 2.21.19 3.51z" />
+                    </svg>
+                    <span>Apple</span>
+                  </button>
+                </div>
 
                 <div className="flex items-center justify-between text-[11px] text-text-secondary pt-1">
                   <span>Want to test without signing up?</span>

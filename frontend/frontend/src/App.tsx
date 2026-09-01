@@ -12,6 +12,7 @@ import { CommandPaletteModal } from './components/modals/CommandPaletteModal';
 import { MemoryDashboardModal } from './components/modals/MemoryDashboardModal';
 import { VoiceTalkModal } from './components/modals/VoiceTalkModal';
 import { MemoryMindMapModal } from './components/modals/MemoryMindMapModal';
+import { IntegrationsModal } from './components/modals/IntegrationsModal';
 import InstallPwaBanner from './components/shell/InstallPwaBanner';
 import Toast, { showToast } from './components/shell/Toast';
 import { FloatingOrb } from './components/shell/FloatingOrb';
@@ -21,6 +22,7 @@ import RemindersPage from './components/pages/RemindersPage';
 import WorkflowsPage from './components/pages/WorkflowsPage';
 import KnowledgePage from './components/pages/KnowledgePage';
 import AnalyticsPage from './components/pages/AnalyticsPage';
+import Login from './components/auth/Login';
 import { useCompanionStore } from './store/companion.store';
 import { CompanionService } from './services/companion.service';
 import { cn } from './lib/utils';
@@ -125,16 +127,20 @@ const App: React.FC = () => {
     addMessage, addNotification, addContextItem,
   } = useCompanionStore();
 
-  const [activeSection, setActiveSection] = useState('chat');
+  const [activeSection, setActiveSection] = useState(() => {
+    return (window.location.pathname === '/login' || window.location.hash === '#login') ? 'login' : 'chat';
+  });
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [focusOpen, setFocusOpen] = useState(false);
   const [cmdOpen, setCmdOpen] = useState(false);
   const [memoryOpen, setMemoryOpen] = useState(false);
   const [voiceTalkOpen, setVoiceTalkOpen] = useState(false);
   const [mindMapOpen, setMindMapOpen] = useState(false);
+  const [integrationsOpen, setIntegrationsOpen] = useState(false);
 
   useEffect(() => {
     (window as any).__MITRA_SETTINGS__ = () => setSettingsOpen(true);
+    (window as any).__MITRA_INTEGRATIONS__ = () => setIntegrationsOpen(true);
   }, []);
 
   // Global Ctrl+K / Cmd+K listener
@@ -298,6 +304,7 @@ const App: React.FC = () => {
         {activeSection === 'reminders' && <RemindersPage onChatNavigate={handleChatNavigate} />}
         {activeSection === 'workflows' && <WorkflowsPage onChatNavigate={handleChatNavigate} />}
         {activeSection === 'knowledge' && <KnowledgePage onChatNavigate={handleChatNavigate} />}
+        {activeSection === 'login' && <Login onToggleForm={() => setActiveSection('chat')} />}
       </div>
 
       {/* Bottom Chat Bar — grid-area 'input' */}
@@ -331,6 +338,9 @@ const App: React.FC = () => {
 
       {/* Auth Modal */}
       <AuthModal open={authModalOpen} onClose={() => setAuthModalOpen(false)} />
+
+      {/* Integrations Modal */}
+      <IntegrationsModal isOpen={integrationsOpen} onClose={() => setIntegrationsOpen(false)} />
 
       {/* Native PWA Install Banner */}
       <InstallPwaBanner />

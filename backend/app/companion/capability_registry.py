@@ -53,6 +53,10 @@ class CapabilityRegistry:
             return self._registry.get(name)
         return None
 
+    def get_capabilities(self) -> List[str]:
+        """Return list of active registered capability names."""
+        return list(self._registry.keys())
+
     async def execute(
         self,
         intent: str,
@@ -60,15 +64,22 @@ class CapabilityRegistry:
         trace_id: Optional[str] = None,
     ) -> Optional[CapabilityResult]:
         """
-        Route intent to the correct capability and execute.
+        Route intent to the correct capability and execute with a 10.0s timeout guard.
         Returns None if no capability handles this intent.
         """
+        import asyncio
         cap = self.resolve(intent)
         if not cap:
             logger.debug("No capability found for intent: %s", intent)
             return None
         try:
-            return await cap.execute(intent, params, trace_id)
+            return await asyncio.wait_for(
+                cap.execute(intent, params, trace_id),
+                timeout=10.0
+            )
+        except asyncio.TimeoutError:
+            logger.error("Capability '%s' execution timed out for intent '%s'", cap.name, intent)
+            return CapabilityResult.error_result(cap.name, intent, "Execution timed out (10s limit)", trace_id)
         except Exception as exc:
             logger.exception("Capability '%s' failed for intent '%s': %s", cap.name, intent, exc)
             return CapabilityResult.error_result(cap.name, intent, str(exc), trace_id)

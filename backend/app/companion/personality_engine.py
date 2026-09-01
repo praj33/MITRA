@@ -77,9 +77,8 @@ class PersonalityEngine:
         caps = enabled_capabilities or self._config.enabled_capabilities
 
         capability_list = "\n".join(
-            f"  - {cap}: {_CAPABILITY_DESCRIPTIONS.get(cap, cap)}"
+            f"  - {cap}: {_CAPABILITY_DESCRIPTIONS.get(cap, f'manage and execute {cap} operations')}"
             for cap in caps
-            if cap in _CAPABILITY_DESCRIPTIONS
         )
 
         facts_section = ""

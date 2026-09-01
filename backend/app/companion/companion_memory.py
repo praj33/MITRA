@@ -94,7 +94,8 @@ class CompanionMemory:
 
         if self._mongo_available and self._mongo_col is not None:
             try:
-                doc = self._mongo_col.find_one({"user_id": user_id})
+                import asyncio
+                doc = await asyncio.to_thread(self._mongo_col.find_one, {"user_id": user_id})
                 if doc:
                     mem = self._deserialize(doc)
                     self._cache[user_id] = mem
@@ -172,9 +173,11 @@ class CompanionMemory:
         if not self._mongo_available or self._mongo_col is None:
             return
         try:
+            import asyncio
             doc = self._serialize(mem)
-            self._mongo_col.replace_one(
-                {"user_id": mem.user_id}, doc, upsert=True
+            await asyncio.to_thread(
+                self._mongo_col.replace_one,
+                {"user_id": mem.user_id}, doc, True
             )
         except Exception as exc:
             logger.warning("CompanionMemory._save failed: %s", exc)

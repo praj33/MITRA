@@ -1,0 +1,38 @@
+version: "3.8"
+
+services:
+  # 1. Ollama — Self-Hosted Local LLM Engine (Llama 3.1 / Qwen 2.5 / DeepSeek)
+  ollama:
+    image: ollama/ollama:latest
+    container_name: mitra_ollama_llm
+    ports:
+      - "11434:11434"
+    volumes:
+      - ollama_data:/root/.ollama
+    restart: unless-stopped
+    environment:
+      - OLLAMA_KEEP_ALIVE=24h
+
+  # 2. SearXNG — Self-Hosted Metasearch Engine (Google + Bing + DDG Aggregator)
+  searxng:
+    image: searxng/searxng:latest
+    container_name: mitra_searxng_search
+    ports:
+      - "8888:8080"
+    volumes:
+      - ./searxng:/etc/searxng
+    environment:
+      - SEARXNG_BASE_URL=http://localhost:8888/
+      - INSTANCE_NAME=Mitra-Private-Search
+    restart: unless-stopped
+
+  # 3. Open-Meteo — Self-Hosted Real-Time Weather Engine
+  openmeteo:
+    image: openmeteo/openmeteo:latest
+    container_name: mitra_weather_engine
+    ports:
+      - "8080:8080"
+    restart: unless-stopped
+
+volumes:
+  ollama_data:

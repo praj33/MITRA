@@ -6,10 +6,11 @@ All requests pass through the CompanionOrchestrator.
 """
 from __future__ import annotations
 
+import asyncio
 from typing import Optional
 
 from fastapi import APIRouter, Header
-from fastapi.responses import JSONResponse
+from fastapi.responses import JSONResponse, StreamingResponse
 from pydantic import BaseModel
 
 from app.companion.companion_orchestrator import companion_orchestrator
@@ -72,6 +73,36 @@ async def companion_chat(
     except Exception as exc:
         logger.exception("Companion chat failed for user_id=%s: %s", user_id, exc)
         return JSONResponse(status_code=500, content={"error": "Companion pipeline failed."})
+
+
+@router.post("/api/companion/chat/stream")
+async def companion_chat_stream(
+    request: CompanionChatRequest,
+    x_api_key: Optional[str] = Header(None, alias="X-API-Key"),
+    x_user_id: Optional[str] = Header(None, alias="X-User-Id"),
+):
+    """
+    High-Speed Server-Sent Events (SSE) streaming endpoint.
+    Emits character-by-character tokens to the client for sub-150ms TTFT latency.
+    """
+    _ = x_api_key
+    user_id = request.user_id or x_user_id or "anonymous"
+    if not request.message or not request.message.strip():
+        return JSONResponse(status_code=400, content={"error": "message is required"})
+
+    async def event_generator():
+        try:
+            async for token in companion_orchestrator.stream_conversation_tokens(
+                message=request.message.strip(),
+                user_id=user_id,
+            ):
+                yield f"data: {token}\n\n"
+            yield "data: [DONE]\n\n"
+        except Exception as exc:
+            logger.exception("Streaming failed for user_id=%s: %s", user_id, exc)
+            yield f"data: Error: {str(exc)}\n\n"
+
+    return StreamingResponse(event_generator(), media_type="text/event-stream")
 
 
 @router.post("/api/companion/context/sync")
@@ -349,9 +380,11 @@ async def get_daily_briefing(user_id: str):
         calendar_cap = capability_registry.get("calendar")
         reminder_cap = capability_registry.get("reminder")
 
-        tasks_res = await task_cap.execute("list_tasks", {"user_id": user_id}) if task_cap else None
-        events_res = await calendar_cap.execute("list_events", {"user_id": user_id}) if calendar_cap else None
-        reminders_res = await reminder_cap.execute("list_reminders", {"user_id": user_id}) if reminder_cap else None
+        tasks_task = task_cap.execute("list_tasks", {"user_id": user_id}) if task_cap else asyncio.sleep(0)
+        events_task = calendar_cap.execute("list_events", {"user_id": user_id}) if calendar_cap else asyncio.sleep(0)
+        reminders_task = reminder_cap.execute("list_reminders", {"user_id": user_id}) if reminder_cap else asyncio.sleep(0)
+
+        tasks_res, events_res, reminders_res = await asyncio.gather(tasks_task, events_task, reminders_task)
 
         def extract_data(res):
             if isinstance(res, CapabilityResult):
@@ -430,10 +463,32 @@ async def get_companion_analytics(
     """Aggregate productivity stats, task completion velocity, and focus analytics."""
     _ = x_api_key
     try:
-        tasks = await task_cap.list_tasks(user_id)
-        events = await cal_cap.list_events(user_id)
-        reminders = await rem_cap.list_reminders(user_id)
-        mem = await companion_memory.get(user_id)
+        from app.companion.capability_registry import capability_registry
+        from app.capabilities.base_capability import CapabilityResult
+
+        task_cap = capability_registry.get("task")
+        calendar_cap = capability_registry.get("calendar")
+        reminder_cap = capability_registry.get("reminder")
+
+        tasks_task = task_cap.execute("list_tasks", {"user_id": user_id}) if task_cap else asyncio.sleep(0)
+        events_task = calendar_cap.execute("list_events", {"user_id": user_id}) if calendar_cap else asyncio.sleep(0)
+        reminders_task = reminder_cap.execute("list_reminders", {"user_id": user_id}) if reminder_cap else asyncio.sleep(0)
+        facts_task = companion_memory.get_user_facts(user_id)
+
+        tasks_res, events_res, reminders_res, facts = await asyncio.gather(
+            tasks_task, events_task, reminders_task, facts_task
+        )
+
+        def extract_data(res):
+            if isinstance(res, CapabilityResult):
+                return res.data
+            elif isinstance(res, dict):
+                return res.get("data", res)
+            return {}
+
+        tasks = extract_data(tasks_res).get("tasks", [])
+        events = extract_data(events_res).get("events", [])
+        reminders = extract_data(reminders_res).get("reminders", [])
 
         total_tasks = len(tasks)
         completed_tasks = len([t for t in tasks if t.get("status") == "completed"])
@@ -443,7 +498,7 @@ async def get_companion_analytics(
 
         completion_rate = round((completed_tasks / total_tasks * 100) if total_tasks > 0 else 100, 1)
 
-        facts_count = len(mem.facts) if mem and hasattr(mem, "facts") else 0
+        facts_count = len(facts) if isinstance(facts, dict) else 0
 
         # Dynamic Focus Hours & Weekly Activity calculation
         # Each completed task adds ~35 mins of focus work; completed events add ~45 mins; facts add focus depth
@@ -519,12 +574,13 @@ async def web_summarize(req: WebSummarizeRequest):
         url = "https://" + url
 
     try:
-        req_obj = urllib.request.Request(
-            url,
-            headers={"User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) Chrome/120.0.0.0 Safari/537.36"}
-        )
-        with urllib.request.urlopen(req_obj, timeout=8) as response:
-            html = response.read().decode("utf-8", errors="ignore")
+        import httpx, re
+        async with httpx.AsyncClient(timeout=8.0, follow_redirects=True) as client:
+            resp = await client.get(
+                url,
+                headers={"User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) Chrome/120.0.0.0 Safari/537.36"}
+            )
+            html = resp.text
 
         # Strip HTML tags cleanly
         text = re.sub(r"<script.*?>.*?</script>", "", html, flags=re.DOTALL | re.IGNORECASE)

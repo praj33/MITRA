@@ -75,7 +75,7 @@ class CompanionConfig:
 
 
 
-# Singleton config — loaded once at startup
+# Singleton config — loaded dynamically
 _companion_config: Optional[CompanionConfig] = None
 
 
@@ -83,4 +83,11 @@ def get_companion_config() -> CompanionConfig:
     global _companion_config
     if _companion_config is None:
         _companion_config = CompanionConfig.from_env()
+    return _companion_config
+
+
+def reload_companion_config() -> CompanionConfig:
+    """Hot-reload configuration from current environment variables."""
+    global _companion_config
+    _companion_config = CompanionConfig.from_env()
     return _companion_config

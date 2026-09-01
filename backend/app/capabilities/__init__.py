@@ -27,6 +27,7 @@ def register_all_capabilities() -> None:
     from app.capabilities.browser_capability import BrowserCapability
     from app.capabilities.document_capability import DocumentCapability
     from app.capabilities.uniguru_capability import UniGuruCapability
+    from app.capabilities.setu_capability import SetuCapability
     from app.capabilities.samruddhi_capability import SamruddhiCapability
     from app.capabilities.samachar_capability import SamacharCapability
     from app.capabilities.setu_capability import SetuCapability
@@ -43,6 +44,7 @@ def register_all_capabilities() -> None:
         BrowserCapability,
         DocumentCapability,
         UniGuruCapability,
+        SetuCapability,
         SamruddhiCapability,
         SamacharCapability,
         SetuCapability,

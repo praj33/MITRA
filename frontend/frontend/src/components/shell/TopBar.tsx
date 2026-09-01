@@ -270,11 +270,25 @@ const TopBar: React.FC<Props> = ({ onSearch }) => {
         </button>
       </div>
 
+      {/* Plug-ins Vault Button */}
+      <button
+        id="topbar-integrations-button"
+        onClick={() => {
+          const fn = (window as any).__MITRA_INTEGRATIONS__;
+          if (fn) fn();
+        }}
+        className="flex items-center gap-1.5 px-2 py-1 rounded-lg bg-blue-500/10 border border-blue-500/30 hover:bg-blue-500/20 text-blue-400 text-xs transition-all cursor-pointer"
+        title="Personal Gmail & WhatsApp Plug-ins"
+      >
+        <span className="text-[11px]">🔌</span>
+        <span className="hidden sm:inline text-2xs font-semibold">Plug-ins</span>
+      </button>
+
       {/* Account / Login Trigger */}
       <button
         id="topbar-auth-button"
         onClick={() => useCompanionStore.getState().setAuthModalOpen(true)}
-        className="flex items-center gap-1.5 px-2 py-1 rounded-lg bg-surface-overlay border border-border-subtle hover:border-brand/40 text-text-primary text-xs transition-all"
+        className="flex items-center gap-1.5 px-2 py-1 rounded-lg bg-surface-overlay border border-border-subtle hover:border-brand/40 text-text-primary text-xs transition-all cursor-pointer"
         title={isAuthenticated ? `Account: ${userName}` : 'Log In / Sign Up'}
       >
         <div className="w-5 h-5 rounded-full bg-brand/20 border border-brand/40 flex items-center justify-center text-brand-light font-bold text-[10px]">

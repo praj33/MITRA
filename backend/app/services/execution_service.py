@@ -60,18 +60,21 @@ class ExecutionService:
                 action_data = self._apply_rewrite(action_data, action_type)
 
             # Route to appropriate real execution method
+            user_id = action_data.get("user_id", "user_default")
             if action_type.lower() == "whatsapp":
                 return self.whatsapp.send_message(
                     to_number=action_data.get("recipient", action_data.get("to", "")),
                     message=action_data.get("message", ""),
-                    trace_id=trace_id
+                    trace_id=trace_id,
+                    user_id=user_id
                 )
             elif action_type.lower() == "email":
                 return self.email.send_message(
                     to_email=action_data.get("recipient", action_data.get("to", "")),
                     subject=action_data.get("subject", "Message from AI Assistant"),
                     message=action_data.get("body", action_data.get("message", "")),
-                    trace_id=trace_id
+                    trace_id=trace_id,
+                    user_id=user_id
                 )
             elif action_type.lower() == "instagram":
                 return self.instagram.send_message(

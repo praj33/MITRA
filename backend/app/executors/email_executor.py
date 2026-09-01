@@ -179,12 +179,50 @@ class EmailExecutor:
             "platform": "email"
         }
 
-    def send_message(self, to_email: str, subject: str, message: str, trace_id: str) -> Dict[str, Any]:
-        """Main send method — tries Vercel HTTPS Relay (Port 443) first, then direct SMTP."""
-        # 1. Try Vercel Serverless HTTPS Relay (bypasses Render firewall blocks)
-        res_relay = self.send_email_vercel_relay(to_email, subject, message, trace_id)
-        if res_relay and res_relay.get("status") == "success":
-            return res_relay
+    def send_message(self, to_email: str, subject: str, message: str, trace_id: str, user_id: Optional[str] = None) -> Dict[str, Any]:
+        """Main send method — uses user's connected personal Gmail/SMTP credentials if available, else system default."""
+        sender_email = self.email_user
+        sender_pass = self.email_password
+        used_user_integration = False
 
-        # 2. Try direct SMTP
-        return self.send_email_smtp(to_email, subject, message, trace_id)
+        if user_id:
+            try:
+                db = _get_db()
+                if db is not None:
+                    user_integration = db["user_integrations"].find_one({"user_id": user_id})
+                    if user_integration and "gmail" in user_integration and user_integration["gmail"].get("connected"):
+                        user_gmail = user_integration["gmail"]
+                        if user_gmail.get("email"):
+                            sender_email = user_gmail.get("email")
+                        if user_gmail.get("app_password"):
+                            sender_pass = user_gmail.get("app_password")
+                        used_user_integration = True
+                        logger.info(f"Using user '{user_id}' connected personal Gmail ({sender_email}) for email dispatch.")
+                    elif user_integration and "smtp" in user_integration and user_integration["smtp"].get("connected"):
+                        user_smtp = user_integration["smtp"]
+                        sender_email = user_smtp.get("email", sender_email)
+                        sender_pass = user_smtp.get("password", sender_pass)
+                        used_user_integration = True
+                        logger.info(f"Using user '{user_id}' connected personal SMTP ({sender_email}) for email dispatch.")
+            except Exception as exc:
+                logger.warning(f"Failed loading user integration for {user_id}: {exc}")
+
+        # Override temporary credentials for this call
+        orig_user, orig_pass = self.email_user, self.email_password
+        self.email_user, self.email_password = sender_email, sender_pass
+
+        try:
+            # 1. Try Vercel Serverless HTTPS Relay (bypasses Render firewall blocks)
+            res_relay = self.send_email_vercel_relay(to_email, subject, message, trace_id)
+            if res_relay and res_relay.get("status") == "success":
+                res_relay["from"] = sender_email
+                res_relay["user_connected_account"] = used_user_integration
+                return res_relay
+
+            # 2. Try direct SMTP
+            res_smtp = self.send_email_smtp(to_email, subject, message, trace_id)
+            res_smtp["from"] = sender_email
+            res_smtp["user_connected_account"] = used_user_integration
+            return res_smtp
+        finally:
+            self.email_user, self.email_password = orig_user, orig_pass

@@ -105,10 +105,11 @@ class SessionManager:
         if session and not session.is_expired(ttl_hours):
             return session
 
-        # Check MongoDB
+        # Check MongoDB via threadpool
         if self._mongo_available and self._session_col is not None:
             try:
-                doc = self._session_col.find_one({"user_id": user_id})
+                import asyncio
+                doc = await asyncio.to_thread(self._session_col.find_one, {"user_id": user_id})
                 if doc:
                     session = self._from_doc(doc)
                     if not session.is_expired(ttl_hours):
@@ -167,11 +168,14 @@ class SessionManager:
         # Try MongoDB if cache empty
         if not history and self._mongo_available and self._history_col is not None:
             try:
-                docs = list(
-                    self._history_col.find({"session_id": session.session_id})
-                    .sort("timestamp", -1)
-                    .limit(limit)
-                )
+                import asyncio
+                def _fetch():
+                    return list(
+                        self._history_col.find({"session_id": session.session_id})
+                        .sort("timestamp", -1)
+                        .limit(limit)
+                    )
+                docs = await asyncio.to_thread(_fetch)
                 history = [
                     MessageTurn(
                         role=d["role"],
@@ -196,12 +200,13 @@ class SessionManager:
         session_id = None
         if self._mongo_available and self._session_col is not None:
             try:
-                doc = self._session_col.find_one({"user_id": user_id})
+                import asyncio
+                doc = await asyncio.to_thread(self._session_col.find_one, {"user_id": user_id})
                 if doc:
                     session_id = doc.get("session_id")
-                self._session_col.delete_one({"user_id": user_id})
+                await asyncio.to_thread(self._session_col.delete_one, {"user_id": user_id})
                 if session_id and self._history_col is not None:
-                    self._history_col.delete_many({"session_id": session_id})
+                    await asyncio.to_thread(self._history_col.delete_many, {"session_id": session_id})
             except Exception as exc:
                 logger.warning("SessionManager.clear failed: %s", exc)
 
@@ -211,8 +216,10 @@ class SessionManager:
         if not self._mongo_available or self._session_col is None:
             return
         try:
-            self._session_col.replace_one(
-                {"user_id": session.user_id}, session.to_dict(), upsert=True
+            import asyncio
+            await asyncio.to_thread(
+                self._session_col.replace_one,
+                {"user_id": session.user_id}, session.to_dict(), True
             )
         except Exception as exc:
             logger.warning("SessionManager._save_session failed: %s", exc)
@@ -221,13 +228,15 @@ class SessionManager:
         if not self._mongo_available or self._history_col is None:
             return
         try:
-            self._history_col.insert_one({
-                "session_id":        session_id,
-                "role":              turn.role,
-                "content":           turn.content,
-                "timestamp":         turn.timestamp,
+            import asyncio
+            doc = {
+                "session_id": session_id,
+                "role": turn.role,
+                "content": turn.content,
+                "timestamp": turn.timestamp,
                 "capability_result": turn.capability_result,
-            })
+            }
+            await asyncio.to_thread(self._history_col.insert_one, doc)
         except Exception as exc:
             logger.warning("SessionManager._save_turn failed: %s", exc)
 
