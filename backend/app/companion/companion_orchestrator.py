@@ -191,7 +191,11 @@ class CompanionOrchestrator:
         # Check active UI context from request page_context
         active_host_app = (page_context or {}).get("host_app", "")
 
-        if active_host_app == "uniguru":
+        if intent in ("setu", "inventory", "stock", "orders") or any(kw in message.lower() for kw in ["inventory", "stock", "tea leaves", "setu", "sku"]):
+            capability_name = "setu"
+            intent = "setu"
+            is_knowledge = False
+        elif active_host_app == "uniguru":
             is_knowledge = True
             capability_name = None
             intent = "knowledge"
