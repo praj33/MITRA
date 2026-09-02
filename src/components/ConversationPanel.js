@@ -1,4 +1,4 @@
-import { controlPlane } from '../services/controlPlane.js';
+import { controlPlane, getApiBaseUrl } from '../services/controlPlane.js';
 
 export class ConversationPanel {
   constructor(eventBus, contextStore) {
@@ -15,7 +15,7 @@ export class ConversationPanel {
       // Real-time listener: append new incoming messages immediately
       eventBus.on('chat.mitra_message', (data) => {
         if (data.role === 'mitra') {
-          this.addMitraMessage(data.text, new Date(), data.intent, data.suggestedActions, data.capabilityResult);
+          this.addMitraMessage(data.text, new Date(), data.intent, data.suggestedActions || [], data.capabilityResult);
         } else {
           this.addSystemMessage(data.text);
         }
@@ -24,7 +24,7 @@ export class ConversationPanel {
       // Also render real notifications (like reminders) as chat bubbles
       eventBus.on('notification.received', (data) => {
         if (data.role === 'mitra') {
-          this.addMitraMessage(data.text || data.message, new Date(), data.intent, data.suggestedActions, data.capabilityResult);
+          this.addMitraMessage(data.text || data.message, new Date(), data.intent, data.suggestedActions || [], data.capabilityResult);
         }
       });
 
@@ -83,7 +83,7 @@ export class ConversationPanel {
       const headers = { 'X-API-Key': 'bhiv-enterprise-key' };
       if (token) headers['Authorization'] = `Bearer ${token}`;
 
-      const res = await fetch(`https://mitra-backend-q1f3.onrender.com/api/companion/greeting/${encodeURIComponent(userId)}`, { headers });
+      const res = await fetch(`${getApiBaseUrl()}/api/companion/greeting/${encodeURIComponent(userId)}`, { headers });
       if (res.ok) {
         const data = await res.json();
         this.addMitraMessage(data.greeting || data.message || defaultGreeting, new Date());

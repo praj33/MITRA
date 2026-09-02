@@ -473,7 +473,7 @@ export class ControlPlane {
             };
             if (token) headers['Authorization'] = `Bearer ${token}`;
 
-            await fetch(`https://mitra-backend-q1f3.onrender.com/api/pages/reminders/create?user_id=${encodeURIComponent(userId)}`, {
+            await fetch(`${getApiBaseUrl()}/api/pages/reminders/create?user_id=${encodeURIComponent(userId)}`, {
               method: 'POST',
               headers,
               body: JSON.stringify({
