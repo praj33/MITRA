@@ -86,11 +86,26 @@ class SearchTool:
             query_clean = re.sub(r"[^\w\s]", "", query)
             city_words = [w for w in query_clean.strip().split() if w.lower() not in stop_words]
             city = " ".join(city_words) if city_words else "Mumbai"
+            # Disambiguate major Indian metro names if country not specified
+            indian_city_map = {
+                "delhi": "Delhi, India",
+                "mumbai": "Mumbai, India",
+                "bangalore": "Bengaluru, India",
+                "bengaluru": "Bengaluru, India",
+                "chennai": "Chennai, India",
+                "kolkata": "Kolkata, India",
+                "hyderabad": "Hyderabad, India",
+                "pune": "Pune, India",
+                "ahmedabad": "Ahmedabad, India",
+                "jaipur": "Jaipur, India",
+                "lucknow": "Lucknow, India"
+            }
+            city_query = indian_city_map.get(city.lower(), city)
 
             weather_key = os.getenv("WEATHER_API_KEY", "").strip()
             if weather_key:
                 try:
-                    url = f"http://api.weatherapi.com/v1/current.json?key={weather_key}&q={urllib.parse.quote(city)}"
+                    url = f"http://api.weatherapi.com/v1/current.json?key={weather_key}&q={urllib.parse.quote(city_query)}"
                     async with httpx.AsyncClient(timeout=4.0) as client:
                         resp = await client.get(url)
                         if resp.status_code == 200:
@@ -116,7 +131,7 @@ class SearchTool:
                     logger.warning("WeatherAPI.com query failed: %s — trying wttr.in fallback", exc)
 
             # Fallback to wttr.in JSON API
-            url = f"https://wttr.in/{urllib.parse.quote(city)}?format=j1"
+            url = f"https://wttr.in/{urllib.parse.quote(city_query)}?format=j1"
             async with httpx.AsyncClient(timeout=4.0, follow_redirects=True) as client:
                 resp = await client.get(url, headers={"User-Agent": "Mozilla/5.0"})
                 if resp.status_code == 200:
@@ -342,7 +357,10 @@ class SearchTool:
 
                         tavily_key = os.getenv("TAVILY_API_KEY", "")
                         if tavily_key:
-                            fund_snippets = await self._search_tavily(f"{query} stock P/E ratio market cap ROE debt equity fundamental ratios screener", tavily_key)
+                            if symbol.startswith("^"):
+                                fund_snippets = await self._search_tavily(f"{long_name} stock market index news analysis today Indian equity market", tavily_key)
+                            else:
+                                fund_snippets = await self._search_tavily(f"{query} stock P/E ratio market cap ROE debt equity fundamental ratios screener", tavily_key)
                             if fund_snippets:
                                 card += f"\nFundamental Ratios & Financial Overview:\n{fund_snippets}\n"
 

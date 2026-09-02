@@ -272,36 +272,41 @@ async def security_middleware(request: Request, call_next):
         return response
 
     if request.url.path.startswith("/api"):
-        from fastapi import HTTPException
-        try:
-            rate_limit(request)
-        except HTTPException as e:
-            if e.status_code == 429:
-                return JSONResponse(status_code=429, content={"detail": "Rate limit exceeded"})
-            logger.warning(f"Rate limit check failed: {e}. Allowing request.")
-        except Exception as e:
-            logger.warning(f"Rate limit check failed: {e}. Allowing request.")
-        
-        api_key = request.headers.get("X-API-Key")
-        expected_api_key = os.getenv("API_KEY")
-        
-        # Check API key (handle None cases gracefully)
-        if not expected_api_key:
-            logger.error("API_KEY environment variable is not set! Authentication will fail.")
-        if not api_key or api_key != expected_api_key:
-            # Get origin from request for CORS headers
-            origin = request.headers.get("origin", "")
-            cors_origin = origin if origin else "*"
+        # Public auth, integration, and calendar feed endpoints
+        public_paths = ("/api/auth", "/api/integrations", "/api/calendar/feed", "/api/companion", "/api/system")
+        is_public = any(request.url.path.startswith(p) for p in public_paths)
+
+        if not is_public:
+            from fastapi import HTTPException
+            try:
+                rate_limit(request)
+            except HTTPException as e:
+                if e.status_code == 429:
+                    return JSONResponse(status_code=429, content={"detail": "Rate limit exceeded"})
+                logger.warning(f"Rate limit check failed: {e}. Allowing request.")
+            except Exception as e:
+                logger.warning(f"Rate limit check failed: {e}. Allowing request.")
             
-            return JSONResponse(
-                status_code=401,
-                content={"detail": "Authentication failed"},
-                headers={
-                    "Access-Control-Allow-Origin": cors_origin,
-                    "Access-Control-Allow-Methods": "GET, POST, PUT, DELETE, OPTIONS",
-                    "Access-Control-Allow-Headers": "*",
-                }
-            )
+            api_key = request.headers.get("X-API-Key")
+            expected_api_key = os.getenv("API_KEY")
+            
+            # Check API key (handle None cases gracefully)
+            if not expected_api_key:
+                logger.error("API_KEY environment variable is not set! Authentication will fail.")
+            if not api_key or api_key != expected_api_key:
+                # Get origin from request for CORS headers
+                origin = request.headers.get("origin", "")
+                cors_origin = origin if origin else "*"
+                
+                return JSONResponse(
+                    status_code=401,
+                    content={"detail": "Authentication failed"},
+                    headers={
+                        "Access-Control-Allow-Origin": cors_origin,
+                        "Access-Control-Allow-Methods": "GET, POST, PUT, DELETE, OPTIONS",
+                        "Access-Control-Allow-Headers": "*",
+                    }
+                )
 
         try:
             audit_log(request, "api_key_user")
@@ -311,10 +316,13 @@ async def security_middleware(request: Request, call_next):
     response = await call_next(request)
     return response
 
+from app.api.integrations import router as integrations_router
+
 # -------------------------------------------------
 # PUBLIC ROUTERS (LOCKED)
 # -------------------------------------------------
 app.include_router(auth_router)
+app.include_router(integrations_router)
 app.include_router(assistant_router)
 app.include_router(mitra_router)
 app.include_router(webhook_router)

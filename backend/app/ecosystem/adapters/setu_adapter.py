@@ -29,10 +29,11 @@ class SETUAdapter(BaseBHIVAdapter):
         return "SETU"
 
     def _create_manifest(self) -> IntegrationManifest:
+        base_url = os.getenv("SETU_BASE_URL") or os.getenv("SETU_API_URL") or "http://163.128.209.18:8014"
         return IntegrationManifest(
             product_name=self.product_name,
             protocol=IntegrationProtocol.REST,
-            base_url=os.getenv("SETU_API_URL", "https://setu.bhiv.example.com/api/v1"),
+            base_url=base_url.rstrip("/"),
             capabilities=[
                 AdapterCapability.QUERY,
                 AdapterCapability.EXECUTE,

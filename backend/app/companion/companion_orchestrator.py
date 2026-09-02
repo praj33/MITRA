@@ -7,6 +7,7 @@ Flow: message → intent classify → capability route OR conversation
 """
 from __future__ import annotations
 
+import os
 import logging
 from dataclasses import dataclass, field
 from datetime import datetime, timezone
@@ -512,7 +513,7 @@ class CompanionOrchestrator:
 
 
     async def _call_knowledge(self, message: str, user_id: str) -> str:
-        """Route to UniGuru for knowledge queries."""
+        """Route to primary LLM / UniGuru for knowledge queries."""
         history = await session_manager.get_history(user_id, limit=6)
         messages = [
             {"role": "system", "content": (
@@ -521,8 +522,9 @@ class CompanionOrchestrator:
                 "Offer to go deeper or give examples if the user wants."
             )}
         ] + history + [{"role": "user", "content": message}]
+        primary = os.getenv("COMPANION_LLM_PROVIDER", "groq")
         return await llm_bridge.call_llm_with_messages(
-            model="uniguru",
+            model=primary,
             messages=messages,
             temperature=0.5,
         )

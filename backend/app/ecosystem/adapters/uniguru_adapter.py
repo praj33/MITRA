@@ -29,10 +29,11 @@ class UniGuruAdapter(BaseBHIVAdapter):
         return "UniGuru"
 
     def _create_manifest(self) -> IntegrationManifest:
+        base_url = os.getenv("UNIGURU_API_URL") or os.getenv("UNIGURU_URL") or "https://uniguru.blackholeinfiverse.com/api"
         return IntegrationManifest(
             product_name=self.product_name,
             protocol=IntegrationProtocol.REST,
-            base_url=os.getenv("UNIGURU_API_URL", "https://uniguru.bhiv.example.com/api/v1"),
+            base_url=base_url.rstrip("/"),
             capabilities=[
                 AdapterCapability.QUERY,
                 AdapterCapability.EXECUTE,
@@ -54,12 +55,13 @@ class UniGuruAdapter(BaseBHIVAdapter):
         start = time.time()
         try:
             base_url = self._manifest.base_url
+            token = os.getenv("UNIGURU_API_TOKEN") or os.getenv("UNIGURU_API_KEY") or ""
             headers = {
-                "Authorization": f"Bearer {os.getenv('UNIGURU_API_KEY', '')}",
+                "Authorization": f"Bearer {token}",
                 "X-Trace-ID": request.trace_id,
                 "X-Source": "mitra",
             }
-            async with httpx.AsyncClient(timeout=self._manifest.timeout_seconds) as client:
+            async with httpx.AsyncClient(timeout=self._manifest.timeout_seconds, follow_redirects=True) as client:
                 resp = await client.get(
                     f"{base_url}/{request.action}",
                     params=request.payload,
@@ -100,13 +102,14 @@ class UniGuruAdapter(BaseBHIVAdapter):
         start = time.time()
         try:
             base_url = self._manifest.base_url
+            token = os.getenv("UNIGURU_API_TOKEN") or os.getenv("UNIGURU_API_KEY") or ""
             headers = {
-                "Authorization": f"Bearer {os.getenv('UNIGURU_API_KEY', '')}",
+                "Authorization": f"Bearer {token}",
                 "X-Trace-ID": request.trace_id,
                 "X-Source": "mitra",
                 "Content-Type": "application/json",
             }
-            async with httpx.AsyncClient(timeout=self._manifest.timeout_seconds) as client:
+            async with httpx.AsyncClient(timeout=self._manifest.timeout_seconds, follow_redirects=True) as client:
                 resp = await client.post(
                     f"{base_url}/{request.action}",
                     json=request.payload,
