@@ -8,6 +8,9 @@ export function getApiBaseUrl() {
   if (typeof document !== 'undefined') {
     const attr = document.querySelector('mitra-companion')?.getAttribute('api-base-url');
     if (attr) return attr;
+    if (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1') {
+      return 'http://localhost:8001';
+    }
   }
   return 'https://mitra-backend-q1f3.onrender.com';
 }
