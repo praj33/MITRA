@@ -94,7 +94,7 @@ async def run_hardening_tests():
     logger.info("\n--- TEST 4: SAMACHAR News Intelligence ---")
     res_samachar = await companion_orchestrator.process(
         user_id="prod_test_01",
-        message="https://www.bbc.com/news/live/cr0qxd1y219kt",
+        message="Show me latest technology news",
         platform="samachar",
         device="api",
         page_context={"host_app": "samachar", "current_page": "/pages/samachar.html"}
