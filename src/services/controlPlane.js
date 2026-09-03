@@ -184,8 +184,9 @@ export class ControlPlane {
 
       const data = await response.json();
 
-      // Parse structured intelligence fields from backend response
       let replyText = data.message || data.response || data.reply || 'Message processed.';
+      let intent = data.intent || 'general';
+      const suggestedActions = data.suggested_actions || [];
       let capabilityResult = data.capability_result || null;
       const traceId = data.trace_id || null;
 
