@@ -5,12 +5,12 @@ export function getApiBaseUrl() {
   if (typeof window !== 'undefined' && window.__MITRA_API_BASE_URL) {
     return window.__MITRA_API_BASE_URL;
   }
+  if (typeof window !== 'undefined' && (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1')) {
+    return 'http://localhost:8001';
+  }
   if (typeof document !== 'undefined') {
     const attr = document.querySelector('mitra-companion')?.getAttribute('api-base-url');
     if (attr) return attr;
-    if (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1') {
-      return 'http://localhost:8001';
-    }
   }
   return 'https://mitra-backend-q1f3.onrender.com';
 }
@@ -200,7 +200,7 @@ export class ControlPlane {
 
       // ── TRANSLATE INTERCEPT ──────────────────────────────────────────
       // Backend classifies translation as "general" — no translate executor.
-      // We detect translate-like phrases and call MyMemory free API.
+      // We detect translate-like phrases, apply high-precision dictionary for standard phrases, and call MyMemory free API for complex text.
       const translateMatch = trimmedText.match(
         /translate\s+['"]?(.+?)['"]?\s+(?:into|to|in)\s+([a-z]+)/i
       ) || trimmedText.match(
@@ -208,37 +208,62 @@ export class ControlPlane {
       );
       if ((intent === 'translate' || intent === 'general') && translateMatch) {
         const textToTranslate = translateMatch[1]?.trim() || trimmedText;
-        const targetLang = translateMatch[2]?.trim().toLowerCase() || 'hi';
-        // Map common language names to ISO codes for MyMemory API
+        const rawTarget = translateMatch[2]?.trim().toLowerCase() || 'hi';
+        // Map common language names and abbreviations to ISO codes
         const langMap = {
-          hindi:'hi', french:'fr', spanish:'es', german:'de', arabic:'ar',
+          hindi:'hi', hind:'hi', hindustani:'hi', french:'fr', spanish:'es', german:'de', arabic:'ar',
           portuguese:'pt', russian:'ru', japanese:'ja', chinese:'zh', korean:'ko',
           italian:'it', dutch:'nl', turkish:'tr', polish:'pl', marathi:'mr',
           gujarati:'gu', bengali:'bn', tamil:'ta', telugu:'te', kannada:'kn',
           punjabi:'pa', urdu:'ur', english:'en'
         };
-        const targetCode = langMap[targetLang] || targetLang.slice(0, 2);
-        try {
-          const myMemoryUrl = `https://api.mymemory.translated.net/get?q=${encodeURIComponent(textToTranslate)}&langpair=en|${targetCode}`;
-          const translateResp = await fetch(myMemoryUrl);
-          const tData = await translateResp.json();
-          const translated = tData.responseData?.translatedText || tData.matches?.[0]?.translation;
-          if (translated && translated !== textToTranslate) {
-            replyText = translated;
-            intent = 'translate';
-            capabilityResult = {
-              capability: 'translate',
-              status: 'success',
-              summary: `Translated via MyMemory`,
-              data: {
-                capability: 'translate',
-                result: translated,
-                translation: { text: translated, from: 'English', to: targetLang, original: textToTranslate }
-              }
-            };
+        const targetCode = langMap[rawTarget] || rawTarget.slice(0, 2);
+        const displayLang = rawTarget.charAt(0).toUpperCase() + rawTarget.slice(1);
+
+        // High-precision dictionary for common phrases to guarantee formal, accurate output
+        const commonDict = {
+          'hi': {
+            'how are you': 'आप कैसे हैं?',
+            'how are you?': 'आप कैसे हैं?',
+            'hello': 'नमस्ते',
+            'hi': 'नमस्ते',
+            'good morning': 'शुभ प्रभात',
+            'good night': 'शुभ रात्रि',
+            'thank you': 'धन्यवाद',
+            'thanks': 'धन्यवाद',
+            'what is your name': 'आपका नाम क्या है?',
+            'what is your name?': 'आपका नाम क्या है?',
+            'where are you': 'आप कहाँ हैं?',
+            'where are you?': 'आप कहाँ हैं?'
           }
-        } catch (e) {
-          // MyMemory failed, keep backend response
+        };
+
+        let translated = commonDict[targetCode]?.[textToTranslate.toLowerCase().trim()] || null;
+
+        if (!translated) {
+          try {
+            const myMemoryUrl = `https://api.mymemory.translated.net/get?q=${encodeURIComponent(textToTranslate)}&langpair=en|${targetCode}`;
+            const translateResp = await fetch(myMemoryUrl);
+            const tData = await translateResp.json();
+            translated = tData.responseData?.translatedText || tData.matches?.[0]?.translation;
+          } catch (e) {
+            // MyMemory failed, fallback below
+          }
+        }
+
+        if (translated && translated !== textToTranslate) {
+          replyText = translated;
+          intent = 'translate';
+          capabilityResult = {
+            capability: 'translate',
+            status: 'success',
+            summary: `Translated to ${displayLang}`,
+            data: {
+              capability: 'translate',
+              result: translated,
+              translation: { text: translated, from: 'English', to: displayLang, original: textToTranslate }
+            }
+          };
         }
       }
 
