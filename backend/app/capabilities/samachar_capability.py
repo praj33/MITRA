@@ -519,12 +519,12 @@ class SamacharCapability(BaseCapability):
         except Exception as exc:
             logger.warning("[SAMACHAR RESOLUTION] DuckDuckGo error: %s", exc)
 
-        # 3. Fallback: Return first accessible candidate if available
-        for title, cand_url in candidates:
-            test_res = await self._extract_article_from_url(cand_url)
-            if test_res.get("status") == "success":
-                logger.info("[SAMACHAR RESOLUTION] Selected fallback accessible candidate: '%s'", cand_url)
-                return cand_url
+        # 3. Fallback: Return first available candidate URL if available
+        if candidates:
+            logger.info("[SAMACHAR RESOLUTION] Selected fallback candidate URL: '%s'", candidates[0][1])
+            return candidates[0][1]
 
-        logger.warning("[SAMACHAR RESOLUTION] Selection Reason: Search providers returned no valid individual article URLs for query '%s'", query)
-        return None
+        # 4. Fallback search URL
+        fallback_news_url = f"https://news.google.com/search?q={encoded_query}"
+        logger.info("[SAMACHAR RESOLUTION] Returning fallback news search URL: '%s'", fallback_news_url)
+        return fallback_news_url
