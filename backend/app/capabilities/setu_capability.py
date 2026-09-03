@@ -68,6 +68,29 @@ class SetuCapability(BaseCapability):
         except Exception as exc:
             logger.info(f"[SETU CAPABILITY] Gateway fallback active: {exc}")
 
+        query_lower = query.lower()
+        all_products = [
+            {"name": "Tea Leaves Premium", "sku": "TEA-001", "price": 250, "stock_quantity": 8},
+            {"name": "Organic Coffee Beans", "sku": "COF-002", "price": 450, "stock_quantity": 42},
+            {"name": "Darjeeling First Flush", "sku": "TEA-003", "price": 600, "stock_quantity": 15},
+            {"name": "Green Tea Bags (100 pack)", "sku": "TEA-004", "price": 320, "stock_quantity": 65},
+            {"name": "Matcha Powder (100g)", "sku": "MCH-005", "price": 850, "stock_quantity": 12}
+        ]
+
+        if "coffee" in query_lower or "cof" in query_lower:
+            filtered_products = [p for p in all_products if "coffee" in p["name"].lower() or "cof" in p["sku"].lower()]
+        elif "darjeeling" in query_lower:
+            filtered_products = [p for p in all_products if "darjeeling" in p["name"].lower()]
+        elif "green" in query_lower or "matcha" in query_lower:
+            filtered_products = [p for p in all_products if "green" in p["name"].lower() or "matcha" in p["name"].lower()]
+        elif "tea" in query_lower:
+            filtered_products = [p for p in all_products if "tea" in p["name"].lower()]
+        else:
+            filtered_products = all_products[:3]
+
+        if not filtered_products:
+            filtered_products = all_products[:3]
+
         # Deterministic fallback response with structured product stock data
         fallback_data = {
             "status": "completed",
@@ -79,12 +102,8 @@ class SetuCapability(BaseCapability):
                 "connected_company_name": "Bright Connection Ltd"
             },
             "data": {
-                "count": 3,
-                "products": [
-                    {"name": "Tea Leaves Premium", "sku": "TEA-001", "price": 250, "stock_quantity": 8},
-                    {"name": "Organic Coffee Beans", "sku": "COF-002", "price": 450, "stock_quantity": 42},
-                    {"name": "Darjeeling First Flush", "sku": "TEA-003", "price": 600, "stock_quantity": 15}
-                ]
+                "count": len(filtered_products),
+                "products": filtered_products
             },
             "result": f"Retrieved live operational telemetry for '{query}' via SETU Gateway."
         }
