@@ -330,31 +330,6 @@ export class ControlPlane {
             }
           };
         }
-      }ranslated) {
-          try {
-            const myMemoryUrl = `https://api.mymemory.translated.net/get?q=${encodeURIComponent(textToTranslate)}&langpair=en|${targetCode}`;
-            const translateResp = await fetch(myMemoryUrl);
-            const tData = await translateResp.json();
-            translated = tData.responseData?.translatedText || tData.matches?.[0]?.translation;
-          } catch (e) {
-            // MyMemory failed, fallback below
-          }
-        }
-
-        if (translated && translated !== textToTranslate) {
-          replyText = translated;
-          intent = 'translate';
-          capabilityResult = {
-            capability: 'translate',
-            status: 'success',
-            summary: `Translated to ${displayLang}`,
-            data: {
-              capability: 'translate',
-              result: translated,
-              translation: { text: translated, from: 'English', to: displayLang, original: textToTranslate }
-            }
-          };
-        }
       }
 
       // ── TASK INTERCEPT ───────────────────────────────────────────────
