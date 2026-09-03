@@ -186,9 +186,13 @@ export class ControlPlane {
 
       // Parse structured intelligence fields from backend response
       let replyText = data.message || data.response || data.reply || 'Message processed.';
-      let intent = data.intent || 'general';
-      const suggestedActions = data.suggested_actions || [];
-            // ── TRANSLATE INTERCEPT ──────────────────────────────────────────
+      let capabilityResult = data.capability_result || null;
+      const traceId = data.trace_id || null;
+
+      const trimmedText = text.trim();
+      const isDirectUrl = /^(https?:\/\/[^\s]+)$/i.test(trimmedText);
+
+      // ── TRANSLATE INTERCEPT ──────────────────────────────────────────
       // Dynamic translation support across ALL global languages (French, Spanish, German, Japanese, Marathi, Gujarati, etc.)
       const translateMatch = trimmedText.match(
         /translate\s+['"]?(.+?)['"]?\s+(?:into|to|in)\s+([a-z]+)/i
