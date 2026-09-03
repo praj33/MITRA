@@ -188,59 +188,149 @@ export class ControlPlane {
       let replyText = data.message || data.response || data.reply || 'Message processed.';
       let intent = data.intent || 'general';
       const suggestedActions = data.suggested_actions || [];
-      let capabilityResult = data.capability_result || null;
-      const traceId = data.trace_id || null;
-
-      const trimmedText = text.trim();
-      const isDirectUrl = /^(https?:\/\/[^\s]+)$/i.test(trimmedText);
-
-      // ═══════════════════════════════════════════════════════════════════
-      // FRONTEND INTERCEPTS — handle capabilities that backend cannot exec
-      // ═══════════════════════════════════════════════════════════════════
-
-      // ── TRANSLATE INTERCEPT ──────────────────────────────────────────
-      // Backend classifies translation as "general" — no translate executor.
-      // We detect translate-like phrases, apply high-precision dictionary for standard phrases, and call MyMemory free API for complex text.
+            // ── TRANSLATE INTERCEPT ──────────────────────────────────────────
+      // Dynamic translation support across ALL global languages (French, Spanish, German, Japanese, Marathi, Gujarati, etc.)
       const translateMatch = trimmedText.match(
         /translate\s+['"]?(.+?)['"]?\s+(?:into|to|in)\s+([a-z]+)/i
       ) || trimmedText.match(
         /(?:into|to|in)\s+([a-z]+).*?translate\s+['"]?(.+?)['"]?/i
-      );
+      ) || trimmedText.match(
+        /how\s+do\s+you\s+say\s+['"]?(.+?)['"]?\s+in\s+([a-z]+)/i
+      ) || (/\b(translate|in)\b/i.test(trimmedText) && trimmedText.match(/['"]?(.+?)['"]?\s+in\s+([a-z]+)$/i));
+
       if ((intent === 'translate' || intent === 'general') && translateMatch) {
         const textToTranslate = translateMatch[1]?.trim() || trimmedText;
         const rawTarget = translateMatch[2]?.trim().toLowerCase() || 'hi';
-        // Map common language names and abbreviations to ISO codes
-        const langMap = {
-          hindi:'hi', hind:'hi', hindustani:'hi', french:'fr', spanish:'es', german:'de', arabic:'ar',
-          portuguese:'pt', russian:'ru', japanese:'ja', chinese:'zh', korean:'ko',
-          italian:'it', dutch:'nl', turkish:'tr', polish:'pl', marathi:'mr',
-          gujarati:'gu', bengali:'bn', tamil:'ta', telugu:'te', kannada:'kn',
-          punjabi:'pa', urdu:'ur', english:'en'
-        };
-        const targetCode = langMap[rawTarget] || rawTarget.slice(0, 2);
-        const displayLang = rawTarget.charAt(0).toUpperCase() + rawTarget.slice(1);
 
-        // High-precision dictionary for common phrases to guarantee formal, accurate output
+        // Map 40+ global language names and synonyms to ISO codes
+        const langMap = {
+          hindi:'hi', hind:'hi', hindustani:'hi',
+          french:'fr', francais:'fr',
+          spanish:'es', espanol:'es',
+          german:'de', deutsch:'de',
+          arabic:'ar',
+          portuguese:'pt',
+          russian:'ru',
+          japanese:'ja', nihongo:'ja',
+          chinese:'zh', mandarin:'zh',
+          korean:'ko',
+          italian:'it',
+          dutch:'nl',
+          turkish:'tr',
+          polish:'pl',
+          marathi:'mr',
+          gujarati:'gu',
+          bengali:'bn', bangla:'bn',
+          tamil:'ta',
+          telugu:'te',
+          kannada:'kn',
+          punjabi:'pa',
+          urdu:'ur',
+          vietnamese:'vi',
+          thai:'th',
+          greek:'el',
+          hebrew:'he',
+          swedish:'sv',
+          danish:'da',
+          finnish:'fi',
+          norwegian:'no',
+          czech:'cs',
+          hungarian:'hu',
+          romanian:'ro',
+          ukrainian:'uk',
+          indonesian:'id',
+          malay:'ms',
+          persian:'fa', farsi:'fa',
+          english:'en'
+        };
+
+        const targetCode = langMap[rawTarget] || rawTarget.slice(0, 2);
+
+        const displayNames = {
+          'hi':'Hindi', 'fr':'French', 'es':'Spanish', 'de':'German', 'ar':'Arabic',
+          'pt':'Portuguese', 'ru':'Russian', 'ja':'Japanese', 'zh':'Chinese', 'ko':'Korean',
+          'it':'Italian', 'nl':'Dutch', 'tr':'Turkish', 'pl':'Polish', 'mr':'Marathi',
+          'gu':'Gujarati', 'bn':'Bengali', 'ta':'Tamil', 'te':'Telugu', 'kn':'Kannada',
+          'pa':'Punjabi', 'ur':'Urdu', 'vi':'Vietnamese', 'th':'Thai', 'el':'Greek',
+          'he':'Hebrew', 'sv':'Swedish', 'da':'Danish', 'fi':'Finnish', 'no':'Norwegian',
+          'cs':'Czech', 'hu':'Hungarian', 'ro':'Romanian', 'uk':'Ukrainian', 'id':'Indonesian',
+          'ms':'Malay', 'fa':'Persian', 'en':'English'
+        };
+        const displayLang = displayNames[targetCode] || (rawTarget.charAt(0).toUpperCase() + rawTarget.slice(1));
+
+        // High-precision dictionary for standard phrases across major global & Indian languages
         const commonDict = {
           'hi': {
-            'how are you': 'आप कैसे हैं?',
-            'how are you?': 'आप कैसे हैं?',
-            'hello': 'नमस्ते',
-            'hi': 'नमस्ते',
-            'good morning': 'शुभ प्रभात',
-            'good night': 'शुभ रात्रि',
-            'thank you': 'धन्यवाद',
-            'thanks': 'धन्यवाद',
-            'what is your name': 'आपका नाम क्या है?',
-            'what is your name?': 'आपका नाम क्या है?',
-            'where are you': 'आप कहाँ हैं?',
-            'where are you?': 'आप कहाँ हैं?'
+            'how are you': 'आप कैसे हैं?', 'how are you?': 'आप कैसे हैं?',
+            'hello': 'नमस्ते', 'hi': 'नमस्ते', 'good morning': 'शुभ प्रभात',
+            'good night': 'शुभ रात्रि', 'thank you': 'धन्यवाद', 'thanks': 'धन्यवाद',
+            'what is your name': 'आपका नाम क्या है?', 'what is your name?': 'आपका नाम क्या है?'
+          },
+          'fr': {
+            'how are you': 'Comment allez-vous ?', 'how are you?': 'Comment allez-vous ?',
+            'hello': 'Bonjour', 'hi': 'Salut', 'good morning': 'Bonjour',
+            'good night': 'Bonne nuit', 'thank you': 'Merci', 'thanks': 'Merci',
+            'what is your name': 'Comment vous appelez-vous ?', 'what is your name?': 'Comment vous appelez-vous ?'
+          },
+          'es': {
+            'how are you': '¿Cómo estás?', 'how are you?': '¿Cómo estás?',
+            'hello': 'Hola', 'hi': 'Hola', 'good morning': 'Buenos días',
+            'good night': 'Buenas noches', 'thank you': 'Gracias', 'thanks': 'Gracias',
+            'what is your name': '¿Cómo te llamas?', 'what is your name?': '¿Cómo te llamas?'
+          },
+          'de': {
+            'how are you': 'Wie geht es Ihnen?', 'how are you?': 'Wie geht es Ihnen?',
+            'hello': 'Hallo', 'hi': 'Hallo', 'good morning': 'Guten Morgen',
+            'good night': 'Gute Nacht', 'thank you': 'Danke', 'thanks': 'Danke'
+          },
+          'ja': {
+            'how are you': 'お元気ですか？', 'how are you?': 'お元気ですか？',
+            'hello': 'こんにちは', 'hi': 'やあ', 'good morning': 'おはようございます',
+            'good night': 'おやすみなさい', 'thank you': 'ありがとうございます', 'thanks': 'ありがとう'
+          },
+          'mr': {
+            'how are you': 'तुम्ही कसे आहात?', 'how are you?': 'तुम्ही कसे आहात?',
+            'hello': 'नमस्कार', 'hi': 'नमस्कार', 'good morning': 'शुभ सकाळ',
+            'good night': 'शुभ रात्री', 'thank you': 'धन्यवाद', 'thanks': 'धन्यवाद'
+          },
+          'gu': {
+            'how are you': 'તમે કેમ છો?', 'how are you?': 'તમે કેમ છો?',
+            'hello': 'નમસ્તે', 'hi': 'નમસ્તે', 'thank you': 'આભાર', 'thanks': 'આભાર'
+          },
+          'zh': {
+            'how are you': '你好吗？', 'how are you?': '你好吗？',
+            'hello': '你好', 'hi': '你好', 'thank you': '谢谢', 'thanks': '谢谢'
           }
         };
 
         let translated = commonDict[targetCode]?.[textToTranslate.toLowerCase().trim()] || null;
 
         if (!translated) {
+          try {
+            const myMemoryUrl = `https://api.mymemory.translated.net/get?q=${encodeURIComponent(textToTranslate)}&langpair=autodetect|${targetCode}`;
+            const translateResp = await fetch(myMemoryUrl);
+            const tData = await translateResp.json();
+            translated = tData.responseData?.translatedText || tData.matches?.[0]?.translation;
+          } catch (e) {
+            // MyMemory failed, fallback below
+          }
+        }
+
+        if (translated && translated !== textToTranslate) {
+          replyText = translated;
+          intent = 'translate';
+          capabilityResult = {
+            capability: 'translate',
+            status: 'success',
+            summary: `Translated to ${displayLang}`,
+            data: {
+              capability: 'translate',
+              result: translated,
+              translation: { text: translated, from: 'Auto', to: displayLang, original: textToTranslate }
+            }
+          };
+        }
+      }ranslated) {
           try {
             const myMemoryUrl = `https://api.mymemory.translated.net/get?q=${encodeURIComponent(textToTranslate)}&langpair=en|${targetCode}`;
             const translateResp = await fetch(myMemoryUrl);
