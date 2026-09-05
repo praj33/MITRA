@@ -1,0 +1,247 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Dashboard - BHIV MITRA Universal Companion</title>
+  <link rel="icon" href="favicon.svg" type="image/svg+xml">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    body {
+      font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
+      background: #0B0B0F;
+      color: #FFFFFF;
+      min-height: 100vh;
+      padding-top: 64px;
+    }
+
+    .main {
+      max-width: 1200px;
+      margin: 0 auto;
+      padding: 48px 40px;
+    }
+
+    /* ── Hero header ── */
+    .hero {
+      display: flex;
+      justify-content: space-between;
+      align-items: flex-start;
+      margin-bottom: 40px;
+    }
+    .hero-title {
+      font-size: 32px;
+      font-weight: 800;
+      letter-spacing: -0.5px;
+      margin-bottom: 8px;
+    }
+    .hero-sub {
+      font-size: 14px;
+      color: rgba(255,255,255,0.45);
+    }
+    .runtime-badge {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      background: rgba(46,204,113,0.12);
+      border: 1px solid rgba(46,204,113,0.25);
+      border-radius: 100px;
+      padding: 8px 16px;
+      font-size: 13px;
+      font-weight: 600;
+      color: #2ecc71;
+      white-space: nowrap;
+    }
+    .runtime-dot {
+      width: 8px;
+      height: 8px;
+      border-radius: 50%;
+      background: #2ecc71;
+      box-shadow: 0 0 6px #2ecc71;
+      flex-shrink: 0;
+    }
+
+    /* ── Stat cards row ── */
+    .stat-grid {
+      display: grid;
+      grid-template-columns: repeat(4, 1fr);
+      gap: 16px;
+      margin-bottom: 48px;
+    }
+    .stat-card {
+      background: #15151D;
+      border: 1px solid rgba(255,255,255,0.07);
+      border-radius: 12px;
+      padding: 24px;
+    }
+    .stat-label {
+      font-size: 11px;
+      font-weight: 600;
+      text-transform: uppercase;
+      letter-spacing: 0.1em;
+      color: rgba(255,255,255,0.4);
+      margin-bottom: 12px;
+    }
+    .stat-value {
+      font-size: 26px;
+      font-weight: 700;
+      color: #FFFFFF;
+    }
+
+    /* ── Product launcher ── */
+    .section-heading {
+      font-size: 18px;
+      font-weight: 700;
+      margin-bottom: 20px;
+    }
+    .product-grid {
+      display: grid;
+      grid-template-columns: repeat(4, 1fr);
+      gap: 16px;
+    }
+    .product-card {
+      background: #15151D;
+      border: 1px solid rgba(255,255,255,0.07);
+      border-radius: 12px;
+      padding: 24px;
+      display: flex;
+      align-items: center;
+      gap: 18px;
+      text-decoration: none;
+      color: #FFFFFF;
+      transition: border-color 0.2s, background 0.2s;
+      cursor: pointer;
+    }
+    .product-card:hover {
+      border-color: rgba(108,92,231,0.4);
+      background: #1a1a24;
+    }
+    .product-icon {
+      width: 44px;
+      height: 44px;
+      border-radius: 10px;
+      background: rgba(108,92,231,0.15);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 22px;
+      flex-shrink: 0;
+    }
+    .product-name {
+      font-size: 15px;
+      font-weight: 700;
+      margin-bottom: 4px;
+    }
+    .product-desc {
+      font-size: 12px;
+      color: rgba(255,255,255,0.4);
+      line-height: 1.4;
+    }
+
+    /* ── Footer ── */
+    .footer {
+      text-align: center;
+      padding: 32px 40px;
+      font-size: 13px;
+      color: rgba(255,255,255,0.25);
+      border-top: 1px solid rgba(255,255,255,0.05);
+      margin-top: 48px;
+    }
+
+    @media (max-width: 900px) {
+      .stat-grid { grid-template-columns: repeat(2, 1fr); }
+      .product-grid { grid-template-columns: repeat(2, 1fr); }
+      .hero { flex-direction: column; gap: 16px; }
+    }
+    @media (max-width: 480px) {
+      .stat-grid { grid-template-columns: 1fr; }
+      .product-grid { grid-template-columns: 1fr; }
+      .main { padding: 32px 20px; }
+    }
+  </style>
+</head>
+<body>
+  <mitra-navbar></mitra-navbar>
+  <script type="module" src="src/components/Navbar.js"></script>
+
+  <div class="main">
+    <!-- Hero -->
+    <div class="hero">
+      <div>
+        <h1 class="hero-title">Ecosystem Overview</h1>
+        <p class="hero-sub">Welcome to BHIV MITRA Universal Companion Command Center</p>
+      </div>
+      <div class="runtime-badge">
+        <div class="runtime-dot"></div>
+        MITRA Runtime Connected
+      </div>
+    </div>
+
+    <!-- Stat cards -->
+    <div class="stat-grid">
+      <div class="stat-card">
+        <div class="stat-label">Active Products</div>
+        <div class="stat-value">4 Shared Apps</div>
+      </div>
+      <div class="stat-card">
+        <div class="stat-label">Session Status</div>
+        <div class="stat-value">Active</div>
+      </div>
+      <div class="stat-card">
+        <div class="stat-label">Runtime Latency</div>
+        <div class="stat-value">&lt; 15ms</div>
+      </div>
+      <div class="stat-card">
+        <div class="stat-label">Companion Mode</div>
+        <div class="stat-value">Hover / Dock</div>
+      </div>
+    </div>
+
+    <!-- Product launcher -->
+    <h2 class="section-heading">🚀 Launch Ecosystem Product</h2>
+    <div class="product-grid">
+      <a href="pages/uniguru.html" class="product-card">
+        <div class="product-icon">🎓</div>
+        <div>
+          <div class="product-name">UniGuru</div>
+          <div class="product-desc">Universal Learning Assistant</div>
+        </div>
+      </a>
+      <a href="pages/gurukul.html" class="product-card">
+        <div class="product-icon">🏛️</div>
+        <div>
+          <div class="product-name">Gurukul</div>
+          <div class="product-desc">Interactive Education Workspace</div>
+        </div>
+      </a>
+      <a href="pages/samruddhi.html" class="product-card">
+        <div class="product-icon">🌱</div>
+        <div>
+          <div class="product-name">Samruddhi</div>
+          <div class="product-desc">Resource Management Platform</div>
+        </div>
+      </a>
+      <a href="pages/setu.html" class="product-card">
+        <div class="product-icon">🌉</div>
+        <div>
+          <div class="product-name">SETU</div>
+          <div class="product-desc">Integration &amp; Runtime Bridge</div>
+        </div>
+      </a>
+    </div>
+  </div>
+
+  <div class="footer">
+    © 2026 BHIV Engineering Exchange — MITRA Universal Companion Project.
+  </div>
+
+  <!-- MITRA Companion -->
+  <mitra-companion stylesheet-path="styles/mitra-companion.css" api-base-url="https://mitra.blackholeinfiverse.com"></mitra-companion>
+  <script type="module" src="src/mitra-companion.js?v=5"></script>
+</body>
+</html>
+
+

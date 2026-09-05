@@ -53,7 +53,7 @@ To add the MITRA Floating Orb Companion to any HTML page or web application, inc
 ```
 
 > **Note on `api-base-url`**:  
-> During local development (`localhost` / `127.0.0.1`), `controlPlane.js` automatically resolves `getApiBaseUrl()` to `http://localhost:8001`. For production deployment on Render, update `api-base-url` to `https://mitra-backend-q1f3.onrender.com` or your designated backend endpoint.
+> During local development (`localhost` / `127.0.0.1`), `controlPlane.js` automatically resolves `getApiBaseUrl()` to `http://localhost:8001`. For production deployment on Render, update `api-base-url` to `https://mitra.blackholeinfiverse.com` or your designated backend endpoint.
 
 ---
 
