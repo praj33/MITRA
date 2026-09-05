@@ -12,7 +12,7 @@ export function getApiBaseUrl() {
     const attr = document.querySelector('mitra-companion')?.getAttribute('api-base-url');
     if (attr) return attr;
   }
-  return 'https://mitra-backend-q1f3.onrender.com';
+  return 'https://mitra.blackholeinfiverse.com';
 }
 
 const API_KEY = 'localtest';
