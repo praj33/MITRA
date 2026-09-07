@@ -1,0 +1,47 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Samachar - BHIV MITRA</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+    body {
+      font-family: 'Inter', -apple-system, sans-serif;
+      background: #0B0B0F;
+      color: #FFFFFF;
+      min-height: 100vh;
+      padding-top: 64px;
+    }
+    .content { padding: 48px 40px; max-width: 1200px; margin: 0 auto; }
+    .card {
+      background: #15151D;
+      border: 1px solid rgba(255,255,255,0.08);
+      padding: 32px;
+      border-radius: 14px;
+      margin-bottom: 24px;
+    }
+    .card h2 { font-size: 22px; font-weight: 700; margin-bottom: 12px; }
+    .card p { font-size: 14px; color: rgba(255,255,255,0.5); line-height: 1.7; }
+  </style>
+</head>
+<body>
+  <mitra-navbar></mitra-navbar>
+  <script type="module" src="../src/components/Navbar.js"></script>
+
+  <div class="content">
+    <div class="card">
+      <h2>Samachar News</h2>
+      <p>Welcome to Samachar. MITRA Companion state should persist when you navigate to other apps.</p>
+    </div>
+  </div>
+
+  <mitra-companion stylesheet-path="../styles/mitra-companion.css" api-base-url="https://mitra.blackholeinfiverse.com"></mitra-companion>
+  <script type="module" src="../src/mitra-companion.js"></script>
+</body>
+</html>
+
+
