@@ -215,6 +215,11 @@ def _get_allowed_origins() -> list[str]:
         "http://localhost:3001",
         "http://127.0.0.1:3000",
         "http://127.0.0.1:3001",
+        "https://mitra.blackholeinfiverse.com",
+        "https://artha.blackholeinfiverse.com",
+        "https://samachar.blackholeinfiverse.com",
+        "https://uniguru.blackholeinfiverse.com",
+        "https://setu.blackholeinfiverse.com",
     ]
     frontend_url = os.getenv("FRONTEND_URL", "").strip()
     if frontend_url:
@@ -260,7 +265,7 @@ async def security_middleware(request: Request, call_next):
         return response
 
     # Public endpoints manage their own validation
-    public_prefixes = ("/api/auth", "/api/integrations", "/api/ecosystem", "/api/companion", "/api/replay", "/api/metrics", "/api/tantra")
+    public_prefixes = ("/api/auth", "/api/oauth", "/api/connections", "/api/ecosystem", "/api/replay", "/api/metrics", "/api/tantra", "/api/webhooks")
     if any(request.url.path.startswith(prefix) for prefix in public_prefixes):
         response = await call_next(request)
         return response
@@ -272,8 +277,8 @@ async def security_middleware(request: Request, call_next):
         return response
 
     if request.url.path.startswith("/api"):
-        # Public auth, integration, and calendar feed endpoints
-        public_paths = ("/api/auth", "/api/integrations", "/api/calendar/feed", "/api/companion", "/api/system")
+        # Public auth and calendar feed endpoints
+        public_paths = ("/api/auth", "/api/calendar/feed", "/api/system")
         is_public = any(request.url.path.startswith(p) for p in public_paths)
 
         if not is_public:
@@ -288,19 +293,20 @@ async def security_middleware(request: Request, call_next):
                 logger.warning(f"Rate limit check failed: {e}. Allowing request.")
             
             api_key = request.headers.get("X-API-Key")
+            auth_header = request.headers.get("Authorization")
             expected_api_key = os.getenv("API_KEY")
-            
-            # Check API key (handle None cases gracefully)
-            if not expected_api_key:
-                logger.error("API_KEY environment variable is not set! Authentication will fail.")
-            if not api_key or api_key != expected_api_key:
-                # Get origin from request for CORS headers
+
+            has_valid_api_key = bool(api_key and expected_api_key and api_key == expected_api_key)
+            has_bearer_token = bool(auth_header and auth_header.strip().lower().startswith("bearer "))
+
+            # Block request if neither valid API Key nor Bearer token is provided
+            if not has_valid_api_key and not has_bearer_token and expected_api_key:
                 origin = request.headers.get("origin", "")
                 cors_origin = origin if origin else "*"
-                
+
                 return JSONResponse(
                     status_code=401,
-                    content={"detail": "Authentication failed"},
+                    content={"detail": "Authentication required. Missing API Key or Bearer token."},
                     headers={
                         "Access-Control-Allow-Origin": cors_origin,
                         "Access-Control-Allow-Methods": "GET, POST, PUT, DELETE, OPTIONS",
@@ -317,11 +323,13 @@ async def security_middleware(request: Request, call_next):
     return response
 
 from app.api.integrations import router as integrations_router
+from app.api.oauth_api import router as oauth_router
 
 # -------------------------------------------------
 # PUBLIC ROUTERS (LOCKED)
 # -------------------------------------------------
 app.include_router(auth_router)
+app.include_router(oauth_router)
 app.include_router(integrations_router)
 app.include_router(assistant_router)
 app.include_router(mitra_router)

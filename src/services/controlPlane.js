@@ -5,12 +5,12 @@ export function getApiBaseUrl() {
   if (typeof window !== 'undefined' && window.__MITRA_API_BASE_URL) {
     return window.__MITRA_API_BASE_URL;
   }
-  if (typeof window !== 'undefined' && (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1')) {
-    return 'http://localhost:8001';
-  }
   if (typeof document !== 'undefined') {
     const attr = document.querySelector('mitra-companion')?.getAttribute('api-base-url');
     if (attr) return attr;
+  }
+  if (typeof window !== 'undefined' && (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1')) {
+    return 'http://localhost:8001';
   }
   return 'https://mitra.blackholeinfiverse.com';
 }
@@ -41,12 +41,25 @@ export class ControlPlane {
    */
   getHostContext() {
     const pathname = typeof window !== 'undefined' ? window.location.pathname || '' : '';
+    const hostname = typeof window !== 'undefined' ? window.location.hostname || '' : '';
+    
+    // Explicit attribute override: <mitra-companion host-app="artha">
+    if (typeof document !== 'undefined') {
+      const explicitHost = document.querySelector('mitra-companion')?.getAttribute('host-app');
+      if (explicitHost) {
+        return {
+          host_app: explicitHost,
+          current_page: pathname || window.location.href
+        };
+      }
+    }
+
     let hostApp = 'dashboard';
-    if (pathname.includes('/pages/samachar')) hostApp = 'samachar';
-    else if (pathname.includes('/pages/uniguru')) hostApp = 'uniguru';
-    else if (pathname.includes('/pages/gurukul')) hostApp = 'gurukul';
-    else if (pathname.includes('/pages/samruddhi')) hostApp = 'samruddhi';
-    else if (pathname.includes('/pages/setu')) hostApp = 'setu';
+    if (hostname.includes('artha') || pathname.includes('/pages/artha') || pathname.includes('/pages/samruddhi')) hostApp = 'artha';
+    else if (hostname.includes('samachar') || pathname.includes('/pages/samachar')) hostApp = 'samachar';
+    else if (hostname.includes('uniguru') || pathname.includes('/pages/uniguru')) hostApp = 'uniguru';
+    else if (hostname.includes('gurukul') || pathname.includes('/pages/gurukul')) hostApp = 'gurukul';
+    else if (hostname.includes('setu') || pathname.includes('/pages/setu')) hostApp = 'setu';
 
     return {
       host_app: hostApp,
@@ -167,12 +180,25 @@ export class ControlPlane {
       // ═══════════════════════════════════════════════════════════════════
 
       eventBus.emit('health.changed', { status: 'Executing' });
-      const response = await fetch(`${getApiBaseUrl()}/api/companion/chat`, {
+      let response = await fetch(`${getApiBaseUrl()}/api/companion/chat`, {
         method: 'POST',
         headers: buildHeaders(),
         body: JSON.stringify(payload),
       });
 
+      // Handle nginx proxy path stripping discrepancy if /api/companion/chat returns 404
+      if (response.status === 404 && getApiBaseUrl().includes('mitra.blackholeinfiverse.com')) {
+        try {
+          const altResponse = await fetch(`${getApiBaseUrl()}/api/api/companion/chat`, {
+            method: 'POST',
+            headers: buildHeaders(),
+            body: JSON.stringify(payload),
+          });
+          if (altResponse.ok) {
+            response = altResponse;
+          }
+        } catch (_) {}
+      }
 
       if (!response.ok) {
         if (response.status === 401 || response.status === 403) {
@@ -518,6 +544,24 @@ export class ControlPlane {
           };
           replyText = 'Samachar news intelligence retrieved successfully.';
         }
+      }
+
+      // ── ARTHA / SAMRUDDHI FINANCIAL LEDGER FORMATTING ──────────────
+      const isArthaQuery = (capabilityResult && (capabilityResult.capability === 'artha' || capabilityResult.capability === 'samruddhi'))
+        || (hostCtx.host_app === 'artha' && /\b(balance|ledger|portfolio|financial|invoice|revenue|expense|asset|liability|tally|accounting)\b/i.test(trimmedText));
+
+      if (isArthaQuery && !capabilityResult && replyText) {
+        intent = 'artha';
+        capabilityResult = {
+          capability: 'artha',
+          status: 'success',
+          summary: 'Artha financial ledger analytics retrieved.',
+          data: {
+            capability: 'artha',
+            company_name: 'Artha Financial Analytics',
+            result: replyText
+          }
+        };
       }
 
       if (data.session_id) contextStore.setSessionId(data.session_id);
