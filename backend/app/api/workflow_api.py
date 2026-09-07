@@ -2,16 +2,18 @@
 workflow_api.py — Mitra Workflow REST API
 
 Endpoints to list, run, and create workflows.
+Part of the Canonical MITRA API (Phase 2 Hardened).
 """
 from __future__ import annotations
 
 from typing import Any, Dict, List, Optional
 
-from fastapi import APIRouter, Header
+from fastapi import APIRouter, HTTPException, Depends
 from fastapi.responses import JSONResponse
 from pydantic import BaseModel
 
 from app.companion.workflow_engine import workflow_engine, WorkflowStep
+from app.core.auth_dependencies import get_current_user
 from app.core.logging import get_logger
 
 router = APIRouter()
@@ -20,7 +22,7 @@ logger = get_logger(__name__)
 
 class WorkflowRunRequest(BaseModel):
     workflow_name: str
-    user_id: str
+    user_id: Optional[str] = None
     message: Optional[str] = None
     extra_params: Optional[Dict[str, Any]] = None
 
@@ -32,42 +34,41 @@ class WorkflowCreateRequest(BaseModel):
 
 @router.get("/api/workflow/list")
 async def list_workflows(
-    x_api_key: Optional[str] = Header(None, alias="X-API-Key"),
+    current_user: Dict[str, Any] = Depends(get_current_user),
 ):
     """List all available workflows (built-in + custom)."""
-    _ = x_api_key
     return {"workflows": workflow_engine.list_workflows()}
 
 
 @router.post("/api/workflow/run")
 async def run_workflow(
     request: WorkflowRunRequest,
-    x_api_key: Optional[str] = Header(None, alias="X-API-Key"),
+    current_user: Dict[str, Any] = Depends(get_current_user),
 ):
-    """Run a workflow by name."""
-    _ = x_api_key
+    """Run a workflow by name for the authenticated user."""
+    auth_user_id = current_user["user_id"]
     extra = request.extra_params or {}
     if request.message:
         extra["message"] = request.message
+
     try:
         result = await workflow_engine.run(
             workflow_name=request.workflow_name,
-            user_id=request.user_id,
+            user_id=auth_user_id,
             extra_params=extra,
         )
         return JSONResponse(status_code=200, content=result.to_dict())
     except Exception as exc:
-        logger.exception("Workflow run failed: %s", exc)
+        logger.exception("Workflow run failed for user %s: %s", auth_user_id, exc)
         return JSONResponse(status_code=500, content={"error": str(exc)})
 
 
 @router.post("/api/workflow/create")
 async def create_workflow(
     request: WorkflowCreateRequest,
-    x_api_key: Optional[str] = Header(None, alias="X-API-Key"),
+    current_user: Dict[str, Any] = Depends(get_current_user),
 ):
     """Create a custom workflow."""
-    _ = x_api_key
     try:
         steps = [
             WorkflowStep(

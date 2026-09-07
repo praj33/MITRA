@@ -12,7 +12,7 @@ def test_root_reports_current_backend():
     response = client.get("/")
 
     assert response.status_code == 200
-    assert response.json()["message"] == "AI Assistant Backend API v3.0.0"
+    assert "MITRA AI Command Center API" in response.json()["message"]
 
 
 @pytest.mark.parametrize(

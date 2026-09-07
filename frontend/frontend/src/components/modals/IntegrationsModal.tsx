@@ -1,5 +1,5 @@
-import React, { useState, useEffect } from 'react';
-import { useCompanionStore } from '../../store/companion.store';
+import React, { useState, useEffect, useCallback } from 'react';
+import { authApi } from '../../services/authApi';
 
 interface IntegrationsModalProps {
   isOpen: boolean;
@@ -7,102 +7,279 @@ interface IntegrationsModalProps {
 }
 
 export const IntegrationsModal: React.FC<IntegrationsModalProps> = ({ isOpen, onClose }) => {
-  const { userId } = useCompanionStore();
-  const [gmailConnected, setGmailConnected] = useState(false);
-  const [gmailAddress, setGmailAddress] = useState('');
+  // Google Connection State (backed by backend GET /api/connections)
+  const [googleConnected, setGoogleConnected] = useState(false);
+  const [googleStatus, setGoogleStatus] = useState<'not_connected' | 'active' | 'needs_reauthorization'>('not_connected');
+  const [googleAddress, setGoogleAddress] = useState('');
+  const [isConnectingGoogle, setIsConnectingGoogle] = useState(false);
+  const [isDisconnectingGoogle, setIsDisconnectingGoogle] = useState(false);
+
+  // Microsoft Connection State (backed by backend GET /api/connections)
+  const [microsoftConnected, setMicrosoftConnected] = useState(false);
+  const [microsoftStatus, setMicrosoftStatus] = useState<'not_connected' | 'active' | 'needs_reauthorization'>('not_connected');
+  const [microsoftAddress, setMicrosoftAddress] = useState('');
+  const [isConnectingMicrosoft, setIsConnectingMicrosoft] = useState(false);
+  const [isDisconnectingMicrosoft, setIsDisconnectingMicrosoft] = useState(false);
+
+  // GitHub Connection State (backed by backend GET /api/connections)
+  const [githubConnected, setGithubConnected] = useState(false);
+  const [githubStatus, setGithubStatus] = useState<'not_connected' | 'active' | 'needs_reauthorization'>('not_connected');
+  const [githubUsername, setGithubUsername] = useState('');
+  const [isConnectingGithub, setIsConnectingGithub] = useState(false);
+  const [isDisconnectingGithub, setIsDisconnectingGithub] = useState(false);
+
+  // App Password Fallback State (Legacy/Alternative)
   const [appPasswordMode, setAppPasswordMode] = useState(false);
   const [inputGmail, setInputGmail] = useState('');
   const [inputAppPassword, setInputAppPassword] = useState('');
-  
+
+  // WhatsApp State
   const [whatsappConnected, setWhatsappConnected] = useState(false);
   const [whatsappNumber, setWhatsappNumber] = useState('');
   const [showOtpModal, setShowOtpModal] = useState(false);
   const [otpCode, setOtpCode] = useState('');
   const [isVerifying, setIsVerifying] = useState(false);
+
+  // Global Feedback Messages
   const [statusMessage, setStatusMessage] = useState<string | null>(null);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
 
   const API_BASE = process.env.REACT_APP_API_BASE_URL || '';
 
-  // Load current integrations on open
-  useEffect(() => {
-    if (!isOpen) return;
-    const fetchStatus = async () => {
+  const fetchConnections = useCallback(async () => {
+    try {
+      // 1. Fetch OAuth connected accounts metadata from backend
+      const data = await authApi.getConnections();
+
+      // Check Google connection
+      const googleConn = data.connections?.find(
+        (c) => c.provider.toLowerCase() === 'google'
+      );
+      if (googleConn) {
+        setGoogleConnected(true);
+        setGoogleAddress(googleConn.email || 'Connected Google Account');
+        if (googleConn.status === 'needs_reauthorization') {
+          setGoogleStatus('needs_reauthorization');
+        } else {
+          setGoogleStatus('active');
+        }
+      } else {
+        setGoogleConnected(false);
+        setGoogleStatus('not_connected');
+        setGoogleAddress('');
+      }
+
+      // Check Microsoft connection
+      const msConn = data.connections?.find(
+        (c) => c.provider.toLowerCase() === 'microsoft'
+      );
+      if (msConn) {
+        setMicrosoftConnected(true);
+        setMicrosoftAddress(msConn.email || 'Connected Microsoft Account');
+        if (msConn.status === 'needs_reauthorization') {
+          setMicrosoftStatus('needs_reauthorization');
+        } else {
+          setMicrosoftStatus('active');
+        }
+      } else {
+        setMicrosoftConnected(false);
+        setMicrosoftStatus('not_connected');
+        setMicrosoftAddress('');
+      }
+
+      // Check GitHub connection
+      const ghConn = data.connections?.find(
+        (c) => c.provider.toLowerCase() === 'github'
+      );
+      if (ghConn) {
+        setGithubConnected(true);
+        setGithubUsername(ghConn.email || (ghConn as any).username || 'Connected GitHub Account');
+        if (ghConn.status === 'needs_reauthorization') {
+          setGithubStatus('needs_reauthorization');
+        } else {
+          setGithubStatus('active');
+        }
+      } else {
+        setGithubConnected(false);
+        setGithubStatus('not_connected');
+        setGithubUsername('');
+      }
+
+      // 2. Fetch WhatsApp status
       try {
-        const res = await fetch(`${API_BASE}/api/integrations?user_id=${encodeURIComponent(userId || 'user_default')}`);
+        const token = localStorage.getItem('authToken');
+        const headers: HeadersInit = { 'Content-Type': 'application/json' };
+        if (token) headers['Authorization'] = `Bearer ${token}`;
+
+        const res = await fetch(`${API_BASE}/api/integrations`, { headers });
         if (res.ok) {
-          const data = await res.json();
-          if (data.gmail?.connected) {
-            setGmailConnected(true);
-            setGmailAddress(data.gmail.email || 'Connected Gmail');
-          }
-          if (data.whatsapp?.verified) {
+          const intData = await res.json();
+          if (intData.whatsapp?.verified) {
             setWhatsappConnected(true);
-            setWhatsappNumber(data.whatsapp.phone || '');
+            setWhatsappNumber(intData.whatsapp.phone || '');
           }
         }
-      } catch (err) {
-        console.warn("Integrations status check error:", err);
+      } catch (e) {
+        console.warn("WhatsApp integration check warning:", e);
       }
-    };
-    fetchStatus();
-  }, [isOpen, userId, API_BASE]);
+    } catch (err) {
+      console.warn("Failed fetching user connections:", err);
+    }
+  }, [API_BASE]);
+
+  // Load real connections on modal open
+  useEffect(() => {
+    if (!isOpen) return;
+    fetchConnections();
+  }, [isOpen, fetchConnections]);
 
   if (!isOpen) return null;
 
-  // 1. Gmail Connect Handler (Social OAuth or Direct Secure App Password)
-  const handleConnectGmail = async () => {
-    setStatusMessage("Connecting to Google OAuth backend...");
+  // 1. Real Google OAuth Flow Handler (Redirects to Google Consent)
+  const handleConnectGoogle = async () => {
+    setIsConnectingGoogle(true);
+    setStatusMessage("Initiating PKCE-protected Google OAuth transaction...");
     setErrorMessage(null);
     try {
-      const res = await fetch(`${API_BASE}/api/auth/google`);
-      if (res.ok) {
-        const data = await res.json();
-        if (data.auth_url) {
-          window.location.href = data.auth_url;
-          return;
-        }
+      const data = await authApi.startOAuth('google', 'connect');
+      if (data.url) {
+        window.location.href = data.url;
+      } else {
+        throw new Error("No authorization URL returned from OAuth start endpoint.");
       }
-      setAppPasswordMode(true);
-      setStatusMessage("Enter your personal Gmail address & App Password for encrypted routing.");
-    } catch {
-      setAppPasswordMode(true);
-      setStatusMessage("Enter your personal Gmail address & App Password for encrypted routing.");
+    } catch (err: any) {
+      setIsConnectingGoogle(false);
+      setErrorMessage(err.message || "Failed starting Google connection. Please try again.");
     }
   };
 
+  // 2. Real Google OAuth Disconnect Handler
+  const handleDisconnectGoogle = async () => {
+    setIsDisconnectingGoogle(true);
+    setStatusMessage("Disconnecting Google account...");
+    setErrorMessage(null);
+    try {
+      await authApi.disconnectAccount('google');
+      setGoogleConnected(false);
+      setGoogleStatus('not_connected');
+      setGoogleAddress('');
+      setStatusMessage("Google account disconnected successfully.");
+    } catch (err: any) {
+      setErrorMessage(err.message || "Failed disconnecting Google account.");
+    } finally {
+      setIsDisconnectingGoogle(false);
+    }
+  };
+
+  // 3. Real Microsoft OAuth Flow Handler
+  const handleConnectMicrosoft = async () => {
+    setIsConnectingMicrosoft(true);
+    setStatusMessage("Initiating PKCE-protected Microsoft OAuth transaction...");
+    setErrorMessage(null);
+    try {
+      const data = await authApi.startOAuth('microsoft', 'connect');
+      if (data.url) {
+        window.location.href = data.url;
+      } else {
+        throw new Error("No authorization URL returned from Microsoft OAuth endpoint.");
+      }
+    } catch (err: any) {
+      setIsConnectingMicrosoft(false);
+      setErrorMessage(err.message || "Failed starting Microsoft connection. Please try again.");
+    }
+  };
+
+  // 4. Real Microsoft OAuth Disconnect Handler
+  const handleDisconnectMicrosoft = async () => {
+    setIsDisconnectingMicrosoft(true);
+    setStatusMessage("Disconnecting Microsoft account...");
+    setErrorMessage(null);
+    try {
+      await authApi.disconnectAccount('microsoft');
+      setMicrosoftConnected(false);
+      setMicrosoftStatus('not_connected');
+      setMicrosoftAddress('');
+      setStatusMessage("Microsoft account disconnected successfully.");
+    } catch (err: any) {
+      setErrorMessage(err.message || "Failed disconnecting Microsoft account.");
+    } finally {
+      setIsDisconnectingMicrosoft(false);
+    }
+  };
+
+  // 5. Real GitHub OAuth Flow Handler
+  const handleConnectGithub = async () => {
+    setIsConnectingGithub(true);
+    setStatusMessage("Initiating secure GitHub OAuth transaction...");
+    setErrorMessage(null);
+    try {
+      const data = await authApi.startOAuth('github', 'connect');
+      if (data.url) {
+        window.location.href = data.url;
+      } else {
+        throw new Error("No authorization URL returned from GitHub OAuth endpoint.");
+      }
+    } catch (err: any) {
+      setIsConnectingGithub(false);
+      setErrorMessage(err.message || "Failed starting GitHub connection. Please try again.");
+    }
+  };
+
+  // 6. Real GitHub OAuth Disconnect Handler
+  const handleDisconnectGithub = async () => {
+    setIsDisconnectingGithub(true);
+    setStatusMessage("Disconnecting GitHub account...");
+    setErrorMessage(null);
+    try {
+      await authApi.disconnectAccount('github');
+      setGithubConnected(false);
+      setGithubStatus('not_connected');
+      setGithubUsername('');
+      setStatusMessage("GitHub account disconnected successfully.");
+    } catch (err: any) {
+      setErrorMessage(err.message || "Failed disconnecting GitHub account.");
+    } finally {
+      setIsDisconnectingGithub(false);
+    }
+  };
+
+  // 5. Fallback App Password Handler
   const handleSaveGmailAppPassword = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!inputGmail || !inputAppPassword) return;
     setIsVerifying(true);
     setErrorMessage(null);
     try {
+      const token = localStorage.getItem('authToken');
+      const headers: HeadersInit = { 'Content-Type': 'application/json' };
+      if (token) headers['Authorization'] = `Bearer ${token}`;
+
       const res = await fetch(`${API_BASE}/api/integrations/gmail`, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers,
         body: JSON.stringify({
-          user_id: userId || 'user_default',
           email: inputGmail,
           app_password: inputAppPassword,
         })
       });
       const data = await res.json();
       if (res.ok && data.status === 'success') {
-        setGmailConnected(true);
-        setGmailAddress(inputGmail);
+        setGoogleConnected(true);
+        setGoogleStatus('active');
+        setGoogleAddress(inputGmail);
         setAppPasswordMode(false);
-        setStatusMessage(`Gmail account ${inputGmail} successfully connected (AES-256 encrypted).`);
+        setStatusMessage(`Gmail account ${inputGmail} connected (AES-256 encrypted App Password).`);
       } else {
-        setErrorMessage(data.detail || data.message || "Failed saving Gmail connection");
+        setErrorMessage(data.detail || data.message || "Failed saving Gmail App Password.");
       }
     } catch (err: any) {
-      setErrorMessage("Network error connecting Gmail account");
+      setErrorMessage("Network error connecting Gmail account.");
     } finally {
       setIsVerifying(false);
     }
   };
 
-  // 2. Real WhatsApp OTP Send Handler
+  // 6. WhatsApp OTP Dispatch
   const handleSendWhatsappOtp = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!whatsappNumber) return;
@@ -110,72 +287,70 @@ export const IntegrationsModal: React.FC<IntegrationsModalProps> = ({ isOpen, on
     setErrorMessage(null);
     setStatusMessage(null);
     try {
+      const token = localStorage.getItem('authToken');
+      const headers: HeadersInit = { 'Content-Type': 'application/json' };
+      if (token) headers['Authorization'] = `Bearer ${token}`;
+
       const res = await fetch(`${API_BASE}/api/integrations/whatsapp/send-otp`, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          user_id: userId || 'user_default',
-          phone: whatsappNumber,
-        })
+        headers,
+        body: JSON.stringify({ phone: whatsappNumber })
       });
       const data = await res.json();
       if (res.ok && (data.status === 'success' || data.otp_sent)) {
         setShowOtpModal(true);
-        setStatusMessage(`OTP sent to ${whatsappNumber}. Enter 6-digit code to verify.`);
+        setStatusMessage(`OTP dispatched to ${whatsappNumber}. Enter 6-digit code to verify.`);
       } else {
-        setErrorMessage(data.detail || data.message || "Failed sending OTP to WhatsApp number");
+        setErrorMessage(data.detail || data.message || "Failed sending OTP to WhatsApp.");
       }
-    } catch {
-      // Fallback demo mode if backend server is unreachable
-      setShowOtpModal(true);
-      setStatusMessage(`Verification code dispatched to ${whatsappNumber}`);
+    } catch (err: any) {
+      setErrorMessage("Network error sending WhatsApp OTP.");
     } finally {
       setIsVerifying(false);
     }
   };
 
-  // 3. Real WhatsApp OTP Verification Handler
+  // 7. WhatsApp OTP Verification
   const handleVerifyOtp = async (e: React.FormEvent) => {
     e.preventDefault();
     if (otpCode.length !== 6) return;
     setIsVerifying(true);
     setErrorMessage(null);
     try {
-      const res = await fetch(`${API_BASE}/api/integrations/whatsapp/verify`, {
+      const token = localStorage.getItem('authToken');
+      const headers: HeadersInit = { 'Content-Type': 'application/json' };
+      if (token) headers['Authorization'] = `Bearer ${token}`;
+
+      const res = await fetch(`${API_BASE}/api/integrations/whatsapp/verify-otp`, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          user_id: userId || 'user_default',
-          phone: whatsappNumber,
-          otp: otpCode,
-        })
+        headers,
+        body: JSON.stringify({ phone: whatsappNumber, otp: otpCode })
       });
       const data = await res.json();
       if (res.ok && (data.status === 'success' || data.verified)) {
         setWhatsappConnected(true);
         setShowOtpModal(false);
-        setStatusMessage("WhatsApp number verified! Daily 8:45 AM briefings enabled.");
+        setOtpCode('');
+        setStatusMessage(`WhatsApp number ${whatsappNumber} verified successfully!`);
       } else {
-        setErrorMessage(data.detail || data.message || "Invalid OTP code. Please try again.");
+        setErrorMessage(data.detail || data.message || "Invalid OTP code. Please check and try again.");
       }
-    } catch {
-      setWhatsappConnected(true);
-      setShowOtpModal(false);
-      setStatusMessage("WhatsApp number verified! Daily 8:45 AM market briefings enabled.");
+    } catch (err: any) {
+      setErrorMessage("Network error verifying WhatsApp OTP.");
     } finally {
       setIsVerifying(false);
     }
   };
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 backdrop-blur-md px-4">
-      <div className="w-full max-w-xl bg-[#121212] border border-white/10 rounded-3xl p-6 sm:p-8 text-white shadow-2xl relative">
+    <div className="fixed inset-0 bg-black/80 backdrop-blur-md flex items-center justify-center p-4 z-50 animate-fade-in">
+      <div className="bg-[#141414] border border-white/10 rounded-3xl p-6 md:p-8 max-w-xl w-full text-white shadow-2xl relative">
         {/* Close Button */}
         <button
           onClick={onClose}
-          className="absolute top-6 right-6 text-gray-400 hover:text-white transition-colors p-2 rounded-full bg-white/5 hover:bg-white/10"
+          className="absolute top-6 right-6 text-gray-400 hover:text-white transition-colors cursor-pointer"
         >
-          <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <svg className="w-6 h-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
           </svg>
         </button>
@@ -183,11 +358,11 @@ export const IntegrationsModal: React.FC<IntegrationsModalProps> = ({ isOpen, on
         {/* Modal Title */}
         <div className="mb-6">
           <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-blue-500/10 border border-blue-500/20 text-blue-400 text-xs font-semibold uppercase tracking-wider mb-2">
-            🔒 AES-256 Security Vault
+            🔒 AES-256 Connections Vault
           </div>
-          <h2 className="text-2xl font-bold text-gray-100">Mitra Personal Plug-ins</h2>
+          <h2 className="text-2xl font-bold text-gray-100">MITRA Service Connections</h2>
           <p className="text-sm text-gray-400 mt-1">
-            Connect your personal Gmail & WhatsApp accounts to send automated executive market briefings and emails directly.
+            Connect your personal accounts to enable automated email sending, calendar sync, and executive briefings.
           </p>
         </div>
 
@@ -206,8 +381,8 @@ export const IntegrationsModal: React.FC<IntegrationsModalProps> = ({ isOpen, on
           </div>
         )}
 
-        <div className="space-y-6">
-          {/* 1. GMAIL INTEGRATION CARD */}
+        <div className="space-y-6 max-h-[60vh] overflow-y-auto pr-1">
+          {/* 1. GOOGLE INTEGRATION CARD */}
           <div className="p-5 rounded-2xl bg-[#1A1A1A] border border-white/10">
             <div className="flex items-center justify-between mb-3">
               <div className="flex items-center gap-3">
@@ -220,27 +395,81 @@ export const IntegrationsModal: React.FC<IntegrationsModalProps> = ({ isOpen, on
                   </svg>
                 </div>
                 <div>
-                  <h3 className="font-semibold text-gray-200">Google Gmail Account</h3>
-                  <p className="text-xs text-gray-400">Send market summaries & emails via your Gmail</p>
+                  <h3 className="font-semibold text-gray-200">Google Account</h3>
+                  <p className="text-xs text-gray-400">Gmail dispatch & Google Calendar sync</p>
                 </div>
               </div>
 
-              {gmailConnected ? (
-                <span className="px-3 py-1 rounded-full bg-emerald-500/10 border border-emerald-500/30 text-emerald-400 text-xs font-medium">
-                  Active Connected
-                </span>
+              {googleStatus === 'active' ? (
+                <div className="flex items-center gap-2">
+                  <span className="px-3 py-1 rounded-full bg-emerald-500/10 border border-emerald-500/30 text-emerald-400 text-xs font-medium">
+                    Connected
+                  </span>
+                  <button
+                    onClick={handleDisconnectGoogle}
+                    disabled={isDisconnectingGoogle}
+                    className="px-3 py-1 bg-red-500/10 hover:bg-red-500/20 text-red-400 border border-red-500/30 text-xs font-medium rounded-xl transition-colors cursor-pointer"
+                  >
+                    {isDisconnectingGoogle ? "Disconnecting..." : "Disconnect"}
+                  </button>
+                </div>
+              ) : googleStatus === 'needs_reauthorization' ? (
+                <div className="flex items-center gap-2">
+                  <span className="px-3 py-1 rounded-full bg-amber-500/10 border border-amber-500/30 text-amber-400 text-xs font-medium">
+                    Needs Reauthorization
+                  </span>
+                  <button
+                    onClick={handleConnectGoogle}
+                    disabled={isConnectingGoogle}
+                    className="px-3 py-1 bg-amber-500 hover:bg-amber-600 text-black font-semibold text-xs rounded-xl transition-colors cursor-pointer"
+                  >
+                    {isConnectingGoogle ? "Redirecting..." : "Reconnect Google"}
+                  </button>
+                </div>
               ) : (
                 <button
-                  onClick={handleConnectGmail}
-                  className="px-4 py-2 bg-white text-black hover:bg-gray-200 font-medium text-xs rounded-xl transition-colors cursor-pointer"
+                  onClick={handleConnectGoogle}
+                  disabled={isConnectingGoogle}
+                  className="px-4 py-2 bg-white text-black hover:bg-gray-200 font-semibold text-xs rounded-xl transition-colors cursor-pointer disabled:opacity-50"
                 >
-                  Connect Gmail
+                  {isConnectingGoogle ? "Connecting..." : "Connect Google"}
                 </button>
               )}
             </div>
 
-            {appPasswordMode && !gmailConnected && (
-              <form onSubmit={handleSaveGmailAppPassword} className="mt-4 pt-3 border-t border-white/10 space-y-3">
+            {/* Google Account Metadata & Capabilities */}
+            {googleConnected && (
+              <div className="mt-3 pt-3 border-t border-white/5 space-y-2 text-xs">
+                <div className="flex items-center justify-between text-gray-400">
+                  <span>Account: <strong className="text-gray-200">{googleAddress}</strong></span>
+                  <span className="text-emerald-400 font-medium">AES-256 Encrypted</span>
+                </div>
+                <div className="flex flex-wrap gap-2 pt-1">
+                  <span className="px-2 py-0.5 rounded bg-white/5 border border-white/10 text-gray-300 text-[10px]">
+                    ✉️ Gmail API (Send)
+                  </span>
+                  <span className="px-2 py-0.5 rounded bg-white/5 border border-white/10 text-gray-300 text-[10px]">
+                    📅 Google Calendar API
+                  </span>
+                </div>
+              </div>
+            )}
+
+            {/* App Password Fallback Trigger */}
+            {!googleConnected && (
+              <div className="mt-3 pt-2 border-t border-white/5 flex items-center justify-between text-[11px] text-gray-500">
+                <span>OAuth unavailable or using app passwords?</span>
+                <button
+                  onClick={() => setAppPasswordMode(!appPasswordMode)}
+                  className="text-blue-400 hover:underline cursor-pointer"
+                >
+                  {appPasswordMode ? "Hide App Password Form" : "Use App Password"}
+                </button>
+              </div>
+            )}
+
+            {appPasswordMode && !googleConnected && (
+              <form onSubmit={handleSaveGmailAppPassword} className="mt-3 pt-3 border-t border-white/10 space-y-3">
                 <input
                   type="email"
                   required
@@ -262,20 +491,161 @@ export const IntegrationsModal: React.FC<IntegrationsModalProps> = ({ isOpen, on
                   disabled={isVerifying}
                   className="w-full py-2 bg-emerald-500 hover:bg-emerald-600 text-black font-bold text-xs rounded-xl transition-colors"
                 >
-                  {isVerifying ? "Encrypting & Connecting..." : "Save Gmail Plug-in Credentials"}
+                  {isVerifying ? "Encrypting & Connecting..." : "Save Gmail App Password"}
                 </button>
               </form>
             )}
+          </div>
 
-            {gmailConnected && (
-              <div className="mt-3 pt-3 border-t border-white/5 flex items-center justify-between text-xs text-gray-400">
-                <span>Account: <strong className="text-gray-200">{gmailAddress}</strong></span>
-                <span className="text-emerald-400 font-medium">AES-256 Encrypted</span>
+          {/* 2. MICROSOFT INTEGRATION CARD */}
+          <div className="p-5 rounded-2xl bg-[#1A1A1A] border border-white/10">
+            <div className="flex items-center justify-between mb-3">
+              <div className="flex items-center gap-3">
+                <div className="w-10 h-10 rounded-xl bg-white/5 border border-white/10 flex items-center justify-center">
+                  <div className="w-5 h-5 grid grid-cols-2 gap-0.5">
+                    <div className="bg-[#F25022] rounded-xs" />
+                    <div className="bg-[#7FBA00] rounded-xs" />
+                    <div className="bg-[#00A4EF] rounded-xs" />
+                    <div className="bg-[#FFB900] rounded-xs" />
+                  </div>
+                </div>
+                <div>
+                  <h3 className="font-semibold text-gray-200">Microsoft Account</h3>
+                  <p className="text-xs text-gray-400">Outlook mail dispatch & Microsoft Calendar sync</p>
+                </div>
+              </div>
+
+              {microsoftStatus === 'active' ? (
+                <div className="flex items-center gap-2">
+                  <span className="px-3 py-1 rounded-full bg-emerald-500/10 border border-emerald-500/30 text-emerald-400 text-xs font-medium">
+                    Connected
+                  </span>
+                  <button
+                    onClick={handleDisconnectMicrosoft}
+                    disabled={isDisconnectingMicrosoft}
+                    className="px-3 py-1 bg-red-500/10 hover:bg-red-500/20 text-red-400 border border-red-500/30 text-xs font-medium rounded-xl transition-colors cursor-pointer"
+                  >
+                    {isDisconnectingMicrosoft ? "Disconnecting..." : "Disconnect"}
+                  </button>
+                </div>
+              ) : microsoftStatus === 'needs_reauthorization' ? (
+                <div className="flex items-center gap-2">
+                  <span className="px-3 py-1 rounded-full bg-amber-500/10 border border-amber-500/30 text-amber-400 text-xs font-medium">
+                    Needs Reauthorization
+                  </span>
+                  <button
+                    onClick={handleConnectMicrosoft}
+                    disabled={isConnectingMicrosoft}
+                    className="px-3 py-1 bg-amber-500 hover:bg-amber-600 text-black font-semibold text-xs rounded-xl transition-colors cursor-pointer"
+                  >
+                    {isConnectingMicrosoft ? "Redirecting..." : "Reconnect Microsoft"}
+                  </button>
+                </div>
+              ) : (
+                <button
+                  onClick={handleConnectMicrosoft}
+                  disabled={isConnectingMicrosoft}
+                  className="px-4 py-2 bg-blue-600 hover:bg-blue-500 text-white font-semibold text-xs rounded-xl transition-colors cursor-pointer disabled:opacity-50"
+                >
+                  {isConnectingMicrosoft ? "Connecting..." : "Connect Microsoft"}
+                </button>
+              )}
+            </div>
+
+            {/* Microsoft Account Metadata & Capabilities */}
+            {microsoftConnected && (
+              <div className="mt-3 pt-3 border-t border-white/5 space-y-2 text-xs">
+                <div className="flex items-center justify-between text-gray-400">
+                  <span>Account: <strong className="text-gray-200">{microsoftAddress}</strong></span>
+                  <span className="text-emerald-400 font-medium">AES-256 Encrypted</span>
+                </div>
+                <div className="flex flex-wrap gap-2 pt-1">
+                  <span className="px-2 py-0.5 rounded bg-white/5 border border-white/10 text-gray-300 text-[10px]">
+                    ✉️ Outlook Graph API (Send)
+                  </span>
+                  <span className="px-2 py-0.5 rounded bg-white/5 border border-white/10 text-gray-300 text-[10px]">
+                    📅 Microsoft Calendar API
+                  </span>
+                </div>
               </div>
             )}
           </div>
 
-          {/* 2. WHATSAPP INTEGRATION CARD */}
+          {/* 3. GITHUB DEVELOPER INTEGRATION CARD */}
+          <div className="p-5 rounded-2xl bg-[#1A1A1A] border border-white/10">
+            <div className="flex items-center justify-between mb-3">
+              <div className="flex items-center gap-3">
+                <div className="w-10 h-10 rounded-xl bg-white/5 border border-white/10 flex items-center justify-center">
+                  <svg className="w-6 h-6 fill-current text-white" viewBox="0 0 24 24">
+                    <path fillRule="evenodd" clipRule="evenodd" d="M12 2C6.477 2 2 6.484 2 12.017c0 4.425 2.865 8.18 6.839 9.504.5.092.682-.217.682-.483 0-.237-.008-.868-.013-1.703-2.782.605-3.369-1.343-3.369-1.343-.454-1.158-1.11-1.466-1.11-1.466-.908-.62.069-.608.069-.608 1.003.07 1.53 1.032 1.53 1.032.892 1.53 2.341 1.088 2.91.832.092-.647.35-1.088.636-1.338-2.22-.253-4.555-1.113-4.555-4.951 0-1.093.39-1.988 1.029-2.688-.103-.253-.446-1.272.098-2.65 0 0 .84-.27 2.75 1.026A9.564 9.564 0 0112 6.844c.85.004 1.705.115 2.504.337 1.909-1.296 2.747-1.027 2.747-1.027.546 1.379.202 2.398.1 2.651.64.7 1.028 1.595 1.028 2.688 0 3.848-2.339 4.695-4.566 4.943.359.309.678.92.678 1.855 0 1.338-.012 2.419-.012 2.747 0 .268.18.58.688.482A10.019 10.019 0 0022 12.017C22 6.484 17.522 2 12 2z" />
+                  </svg>
+                </div>
+                <div>
+                  <h3 className="font-semibold text-gray-200">GitHub Developer Account</h3>
+                  <p className="text-xs text-gray-400">Repositories, GitHub Issues & Pull Requests API</p>
+                </div>
+              </div>
+
+              {githubStatus === 'active' ? (
+                <div className="flex items-center gap-2">
+                  <span className="px-3 py-1 rounded-full bg-emerald-500/10 border border-emerald-500/30 text-emerald-400 text-xs font-medium">
+                    Connected
+                  </span>
+                  <button
+                    onClick={handleDisconnectGithub}
+                    disabled={isDisconnectingGithub}
+                    className="px-3 py-1 bg-red-500/10 hover:bg-red-500/20 text-red-400 border border-red-500/30 text-xs font-medium rounded-xl transition-colors cursor-pointer"
+                  >
+                    {isDisconnectingGithub ? "Disconnecting..." : "Disconnect"}
+                  </button>
+                </div>
+              ) : githubStatus === 'needs_reauthorization' ? (
+                <div className="flex items-center gap-2">
+                  <span className="px-3 py-1 rounded-full bg-amber-500/10 border border-amber-500/30 text-amber-400 text-xs font-medium">
+                    Needs Reauthorization
+                  </span>
+                  <button
+                    onClick={handleConnectGithub}
+                    disabled={isConnectingGithub}
+                    className="px-3 py-1 bg-amber-500 hover:bg-amber-600 text-black font-semibold text-xs rounded-xl transition-colors cursor-pointer"
+                  >
+                    {isConnectingGithub ? "Redirecting..." : "Reconnect GitHub"}
+                  </button>
+                </div>
+              ) : (
+                <button
+                  onClick={handleConnectGithub}
+                  disabled={isConnectingGithub}
+                  className="px-4 py-2 bg-purple-600 hover:bg-purple-500 text-white font-semibold text-xs rounded-xl transition-colors cursor-pointer disabled:opacity-50"
+                >
+                  {isConnectingGithub ? "Connecting..." : "Connect GitHub"}
+                </button>
+              )}
+            </div>
+
+            {/* GitHub Account Metadata & Capabilities */}
+            {githubConnected && (
+              <div className="mt-3 pt-3 border-t border-white/5 space-y-2 text-xs">
+                <div className="flex items-center justify-between text-gray-400">
+                  <span>Account: <strong className="text-gray-200">{githubUsername}</strong></span>
+                  <span className="text-emerald-400 font-medium">AES-256 Encrypted</span>
+                </div>
+                <div className="flex flex-wrap gap-2 pt-1">
+                  <span className="px-2 py-0.5 rounded bg-white/5 border border-white/10 text-gray-300 text-[10px]">
+                    📦 Repositories API
+                  </span>
+                  <span className="px-2 py-0.5 rounded bg-white/5 border border-white/10 text-gray-300 text-[10px]">
+                    🐛 Issues API
+                  </span>
+                  <span className="px-2 py-0.5 rounded bg-white/5 border border-white/10 text-gray-300 text-[10px]">
+                    🔀 Pull Requests API
+                  </span>
+                </div>
+              </div>
+            )}
+          </div>
+
+          {/* 3. WHATSAPP INTEGRATION CARD */}
           <div className="p-5 rounded-2xl bg-[#1A1A1A] border border-white/10">
             <div className="flex items-center gap-3 mb-4">
               <div className="w-10 h-10 rounded-xl bg-emerald-500/10 border border-emerald-500/20 flex items-center justify-center text-emerald-400">
