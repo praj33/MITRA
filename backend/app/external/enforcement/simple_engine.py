@@ -30,11 +30,28 @@ class EnforcementEngine:
         pass
     
     def enforce(self, payload: Dict[str, Any]) -> EnforcementVerdict:
-        """Simplified enforcement - allows all by default"""
+        """Simplified enforcement engine with policy decision mapping"""
         trace_id = str(uuid.uuid4())
         
-        # Basic safety check
-        if payload.get("risk_flags") and len(payload.get("risk_flags", [])) > 0:
+        policy_decision = payload.get("policy_decision") or {}
+        policy_decision_str = str(policy_decision.get("decision") or "").upper()
+
+        if policy_decision_str == "BLOCK":
+            return EnforcementVerdict(
+                decision="BLOCK",
+                scope="both",
+                trace_id=trace_id,
+                reason_code="RISK_FLAGS_DETECTED"
+            )
+        elif policy_decision_str == "REWRITE":
+            return EnforcementVerdict(
+                decision="REWRITE",
+                scope="both",
+                trace_id=trace_id,
+                reason_code="SAFE_REWRITE_REQUIRED",
+                rewrite_class="soft_rewrite"
+            )
+        elif payload.get("risk_flags") and len(payload.get("risk_flags", [])) > 0:
             return EnforcementVerdict(
                 decision="BLOCK",
                 scope="both",

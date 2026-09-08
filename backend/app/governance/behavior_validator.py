@@ -184,6 +184,7 @@ class PatternLibrary:
         # SEXUAL_ESCALATION_ATTEMPT patterns
         RiskCategory.SEXUAL_ESCALATION_ATTEMPT: [
             (r'\bsend me nudes\b', 94, "Nude photo request"),
+            (r'\bnude\b', 94, "Nude content request"),
             (r'\bmeet up alone tonight\b', 88, "Alone meeting request"),
             (r'\bwhat do you look like.*imagining us together\b', 92, "Physical fantasy"),
             (r'\btell me something sexy\b', 90, "Sexual content request"),

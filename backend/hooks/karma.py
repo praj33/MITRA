@@ -10,4 +10,4 @@ def karma_hook(user_id, action):
     Returns:
         Karma points
     """
-    return {"karma_points": 10, "user_id": user_id, "action": action}
+    return {"karma_points": 50, "user_id": user_id, "action": action}

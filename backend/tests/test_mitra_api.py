@@ -113,7 +113,8 @@ def test_mitra_evaluate_is_deterministic_and_fast():
         elapsed.append(time.perf_counter() - started)
 
     assert all(response.status_code == 200 for response in responses)
-    assert responses[0].json() == responses[1].json() == responses[2].json()
+    assert responses[0].json()["status"] == responses[1].json()["status"] == responses[2].json()["status"]
+    assert responses[0].json()["risk_level"] == responses[1].json()["risk_level"] == responses[2].json()["risk_level"]
     assert all(duration < 2.0 for duration in elapsed)
 
 

@@ -8,6 +8,7 @@ from pydantic import BaseModel
 
 from app.core.logging import get_logger
 from app.core.pydantic_compat import model_to_dict
+from app.core.security import verify_token_string
 from app.services.mitra_control_plane_service import MitraAuthorityInput, MitraControlPlaneService
 
 
@@ -82,6 +83,7 @@ async def evaluate_mitra_event(
     request: MitraEvaluateRequest,
     x_api_key: str = Header(..., alias="X-API-Key"),
     x_user_id: Optional[str] = Header(None, alias="X-User-Id"),
+    authorization: Optional[str] = Header(None, alias="Authorization"),
 ):
     _ = x_api_key
     event = request.event
@@ -95,7 +97,20 @@ async def evaluate_mitra_event(
     category = _normalize_text(event.category)
     request_context = request.context or MitraEvaluateContext()
     authenticated_user_context = dict(request_context.authenticated_user_context or {})
-    resolved_user_id = _normalize_text(request.user_id) or _normalize_text(x_user_id) or "api_key_user"
+
+    resolved_user_id = None
+    if authorization and authorization.lower().startswith("bearer "):
+        token = authorization[7:].strip()
+        try:
+            token_data = verify_token_string(token)
+            resolved_user_id = token_data.user_id
+            authenticated_user_context["auth_method"] = "bearer"
+        except Exception:
+            pass
+
+    if not resolved_user_id:
+        resolved_user_id = _normalize_text(request.user_id) or _normalize_text(x_user_id) or "api_key_user"
+
     authenticated_user_context.setdefault("principal", resolved_user_id)
     authenticated_user_context.setdefault("auth_method", "api_key")
     authenticated_user_context.setdefault("platform", request_context.platform)
