@@ -1,5 +1,7 @@
 import React, { createContext, useContext, useState, useEffect } from 'react';
 import { authApi } from '../services/authApi';
+import { getAuthToken, setAuthToken, clearAuthToken } from '../services/apiConfig';
+import { useCompanionStore } from '../store/companion.store';
 
 interface User {
   id: string;
@@ -24,16 +26,29 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
-  // On mount: restore session from stored JWT
+  // On mount: restore session from stored canonical JWT
   useEffect(() => {
     const restoreSession = async () => {
+      const token = getAuthToken();
+      if (!token) {
+        setIsLoading(false);
+        return;
+      }
+
       try {
         const me = await authApi.getMe();
         if (me) {
           setUser(me);
+          // Sync with companion Zustand store
+          useCompanionStore.getState().setAuth(me, token);
+        } else {
+          setUser(null);
+          clearAuthToken();
         }
       } catch {
         // Token invalid or backend unreachable – start unauthenticated
+        setUser(null);
+        clearAuthToken();
       } finally {
         setIsLoading(false);
       }
@@ -46,8 +61,10 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     setIsLoading(true);
     try {
       const { token, user: userData } = await authApi.login(email, password);
-      localStorage.setItem('authToken', token);
+      setAuthToken(token);
       setUser(userData);
+      // Sync with companion Zustand store
+      useCompanionStore.getState().setAuth(userData, token);
     } catch (err) {
       const message = err instanceof Error ? err.message : 'Login failed';
       setError(message);
@@ -62,8 +79,10 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     setIsLoading(true);
     try {
       const { token, user: userData } = await authApi.signup(name, email, password);
-      localStorage.setItem('authToken', token);
+      setAuthToken(token);
       setUser(userData);
+      // Sync with companion Zustand store
+      useCompanionStore.getState().setAuth(userData, token);
     } catch (err) {
       const message = err instanceof Error ? err.message : 'Signup failed';
       setError(message);
@@ -75,8 +94,10 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
   const logout = () => {
     authApi.logout();
+    clearAuthToken();
     setUser(null);
     setError(null);
+    useCompanionStore.getState().logoutUser();
   };
 
   return (

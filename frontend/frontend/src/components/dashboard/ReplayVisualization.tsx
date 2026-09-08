@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
 import { apiService } from '../../services/api';
+import { getApiBase, getAuthHeaders } from '../../services/apiConfig';
 
 interface TraceStage {
   stage: string;
@@ -25,8 +26,8 @@ export const ReplayVisualization: React.FC = () => {
     setError(null);
     try {
       const response = await fetch(
-        `${process.env.REACT_APP_API_URL}/api/replay/${traceId}/stages`,
-        { headers: { 'X-API-Key': process.env.REACT_APP_API_KEY || '' } }
+        `${getApiBase()}/api/replay/${encodeURIComponent(traceId)}/stages`,
+        { headers: getAuthHeaders() }
       );
       const data = await response.json();
       setStages(data.stages || []);

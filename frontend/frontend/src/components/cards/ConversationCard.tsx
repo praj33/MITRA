@@ -6,6 +6,7 @@ import { cn, formatTime } from '../../lib/utils';
 import { Message } from '../../store/companion.store';
 import ActionCard from './ActionCard';
 import FormattedMarkdown from '../primitives/FormattedMarkdown';
+import { getApiBase, getAuthHeaders } from '../../services/apiConfig';
 
 interface Props {
   message: Message;
@@ -27,12 +28,9 @@ const ConversationCard: React.FC<Props> = ({ message, onActionConfirm }) => {
 
     try {
       // Try Nilesh's Live TTS Service endpoint on Render
-      const res = await fetch('https://ai-assistant-backend-8hur.onrender.com/api/tts', {
+      const res = await fetch(`${getApiBase()}/api/tts`, {
         method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'X-API-Key': 'localtest',
-        },
+        headers: getAuthHeaders(),
         body: JSON.stringify({
           text: message.content,
           language: 'en',

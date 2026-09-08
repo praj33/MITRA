@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { authApi } from '../../services/authApi';
+import { getApiBase, getAuthHeaders } from '../../services/apiConfig';
 
 interface IntegrationsModalProps {
   isOpen: boolean;
@@ -44,7 +45,7 @@ export const IntegrationsModal: React.FC<IntegrationsModalProps> = ({ isOpen, on
   const [statusMessage, setStatusMessage] = useState<string | null>(null);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
 
-  const API_BASE = process.env.REACT_APP_API_BASE_URL || '';
+  const API_BASE = getApiBase();
 
   const fetchConnections = useCallback(async () => {
     try {
@@ -107,11 +108,7 @@ export const IntegrationsModal: React.FC<IntegrationsModalProps> = ({ isOpen, on
 
       // 2. Fetch WhatsApp status
       try {
-        const token = localStorage.getItem('authToken');
-        const headers: HeadersInit = { 'Content-Type': 'application/json' };
-        if (token) headers['Authorization'] = `Bearer ${token}`;
-
-        const res = await fetch(`${API_BASE}/api/integrations`, { headers });
+        const res = await fetch(`${API_BASE}/api/integrations`, { headers: getAuthHeaders() });
         if (res.ok) {
           const intData = await res.json();
           if (intData.whatsapp?.verified) {
@@ -250,13 +247,9 @@ export const IntegrationsModal: React.FC<IntegrationsModalProps> = ({ isOpen, on
     setIsVerifying(true);
     setErrorMessage(null);
     try {
-      const token = localStorage.getItem('authToken');
-      const headers: HeadersInit = { 'Content-Type': 'application/json' };
-      if (token) headers['Authorization'] = `Bearer ${token}`;
-
       const res = await fetch(`${API_BASE}/api/integrations/gmail`, {
         method: 'POST',
-        headers,
+        headers: getAuthHeaders(),
         body: JSON.stringify({
           email: inputGmail,
           app_password: inputAppPassword,
@@ -287,13 +280,9 @@ export const IntegrationsModal: React.FC<IntegrationsModalProps> = ({ isOpen, on
     setErrorMessage(null);
     setStatusMessage(null);
     try {
-      const token = localStorage.getItem('authToken');
-      const headers: HeadersInit = { 'Content-Type': 'application/json' };
-      if (token) headers['Authorization'] = `Bearer ${token}`;
-
       const res = await fetch(`${API_BASE}/api/integrations/whatsapp/send-otp`, {
         method: 'POST',
-        headers,
+        headers: getAuthHeaders(),
         body: JSON.stringify({ phone: whatsappNumber })
       });
       const data = await res.json();
@@ -317,13 +306,9 @@ export const IntegrationsModal: React.FC<IntegrationsModalProps> = ({ isOpen, on
     setIsVerifying(true);
     setErrorMessage(null);
     try {
-      const token = localStorage.getItem('authToken');
-      const headers: HeadersInit = { 'Content-Type': 'application/json' };
-      if (token) headers['Authorization'] = `Bearer ${token}`;
-
       const res = await fetch(`${API_BASE}/api/integrations/whatsapp/verify-otp`, {
         method: 'POST',
-        headers,
+        headers: getAuthHeaders(),
         body: JSON.stringify({ phone: whatsappNumber, otp: otpCode })
       });
       const data = await res.json();

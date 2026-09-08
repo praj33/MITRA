@@ -5,6 +5,7 @@ import { Send, Mic, Paperclip, Zap, X, Check } from 'lucide-react';
 import { cn } from '../../lib/utils';
 import { useCompanionStore } from '../../store/companion.store';
 import { showToast } from './Toast';
+import { getApiBase, getAuthHeaders } from '../../services/apiConfig';
 
 interface Props {
   onSend:     (message: string, isVoice?: boolean) => void;
@@ -251,9 +252,8 @@ const InputBar: React.FC<Props> = ({ onSend, disabled }) => {
 
             // Primary active backend endpoint & relative fallback
             const sttEndpoints = [
+              `${getApiBase()}/api/stt`,
               '/api/stt',
-              'https://mitra-backend-q1f3.onrender.com/api/stt',
-              'https://ai-assistant-backend-8hur.onrender.com/api/stt'
             ];
 
             let data: any = null;
@@ -263,6 +263,7 @@ const InputBar: React.FC<Props> = ({ onSend, disabled }) => {
               try {
                 const response = await fetch(endpoint, {
                   method: 'POST',
+                  headers: getAuthHeaders({ contentType: null }),
                   body: formData,
                 });
                 if (response.ok) {
