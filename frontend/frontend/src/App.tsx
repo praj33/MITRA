@@ -24,6 +24,7 @@ import AnalyticsPage from './components/pages/AnalyticsPage';
 import Login from './components/auth/Login';
 import { useCompanionStore } from './store/companion.store';
 import { CompanionService } from './services/companion.service';
+import { getAuthToken, getApiBase, getAuthHeaders } from './services/apiConfig';
 import { cn } from './lib/utils';
 import { LayoutDashboard, Calendar, CheckSquare, PlayCircle, TrendingUp } from 'lucide-react';
 
@@ -42,12 +43,9 @@ const useIsMobile = () => {
 const speakAudioResponse = async (text: string) => {
   if (!text) return;
   try {
-    const res = await fetch('https://ai-assistant-backend-8hur.onrender.com/api/tts', {
+    const res = await fetch(`${getApiBase()}/api/tts`, {
       method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'X-API-Key': 'localtest',
-      },
+      headers: getAuthHeaders(),
       body: JSON.stringify({ text, language: 'en' }),
     });
     const data = await res.json();
@@ -58,7 +56,7 @@ const speakAudioResponse = async (text: string) => {
       return;
     }
   } catch (err) {
-    console.warn('Nilesh TTS service unavailable, falling back to Web Speech API:', err);
+    console.warn('Backend TTS service unavailable, falling back to Web Speech API:', err);
   }
 
   if ('speechSynthesis' in window) {
@@ -164,7 +162,7 @@ const App: React.FC = () => {
   useEffect(() => {
     const init = async () => {
       // 1. Session recovery for logged-in user
-      const existingToken = localStorage.getItem('mitra_auth_token');
+      const existingToken = getAuthToken();
       if (existingToken) {
         try {
           const res = await CompanionService.getMe(existingToken);

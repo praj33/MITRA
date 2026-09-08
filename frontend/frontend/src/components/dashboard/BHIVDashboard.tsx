@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { apiService } from '../../services/api';
+import { getApiBase, getAuthHeaders } from '../../services/apiConfig';
 
 interface EcosystemProduct {
   product_name: string;
@@ -60,19 +61,12 @@ export const BHIVDashboard: React.FC = () => {
 
   const fetchData = useCallback(async () => {
     try {
+      const headers = getAuthHeaders();
       const [productsRes, manifestsRes, healthRes, metricsRes] = await Promise.allSettled([
-        fetch(`${process.env.REACT_APP_API_URL}/api/ecosystem/products`, {
-          headers: { 'X-API-Key': process.env.REACT_APP_API_KEY || '' },
-        }).then(r => r.json()),
-        fetch(`${process.env.REACT_APP_API_URL}/api/ecosystem/manifests`, {
-          headers: { 'X-API-Key': process.env.REACT_APP_API_KEY || '' },
-        }).then(r => r.json()),
-        fetch(`${process.env.REACT_APP_API_URL}/api/ecosystem/health`, {
-          headers: { 'X-API-Key': process.env.REACT_APP_API_KEY || '' },
-        }).then(r => r.json()),
-        fetch(`${process.env.REACT_APP_API_URL}/api/metrics`, {
-          headers: { 'X-API-Key': process.env.REACT_APP_API_KEY || '' },
-        }).then(r => r.json()),
+        fetch(`${getApiBase()}/api/ecosystem/products`, { headers }).then(r => r.json()),
+        fetch(`${getApiBase()}/api/ecosystem/manifests`, { headers }).then(r => r.json()),
+        fetch(`${getApiBase()}/api/ecosystem/health`, { headers }).then(r => r.json()),
+        fetch(`${getApiBase()}/api/metrics`, { headers }).then(r => r.json()),
       ]);
 
       if (productsRes.status === 'fulfilled') setProducts(productsRes.value.products || []);

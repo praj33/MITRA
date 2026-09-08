@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useCallback } from 'react';
+import { getApiBase } from '../../services/apiConfig';
 
 interface SystemHealth {
   status: string;
@@ -15,7 +16,7 @@ export const SystemHealthPanel: React.FC = () => {
 
   const fetchHealth = useCallback(async () => {
     try {
-      const response = await fetch(`${process.env.REACT_APP_API_URL}/health`);
+      const response = await fetch(`${getApiBase()}/health`);
       const data = await response.json();
       setHealth(data);
     } catch (e) {

@@ -2,17 +2,16 @@ import { eventBus } from './eventBus.js';
 import { contextStore } from './contextStore.js';
 
 export function getApiBaseUrl() {
+  let url = 'https://mitra.blackholeinfiverse.com';
   if (typeof window !== 'undefined' && window.__MITRA_API_BASE_URL) {
-    return window.__MITRA_API_BASE_URL;
-  }
-  if (typeof document !== 'undefined') {
+    url = window.__MITRA_API_BASE_URL;
+  } else if (typeof document !== 'undefined') {
     const attr = document.querySelector('mitra-companion')?.getAttribute('api-base-url');
-    if (attr) return attr;
+    if (attr) url = attr;
+  } else if (typeof window !== 'undefined' && (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1')) {
+    url = 'http://localhost:8001';
   }
-  if (typeof window !== 'undefined' && (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1')) {
-    return 'http://localhost:8001';
-  }
-  return 'https://mitra.blackholeinfiverse.com';
+  return url.replace(/\/+$/, '').replace(/\/api$/i, '').replace(/\/+$/, '');
 }
 
 const API_KEY = 'localtest';
@@ -23,6 +22,10 @@ function buildHeaders() {
     'Content-Type': 'application/json',
     'X-API-Key': API_KEY,
   };
+  const token = (typeof window !== 'undefined' && (localStorage.getItem('mitra_auth_token') || localStorage.getItem('authToken'))) || '';
+  if (token) {
+    headers['Authorization'] = `Bearer ${token}`;
+  }
   return headers;
 }
 
@@ -185,20 +188,6 @@ export class ControlPlane {
         headers: buildHeaders(),
         body: JSON.stringify(payload),
       });
-
-      // Handle nginx proxy path stripping discrepancy if /api/companion/chat returns 404
-      if (response.status === 404 && getApiBaseUrl().includes('mitra.blackholeinfiverse.com')) {
-        try {
-          const altResponse = await fetch(`${getApiBaseUrl()}/api/api/companion/chat`, {
-            method: 'POST',
-            headers: buildHeaders(),
-            body: JSON.stringify(payload),
-          });
-          if (altResponse.ok) {
-            response = altResponse;
-          }
-        } catch (_) {}
-      }
 
       if (!response.ok) {
         if (response.status === 401 || response.status === 403) {
