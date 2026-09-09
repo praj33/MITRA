@@ -22,6 +22,15 @@ from app.integrations.oauth.registry import oauth_provider_registry
 client = TestClient(app)
 
 
+@pytest.fixture(autouse=True)
+def cleanup_connections():
+    connected_account_service.delete_connection("usr_gh_test_a", "github")
+    connected_account_service.delete_connection("usr_gh_test_b", "github")
+    yield
+    connected_account_service.delete_connection("usr_gh_test_a", "github")
+    connected_account_service.delete_connection("usr_gh_test_b", "github")
+
+
 @pytest.fixture
 def test_user_a():
     return {
