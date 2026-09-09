@@ -52,7 +52,17 @@ async def get_current_user(
             headers={"WWW-Authenticate": "Bearer"},
         )
 
-    # Attempt resolving user record from auth service persistence
+    # Check if this is a temporary guest token
+    if getattr(token_data, "is_guest", False):
+        return {
+            "id": user_id,
+            "user_id": user_id,
+            "name": token_data.name or "Guest User",
+            "email": token_data.email or f"{user_id}@guest.local",
+            "is_guest": True,
+        }
+
+    # Attempt resolving user record from auth service persistence for regular accounts
     try:
         user = await auth_service.get_public_user_by_id(user_id)
     except Exception:
@@ -68,4 +78,5 @@ async def get_current_user(
 
     user["user_id"] = user.get("id") or user_id
     user["id"] = user["user_id"]
+    user["is_guest"] = False
     return user

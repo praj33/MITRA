@@ -51,6 +51,7 @@ class TokenData(BaseModel):
     user_id: Optional[str] = None
     email: Optional[str] = None
     name: Optional[str] = None
+    is_guest: bool = False
 
 
 def verify_api_key(api_key: str = Depends(api_key_header)) -> str:
@@ -106,11 +107,14 @@ def verify_token_string(token: str) -> TokenData:
         if not user_id:
             raise HTTPException(status_code=401, detail="Invalid token: missing subject/user identification")
 
+        is_guest = bool(payload.get("is_guest", False))
+
         token_data = TokenData(
             username=payload.get("sub") or user_id,
             user_id=user_id,
             email=payload.get("email"),
             name=payload.get("name"),
+            is_guest=is_guest,
         )
         return token_data
     except JWTError as exc:

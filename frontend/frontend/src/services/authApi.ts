@@ -10,6 +10,7 @@ interface AuthUser {
   id: string;
   name: string;
   email: string;
+  is_guest?: boolean;
 }
 
 interface AuthResponse {
@@ -56,6 +57,23 @@ export const authApi = {
       setAuthToken(data.token);
     }
     return data;
+  },
+
+  /** Initiate temporary guest session and return guest token + user */
+  async guestLogin(): Promise<AuthResponse> {
+    const res = await fetch(`${getApiBase()}/api/auth/guest`, {
+      method: 'POST',
+      headers: getAuthHeaders({ includeAuth: false }),
+    });
+    const data = await handleResponse<AuthResponse & { access_token?: string }>(res);
+    const token = data.token || data.access_token || '';
+    if (token) {
+      setAuthToken(token);
+    }
+    return {
+      token,
+      user: data.user,
+    };
   },
 
   /** Fetch current user from the token stored in localStorage */

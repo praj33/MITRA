@@ -60,6 +60,9 @@ async def start_oauth_flow(
         except Exception:
             raise HTTPException(status_code=401, detail="Invalid or expired JWT token.")
 
+        if getattr(token_data, "is_guest", False):
+            raise HTTPException(status_code=403, detail="Forbidden: Guest sessions cannot connect external accounts. Please sign up for a full account.")
+
         if not auth_user_id:
             raise HTTPException(status_code=401, detail="Invalid user session.")
 

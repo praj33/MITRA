@@ -67,6 +67,7 @@ interface CompanionStore {
   userEmail: string;
   authToken: string;
   isAuthenticated: boolean;
+  isGuest: boolean;
   authModalOpen:   boolean;
   apiKey:    string;
   apiBase:   string;
@@ -125,7 +126,7 @@ interface CompanionStore {
   setMemory: (m: Partial<UserMemory>) => void;
   setUserName: (name: string) => void;
 
-  setAuth: (user: { id: string; name: string; email: string }, token: string) => void;
+  setAuth: (user: { id: string; name: string; email: string; is_guest?: boolean }, token: string, isGuest?: boolean) => void;
   logoutUser: () => void;
   setAuthModalOpen: (open: boolean) => void;
 }
@@ -152,6 +153,7 @@ export const useCompanionStore = create<CompanionStore>()(
         userEmail:       localStorage.getItem('mitra_user_email') || '',
         authToken:       initialToken,
         isAuthenticated: Boolean(initialToken),
+        isGuest:         false,
         authModalOpen:   false,
         apiKey:          getApiKey(),
         apiBase:         getApiBase(),
@@ -243,17 +245,19 @@ export const useCompanionStore = create<CompanionStore>()(
         // ── Authentication Actions ───────────────────────
         setAuthModalOpen: (open) => set({ authModalOpen: open }),
 
-        setAuth: (user, token) => {
+        setAuth: (user, token, isGuestParam?: boolean) => {
           if (user.id) localStorage.setItem('mitra_user_id', user.id);
           if (user.name) localStorage.setItem('mitra_user_name', user.name);
           if (user.email) localStorage.setItem('mitra_user_email', user.email);
           if (token) setCanonicalToken(token);
+          const isGuest = isGuestParam !== undefined ? isGuestParam : Boolean((user as any).is_guest);
           set({
             userId:          user.id || getUserId(),
-            userName:        user.name || 'User',
+            userName:        user.name || (isGuest ? 'Guest' : 'User'),
             userEmail:       user.email || '',
             authToken:       token,
             isAuthenticated: Boolean(token),
+            isGuest:         isGuest,
             authModalOpen:   false,
           });
         },
@@ -270,6 +274,7 @@ export const useCompanionStore = create<CompanionStore>()(
             userEmail:       '',
             authToken:       '',
             isAuthenticated: false,
+            isGuest:         false,
             messages:        [],
           });
         },

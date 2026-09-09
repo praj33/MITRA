@@ -58,12 +58,26 @@ const AuthModal: React.FC<Props> = ({ open, onClose }) => {
     }
   };
 
+  const handleContinueAsGuest = async () => {
+    try {
+      const data = await CompanionService.guestLogin();
+      setAuth(data.user, data.token, true);
+      showToast('info', 'Guest Session Active', 'Continuing with temporary guest credentials.');
+      onClose();
+    } catch (err: any) {
+      showToast('error', 'Guest Error', err?.message || 'Could not initiate guest session.');
+    }
+  };
+
   const handleLogout = async () => {
     try {
       await CompanionService.logout();
-    } catch {}
-    logoutUser();
-    showToast('info', 'Logged Out', 'Switched back to Guest session.');
+      const guestData = await CompanionService.guestLogin();
+      setAuth(guestData.user, guestData.token, true);
+    } catch {
+      logoutUser();
+    }
+    showToast('info', 'Logged Out', 'Switched to Guest session.');
     onClose();
   };
 
@@ -322,8 +336,8 @@ const AuthModal: React.FC<Props> = ({ open, onClose }) => {
                   <span>Want to test without signing up?</span>
                   <button
                     type="button"
-                    onClick={onClose}
-                    className="text-brand font-medium hover:underline"
+                    onClick={handleContinueAsGuest}
+                    className="text-brand font-medium hover:underline cursor-pointer"
                   >
                     Continue as Guest
                   </button>

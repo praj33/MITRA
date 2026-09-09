@@ -1,11 +1,13 @@
 import os
+import uuid
+from datetime import datetime, timedelta
 from typing import Optional
 
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException, Request, status
 from fastapi.security import HTTPAuthorizationCredentials
 from pydantic import BaseModel, EmailStr
 
-from app.core.security import bearer_scheme, create_access_token, verify_token_string
+from app.core.security import bearer_scheme, create_access_token, verify_token_string, rate_limit
 from app.services.auth_service import UserAlreadyExistsError, auth_service
 
 
@@ -26,7 +28,8 @@ class LoginRequest(BaseModel):
 class AuthUser(BaseModel):
     id: str
     name: str
-    email: EmailStr
+    email: str
+    is_guest: Optional[bool] = False
 
 
 class AuthResponse(BaseModel):
@@ -73,9 +76,19 @@ async def _current_user(
     if not user_id:
         raise HTTPException(status_code=401, detail="Invalid or expired token. Please log in again.")
 
+    if getattr(token_data, "is_guest", False):
+        return {
+            "id": user_id,
+            "user_id": user_id,
+            "name": token_data.name or "Guest User",
+            "email": token_data.email or f"{user_id}@guest.local",
+            "is_guest": True,
+        }
+
     user = await auth_service.get_public_user_by_id(user_id)
     if not user:
         raise HTTPException(status_code=401, detail="User no longer exists.")
+    user["is_guest"] = False
     return user
 
 
@@ -132,3 +145,40 @@ async def apple_auth_redirect():
         f"client_id={client_id}&redirect_uri={redirect_uri}&response_type=code%20id_token&response_mode=form_post"
     )
     return {"url": apple_url, "provider": "apple"}
+
+
+@router.post("/api/auth/guest")
+async def guest_auth(request: Request):
+    """
+    Issue a temporary guest JWT access token for anonymous users.
+    Generates a unique server-side guest identity (usr_guest_<uuid12>).
+    Applies per-IP rate limiting (20 requests/minute).
+    """
+    rate_limit(request, max_requests=20, window_seconds=60)
+
+    guest_id = f"usr_guest_{uuid.uuid4().hex[:12]}"
+    guest_name = "Guest User"
+    guest_email = f"{guest_id}@guest.local"
+
+    payload = {
+        "sub": guest_id,
+        "user_id": guest_id,
+        "email": guest_email,
+        "name": guest_name,
+        "is_guest": True,
+    }
+
+    # Guest token lifetime: 1 hour (60 minutes)
+    token = create_access_token(data=payload, expires_delta=timedelta(hours=1))
+
+    return {
+        "access_token": token,
+        "token_type": "bearer",
+        "token": token,
+        "user": {
+            "id": guest_id,
+            "name": guest_name,
+            "email": guest_email,
+            "is_guest": True,
+        },
+    }

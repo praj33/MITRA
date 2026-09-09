@@ -356,6 +356,22 @@ export const CompanionService = {
     return resp.json();
   },
 
+  async guestLogin(): Promise<{ token: string; user: { id: string; name: string; email: string; is_guest?: boolean } }> {
+    const resp = await fetch(`${getApiBase()}/api/auth/guest`, {
+      method: 'POST',
+      headers: getAuthHeaders({ includeAuth: false }),
+    });
+    if (!resp.ok) {
+      const err = await resp.json().catch(() => ({ detail: 'Guest session initiation failed' }));
+      throw new Error(err.detail || `HTTP ${resp.status}`);
+    }
+    const data = await resp.json();
+    return {
+      token: data.token || data.access_token || '',
+      user: data.user,
+    };
+  },
+
   async getMe(token?: string): Promise<{ user: { id: string; name: string; email: string } }> {
     const headers = token
       ? getAuthHeaders({ extraHeaders: { Authorization: `Bearer ${token}` } })
