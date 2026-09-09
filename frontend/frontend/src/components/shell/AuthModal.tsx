@@ -1,5 +1,5 @@
 // components/shell/AuthModal.tsx — Impressive Login & Sign Up Modal for MITRA
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { X, User, Mail, Lock, Sparkles, LogIn, UserPlus, ArrowRight, Loader2, ShieldCheck } from 'lucide-react';
 import { useCompanionStore } from '../../store/companion.store';
@@ -12,8 +12,9 @@ interface Props {
 }
 
 const AuthModal: React.FC<Props> = ({ open, onClose }) => {
-  const { setAuth, isAuthenticated, userName, userEmail, logoutUser } = useCompanionStore();
+  const { setAuth, isAuthenticated, isGuest, userName, userEmail, logoutUser } = useCompanionStore();
   const [mode, setMode] = useState<'login' | 'signup'>('login');
+  const [guestViewMode, setGuestViewMode] = useState<'summary' | 'form'>('summary');
   
   // Form states
   const [name, setName] = useState('');
@@ -21,6 +22,14 @@ const AuthModal: React.FC<Props> = ({ open, onClose }) => {
   const [password, setPassword] = useState('');
   const [loading, setLoading] = useState(false);
   const [errorMsg, setErrorMsg] = useState('');
+
+  // Whenever modal opens for a guest, default to the summary view
+  useEffect(() => {
+    if (open && isGuest) {
+      setGuestViewMode('summary');
+      setErrorMsg('');
+    }
+  }, [open, isGuest]);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -40,11 +49,11 @@ const AuthModal: React.FC<Props> = ({ open, onClose }) => {
     try {
       if (mode === 'signup') {
         const data = await CompanionService.signup(name.trim(), email.trim(), password);
-        setAuth(data.user, data.token);
+        setAuth(data.user, data.token, false);
         showToast('success', 'Account Created!', `Welcome to Mitra, ${data.user.name}`);
       } else {
         const data = await CompanionService.login(email.trim(), password);
-        setAuth(data.user, data.token);
+        setAuth(data.user, data.token, false);
         showToast('success', 'Welcome Back!', `Logged in as ${data.user.name}`);
       }
       onClose();
@@ -55,17 +64,6 @@ const AuthModal: React.FC<Props> = ({ open, onClose }) => {
       showToast('error', 'Auth Error', msg);
     } finally {
       setLoading(false);
-    }
-  };
-
-  const handleContinueAsGuest = async () => {
-    try {
-      const data = await CompanionService.guestLogin();
-      setAuth(data.user, data.token, true);
-      showToast('info', 'Guest Session Active', 'Continuing with temporary guest credentials.');
-      onClose();
-    } catch (err: any) {
-      showToast('error', 'Guest Error', err?.message || 'Could not initiate guest session.');
     }
   };
 
@@ -126,8 +124,8 @@ const AuthModal: React.FC<Props> = ({ open, onClose }) => {
               </button>
             </div>
 
-            {/* Authenticated State view */}
-            {isAuthenticated ? (
+            {/* 1. Registered Authenticated User View (non-guest) */}
+            {isAuthenticated && !isGuest ? (
               <div className="flex flex-col gap-4 py-2">
                 <div className="p-4 rounded-xl bg-surface-overlay border border-border-subtle flex items-center gap-3">
                   <div className="w-12 h-12 rounded-full bg-brand/10 border border-brand/30 flex items-center justify-center text-brand font-bold text-lg">
@@ -142,21 +140,85 @@ const AuthModal: React.FC<Props> = ({ open, onClose }) => {
                   </div>
                 </div>
 
-                <p className="text-xs text-text-secondary">
+                <p className="text-xs text-text-secondary leading-relaxed">
                   Your companion memory, workflows, calendar, and history are synchronized to your account.
                 </p>
 
                 <button
                   onClick={handleLogout}
-                  className="w-full py-2.5 px-4 rounded-xl bg-red-500/10 hover:bg-red-500/20 text-red-500 border border-red-500/20 text-xs font-semibold flex items-center justify-center gap-2 transition-colors"
+                  className="w-full py-2.5 px-4 rounded-xl bg-red-500/10 hover:bg-red-500/20 text-red-500 border border-red-500/20 text-xs font-semibold flex items-center justify-center gap-2 transition-colors cursor-pointer"
                 >
                   <LogIn size={15} className="rotate-180" />
                   <span>Sign Out of Account</span>
                 </button>
               </div>
+            ) : isGuest && guestViewMode === 'summary' ? (
+              /* 2. Guest Session Summary View */
+              <div className="flex flex-col gap-4 py-2">
+                <div className="p-4 rounded-xl bg-surface-overlay border border-border-subtle flex items-center gap-3">
+                  <div className="w-12 h-12 rounded-full bg-amber-500/10 border border-amber-500/30 flex items-center justify-center text-amber-400 font-bold text-lg">
+                    <User size={22} />
+                  </div>
+                  <div className="flex-1 overflow-hidden">
+                    <div className="flex items-center gap-1.5 font-semibold text-sm text-text-primary">
+                      <span>Guest User</span>
+                      <span className="px-2 py-0.5 rounded-full bg-amber-500/10 border border-amber-500/20 text-amber-400 text-[10px] font-semibold">
+                        Temporary Session
+                      </span>
+                    </div>
+                    <p className="text-xs text-text-secondary truncate">{userEmail || 'guest@local'}</p>
+                  </div>
+                </div>
+
+                <p className="text-xs text-text-secondary leading-relaxed">
+                  You're using a temporary guest session. Create an account to keep your Mitra experience across devices.
+                </p>
+
+                {/* Primary Action Buttons */}
+                <div className="grid grid-cols-2 gap-2.5 pt-1">
+                  <button
+                    type="button"
+                    onClick={() => { setMode('login'); setGuestViewMode('form'); setErrorMsg(''); }}
+                    className="py-2.5 px-4 rounded-xl bg-brand hover:bg-brand-light text-white font-bold text-xs flex items-center justify-center gap-2 shadow-lg shadow-brand/20 transition-all cursor-pointer"
+                  >
+                    <LogIn size={15} />
+                    <span>Sign In</span>
+                  </button>
+
+                  <button
+                    type="button"
+                    onClick={() => { setMode('signup'); setGuestViewMode('form'); setErrorMsg(''); }}
+                    className="py-2.5 px-4 rounded-xl bg-surface-overlay hover:bg-surface-raised border border-border-subtle text-text-primary font-bold text-xs flex items-center justify-center gap-2 transition-all cursor-pointer"
+                  >
+                    <UserPlus size={15} />
+                    <span>Create Account</span>
+                  </button>
+                </div>
+
+                {/* Secondary Action: Continue as Guest */}
+                <div className="flex items-center justify-center pt-2">
+                  <button
+                    type="button"
+                    onClick={onClose}
+                    className="text-xs text-text-secondary hover:text-text-primary font-medium hover:underline cursor-pointer"
+                  >
+                    Continue as Guest
+                  </button>
+                </div>
+              </div>
             ) : (
-              /* Tabbed Auth Form */
+              /* 3. Log In / Create Account Form View */
               <div className="flex flex-col gap-4">
+                {isGuest && (
+                  <button
+                    type="button"
+                    onClick={() => setGuestViewMode('summary')}
+                    className="self-start text-[11px] text-brand-light hover:underline flex items-center gap-1 font-medium cursor-pointer"
+                  >
+                    <span>← Back to Guest Info</span>
+                  </button>
+                )}
+
                 {/* Tabs */}
                 <div className="grid grid-cols-2 p-1 rounded-xl bg-surface-overlay border border-border-subtle text-xs font-semibold">
                   <button
@@ -329,17 +391,6 @@ const AuthModal: React.FC<Props> = ({ open, onClose }) => {
                       <path d="M18.71 19.5c-.83 1.24-1.71 2.45-3.05 2.47-1.34.03-1.77-.79-3.29-.79-1.53 0-2 .77-3.27.82-1.31.05-2.3-1.32-3.14-2.53C4.25 17 2.94 12.45 4.7 9.39c.87-1.52 2.43-2.48 4.12-2.51 1.28-.02 2.5.87 3.29.87.78 0 2.26-1.07 3.81-.91.65.03 2.47.26 3.64 1.98-.09.06-2.17 1.28-2.15 3.81.03 3.02 2.65 4.03 2.68 4.04-.03.07-.42 1.44-1.38 2.83M15.97 6.85c.66-.8 1.11-1.92.99-3.04-.96.04-2.12.64-2.8 1.44-.61.71-1.14 1.86-1 2.97 1.07.08 2.15-.57 2.81-1.37z" />
                     </svg>
                     <span>Apple</span>
-                  </button>
-                </div>
-
-                <div className="flex items-center justify-between text-[11px] text-text-secondary pt-1">
-                  <span>Want to test without signing up?</span>
-                  <button
-                    type="button"
-                    onClick={handleContinueAsGuest}
-                    className="text-brand font-medium hover:underline cursor-pointer"
-                  >
-                    Continue as Guest
                   </button>
                 </div>
               </div>

@@ -13,7 +13,7 @@ const statusLabel = { active: 'Active', thinking: 'Thinking…', away: 'Away', e
 
 const TopBar: React.FC<Props> = ({ onSearch }) => {
   const {
-    status, userName, isAuthenticated, notifications,
+    status, userName, isAuthenticated, isGuest, notifications,
     toggleContextPanel, contextPanel,
     isMobile, toggleMobileMenu,
   } = useCompanionStore();
@@ -289,13 +289,13 @@ const TopBar: React.FC<Props> = ({ onSearch }) => {
         id="topbar-auth-button"
         onClick={() => useCompanionStore.getState().setAuthModalOpen(true)}
         className="flex items-center gap-1.5 px-2 py-1 rounded-lg bg-surface-overlay border border-border-subtle hover:border-brand/40 text-text-primary text-xs transition-all cursor-pointer"
-        title={isAuthenticated ? `Account: ${userName}` : 'Log In / Sign Up'}
+        title={isAuthenticated && !isGuest ? `Account: ${userName}` : 'Log In / Sign Up'}
       >
         <div className="w-5 h-5 rounded-full bg-brand/20 border border-brand/40 flex items-center justify-center text-brand-light font-bold text-[10px]">
-          {userName ? userName.charAt(0).toUpperCase() : <User size={12} />}
+          {userName && !isGuest ? userName.charAt(0).toUpperCase() : <User size={12} />}
         </div>
         <span className="hidden sm:inline text-2xs font-medium">
-          {isAuthenticated ? userName : 'Account'}
+          {isAuthenticated && !isGuest ? userName : 'Log In'}
         </span>
       </button>
 
