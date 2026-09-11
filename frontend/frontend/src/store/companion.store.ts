@@ -141,6 +141,18 @@ export const getUserId = (): string => {
   return stored;
 };
 
+export function resolveDisplayName(user?: { name?: string | null; email?: string | null }, isGuest?: boolean): string {
+  if (isGuest) return 'Guest User';
+  if (user?.name && user.name.trim() && !['user', 'user_default', 'anonymous', 'guest'].includes(user.name.trim().toLowerCase())) {
+    return user.name.trim();
+  }
+  if (user?.email && user.email.includes('@')) {
+    const prefix = user.email.split('@')[0].trim();
+    if (prefix) return prefix;
+  }
+  return 'Mitra User';
+}
+
 // ── Store Implementation ────────────────────────────────
 export const useCompanionStore = create<CompanionStore>()(
   devtools(
@@ -149,7 +161,7 @@ export const useCompanionStore = create<CompanionStore>()(
       return {
         // Defaults
         userId:          localStorage.getItem('mitra_user_id') || getUserId(),
-        userName:        localStorage.getItem('mitra_user_name') || 'User',
+        userName:        localStorage.getItem('mitra_user_name') || 'Guest User',
         userEmail:       localStorage.getItem('mitra_user_email') || '',
         authToken:       initialToken,
         isAuthenticated: Boolean(initialToken),
@@ -202,7 +214,7 @@ export const useCompanionStore = create<CompanionStore>()(
         toggleMobileMenu:     () => set(s => ({ mobileMenuOpen: !s.mobileMenuOpen })),
         toggleMobileContext:  () => set(s => ({ mobileContextOpen: !s.mobileContextOpen })),
 
-        // ── Messages ────────────────────────────────────
+        // ── Messages ────────────────────────────────
         addMessage: (msg) => set(s => ({
           messages: [
             ...s.messages,
@@ -246,14 +258,15 @@ export const useCompanionStore = create<CompanionStore>()(
         setAuthModalOpen: (open) => set({ authModalOpen: open }),
 
         setAuth: (user, token, isGuestParam?: boolean) => {
+          const isGuest = isGuestParam !== undefined ? isGuestParam : Boolean((user as any).is_guest);
+          const displayName = resolveDisplayName(user, isGuest);
           if (user.id) localStorage.setItem('mitra_user_id', user.id);
-          if (user.name) localStorage.setItem('mitra_user_name', user.name);
+          localStorage.setItem('mitra_user_name', displayName);
           if (user.email) localStorage.setItem('mitra_user_email', user.email);
           if (token) setCanonicalToken(token);
-          const isGuest = isGuestParam !== undefined ? isGuestParam : Boolean((user as any).is_guest);
           set({
             userId:          user.id || getUserId(),
-            userName:        user.name || (isGuest ? 'Guest' : 'User'),
+            userName:        displayName,
             userEmail:       user.email || '',
             authToken:       token,
             isAuthenticated: Boolean(token),
@@ -270,7 +283,7 @@ export const useCompanionStore = create<CompanionStore>()(
           const newId = getUserId();
           set({
             userId:          newId,
-            userName:        'User',
+            userName:        'Guest User',
             userEmail:       '',
             authToken:       '',
             isAuthenticated: false,

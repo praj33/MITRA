@@ -22,6 +22,8 @@ class CalendarEventCreate(BaseModel):
     color: str = "#7c5cfc"
     description: str = ""
     location: str = ""
+    timezone: Optional[str] = "UTC"
+    attendees: Optional[List[str]] = None
 
 class TaskCreate(BaseModel):
     title: str
@@ -72,6 +74,9 @@ async def get_calendar_events(user_id: str = "user_default"):
                     "color": doc.get("color", "#7c5cfc"),
                     "description": doc.get("description", ""),
                     "location": doc.get("location", ""),
+                    "provider": doc.get("provider"),
+                    "provider_event_id": doc.get("provider_event_id"),
+                    "sync_status": doc.get("sync_status", "Saved only in Mitra"),
                 })
             return {"events": db_events, "source": "database"}
         except Exception as e:
@@ -82,14 +87,69 @@ async def get_calendar_events(user_id: str = "user_default"):
 
 @router.post("/calendar/events")
 async def create_calendar_event(event: CalendarEventCreate, user_id: str = "user_default"):
-    """Create a calendar event and persist to database."""
+    """Create a calendar event and synchronize with Google/Microsoft if connected."""
     event_id = f"ev_{uuid4().hex[:8]}"
     now = datetime.now(timezone.utc)
 
-    # Default end = start + 1 hour
-    end_time = event.end or (
-        datetime.fromisoformat(event.start.replace("Z", "+00:00")) + timedelta(hours=1)
-    ).isoformat()
+    # Explicit end time validation vs default 1 hour
+    if event.end:
+        try:
+            start_dt = datetime.fromisoformat(event.start.replace("Z", "+00:00"))
+            end_dt = datetime.fromisoformat(event.end.replace("Z", "+00:00"))
+            if end_dt <= start_dt:
+                raise HTTPException(
+                    status_code=400,
+                    detail=f"Invalid time range: end ({event.end}) must be strictly after start ({event.start})."
+                )
+            end_time = event.end
+        except ValueError as e:
+            raise HTTPException(status_code=400, detail=f"Invalid date format: {e}")
+    else:
+        try:
+            start_dt = datetime.fromisoformat(event.start.replace("Z", "+00:00"))
+            end_time = (start_dt + timedelta(hours=1)).isoformat()
+        except ValueError as e:
+            raise HTTPException(status_code=400, detail=f"Invalid date format for start: {e}")
+
+    # Attempt synchronization via CalendarExecutor
+    sync_status = "Saved only in Mitra"
+    provider = None
+    provider_event_id = None
+    synchronized = False
+
+    try:
+        from app.executors.calendar_executor import CalendarExecutor
+        from app.core.gateway_auth import GatewayAuth
+
+        gw_token = GatewayAuth.issue(
+            trace_id=f"page_cal_{uuid4().hex[:8]}",
+            platform="calendar",
+            action="create_event",
+            decision="allow"
+        )
+        cal_exec = CalendarExecutor()
+        exec_res = cal_exec.create_event(
+            title=event.title,
+            start_time=event.start,
+            end_time=end_time,
+            description=event.description,
+            location=event.location,
+            trace_id=f"page_cal_{uuid4().hex[:8]}",
+            gateway_auth=gw_token,
+            user_id=user_id,
+            timezone=event.timezone or "UTC",
+            attendees=event.attendees
+        )
+        if exec_res.get("status") == "error":
+            raise HTTPException(status_code=400, detail=exec_res.get("error", "Calendar event creation failed."))
+        sync_status = exec_res.get("sync_status", "Saved only in Mitra")
+        provider = exec_res.get("provider")
+        provider_event_id = exec_res.get("provider_event_id")
+        synchronized = bool(exec_res.get("synchronized", False))
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.warning(f"Calendar executor sync attempt warning: {e}")
 
     doc = {
         "_id": event_id,
@@ -100,6 +160,9 @@ async def create_calendar_event(event: CalendarEventCreate, user_id: str = "user
         "color": event.color,
         "description": event.description,
         "location": event.location,
+        "provider": provider,
+        "provider_event_id": provider_event_id,
+        "sync_status": sync_status,
         "created_at": now.isoformat(),
     }
 
@@ -107,16 +170,21 @@ async def create_calendar_event(event: CalendarEventCreate, user_id: str = "user
     if db is not None:
         try:
             db["calendar_events"].insert_one(doc)
-            logger.info(f"Calendar event created: {event_id} — {event.title}")
+            logger.info(f"Calendar event created: {event_id} — {event.title} [{sync_status}]")
         except Exception as e:
             logger.warning(f"Calendar DB insert failed: {e}")
 
     return {
         "success": True,
+        "sync_status": sync_status,
+        "synchronized": synchronized,
+        "provider": provider,
         "event": {
             "id": event_id, "title": event.title, "start": event.start,
             "end": end_time, "color": event.color,
             "description": event.description, "location": event.location,
+            "provider": provider, "provider_event_id": provider_event_id,
+            "sync_status": sync_status
         },
     }
 

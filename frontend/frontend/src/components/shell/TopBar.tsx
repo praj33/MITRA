@@ -65,7 +65,7 @@ const TopBar: React.FC<Props> = ({ onSearch }) => {
 
       {/* User greeting — hidden on mobile & small tablets */}
       <span className="text-xs text-text-muted hidden lg:block">
-        Hey, {!userName || ['there', 'user_default', 'using', 'anonymous'].includes(userName.toLowerCase()) ? 'User' : userName} 👋
+        Hey, {isGuest ? 'Guest User' : (userName || 'Mitra User')} 👋
       </span>
 
       {/* Action Icons Container — Clean & compact on mobile, expanded on desktop */}
@@ -289,13 +289,13 @@ const TopBar: React.FC<Props> = ({ onSearch }) => {
         id="topbar-auth-button"
         onClick={() => useCompanionStore.getState().setAuthModalOpen(true)}
         className="flex items-center gap-1.5 px-2 py-1 rounded-lg bg-surface-overlay border border-border-subtle hover:border-brand/40 text-text-primary text-xs transition-all cursor-pointer"
-        title={isAuthenticated && !isGuest ? `Account: ${userName}` : 'Log In / Sign Up'}
+        title={isAuthenticated && !isGuest ? `Account: ${userName}` : (isGuest ? 'Guest Session' : 'Log In / Sign Up')}
       >
         <div className="w-5 h-5 rounded-full bg-brand/20 border border-brand/40 flex items-center justify-center text-brand-light font-bold text-[10px]">
           {userName && !isGuest ? userName.charAt(0).toUpperCase() : <User size={12} />}
         </div>
         <span className="hidden sm:inline text-2xs font-medium">
-          {isAuthenticated && !isGuest ? userName : 'Log In'}
+          {isAuthenticated && !isGuest ? userName : (isGuest ? 'Guest User' : 'Log In')}
         </span>
       </button>
 

@@ -24,10 +24,11 @@ class CalendarExecutor:
         self.calendar_id = os.getenv("GOOGLE_CALENDAR_ID", "primary")
         self.base_url = "https://www.googleapis.com/calendar/v3"
 
-    def _get_effective_connection(self, user_id: Optional[str] = None) -> Tuple[Optional[str], str]:
+    def _get_effective_connection(self, user_id: Optional[str] = None) -> Tuple[Optional[str], Optional[str]]:
         """
         Resolves (access_token, provider_name) for the target user.
-        Checks Google connection first, then Microsoft connection, then global default.
+        Checks Google connection first, then Microsoft connection.
+        Returns (token, provider) or (None, None) if not connected.
         """
         if user_id:
             try:
@@ -46,7 +47,9 @@ class CalendarExecutor:
             except Exception:
                 pass
 
-        return self.access_token, "google"
+        if self.access_token:
+            return self.access_token, "google"
+        return None, None
 
     def _get_effective_access_token(self, user_id: Optional[str] = None) -> Optional[str]:
         token, _ = self._get_effective_connection(user_id)
@@ -56,10 +59,10 @@ class CalendarExecutor:
         token, _ = self._get_effective_connection(user_id)
         return bool(token or self.api_key)
 
-    def create_event(self, title: str, start_time: str, end_time: str = None,
+    def create_event(self, title: str, start_time: str, end_time: Optional[str] = None,
                      description: str = "", location: str = "", trace_id: str = "", gateway_auth: str = None,
-                     user_id: Optional[str] = None) -> Dict[str, Any]:
-        """Create a calendar event across Google or Microsoft Graph."""
+                     user_id: Optional[str] = None, timezone: str = "UTC", attendees: Optional[list] = None) -> Dict[str, Any]:
+        """Create a calendar event across Google or Microsoft Graph with timezone & attendee support."""
         try:
             try:
                 require_gateway_invocation(
@@ -77,29 +80,62 @@ class CalendarExecutor:
                     "platform": "calendar",
                 }
 
-            # Default end_time = start_time + 1 hour
+            # Range validation:
+            # If end_time is not provided: default to start_time + 1 hour.
+            # If explicit end_time is provided and end_dt <= start_dt: return validation error.
+            tz_str = timezone or "UTC"
             if not end_time:
                 try:
                     start_dt = datetime.fromisoformat(start_time.replace("Z", "+00:00"))
                     end_dt = start_dt + timedelta(hours=1)
                     end_time = end_dt.isoformat()
-                except Exception:
-                    end_time = start_time
+                except Exception as parse_err:
+                    return {
+                        "status": "error",
+                        "error": f"Invalid start_time format: {parse_err}. Expected ISO 8601 string.",
+                        "trace_id": trace_id,
+                        "timestamp": datetime.utcnow().isoformat(),
+                        "platform": "calendar",
+                    }
+            else:
+                try:
+                    start_dt = datetime.fromisoformat(start_time.replace("Z", "+00:00"))
+                    end_dt = datetime.fromisoformat(end_time.replace("Z", "+00:00"))
+                except Exception as parse_err:
+                    return {
+                        "status": "error",
+                        "error": f"Invalid date format: {parse_err}. Expected ISO 8601 string.",
+                        "trace_id": trace_id,
+                        "timestamp": datetime.utcnow().isoformat(),
+                        "platform": "calendar",
+                    }
+                if end_dt <= start_dt:
+                    return {
+                        "status": "error",
+                        "error": f"Invalid time range: end_time ({end_time}) must be strictly after start_time ({start_time}).",
+                        "trace_id": trace_id,
+                        "timestamp": datetime.utcnow().isoformat(),
+                        "platform": "calendar",
+                    }
 
             token, provider = self._get_effective_connection(user_id)
 
             if not token and not self.api_key:
-                logger.info(f"[{trace_id}] Calendar simulation: creating event '{title}'")
+                logger.info(f"[{trace_id}] Calendar event saved locally only in Mitra: '{title}' (no external provider connected)")
                 return {
                     "status": "success",
+                    "sync_status": "Saved only in Mitra",
+                    "synchronized": False,
+                    "provider": None,
+                    "provider_event_id": None,
                     "event_id": f"sim_evt_{datetime.utcnow().strftime('%Y%m%d%H%M%S')}",
                     "action": "create_event",
-                    "event": {"title": title, "start": start_time, "end": end_time},
+                    "event": {"title": title, "start": start_time, "end": end_time, "timezone": tz_str},
                     "method": "calendar_simulation",
                     "trace_id": trace_id,
                     "timestamp": datetime.utcnow().isoformat(),
                     "platform": "calendar",
-                    "note": "Simulation mode — connect Google or Microsoft Calendar for live execution"
+                    "note": "Saved only in Mitra. Connect Google or Microsoft Calendar for external synchronization."
                 }
 
             if provider == "microsoft":
@@ -111,16 +147,24 @@ class CalendarExecutor:
                 payload = {
                     "subject": title,
                     "body": {"contentType": "Text", "content": description},
-                    "start": {"dateTime": start_time, "timeZone": "Asia/Kolkata"},
-                    "end": {"dateTime": end_time, "timeZone": "Asia/Kolkata"},
+                    "start": {"dateTime": start_time, "timeZone": tz_str},
+                    "end": {"dateTime": end_time, "timeZone": tz_str},
                     "location": {"displayName": location}
                 }
+                if attendees:
+                    payload["attendees"] = [{"emailAddress": {"address": a}, "type": "required"} for a in attendees]
+
                 response = requests.post(url, json=payload, headers=headers, timeout=30)
                 if response.status_code in [200, 201]:
                     res_data = response.json()
+                    evt_id = res_data.get("id")
                     return {
                         "status": "success",
-                        "event_id": res_data.get("id"),
+                        "sync_status": "Created in Microsoft Calendar",
+                        "synchronized": True,
+                        "provider": "microsoft",
+                        "provider_event_id": evt_id,
+                        "event_id": evt_id,
                         "action": "create_event",
                         "event": payload,
                         "html_link": res_data.get("webLink"),
@@ -130,6 +174,12 @@ class CalendarExecutor:
                         "platform": "calendar"
                     }
                 else:
+                    if response.status_code == 401 and user_id:
+                        try:
+                            from app.services.connected_account_service import connected_account_service
+                            connected_account_service.mark_status(user_id, "microsoft", "needs_reauthorization")
+                        except Exception:
+                            pass
                     return {
                         "status": "error",
                         "error": f"Microsoft Graph API error: {response.status_code} - {response.text}",
@@ -143,9 +193,12 @@ class CalendarExecutor:
                     "summary": title,
                     "description": description,
                     "location": location,
-                    "start": {"dateTime": start_time, "timeZone": "Asia/Kolkata"},
-                    "end": {"dateTime": end_time, "timeZone": "Asia/Kolkata"},
+                    "start": {"dateTime": start_time, "timeZone": tz_str},
+                    "end": {"dateTime": end_time, "timeZone": tz_str},
                 }
+                if attendees:
+                    event_data["attendees"] = [{"email": a} for a in attendees]
+
                 url = f"{self.base_url}/calendars/{self.calendar_id}/events"
                 headers = {
                     "Authorization": f"Bearer {token}",
@@ -154,9 +207,14 @@ class CalendarExecutor:
                 response = requests.post(url, json=event_data, headers=headers, timeout=30)
                 if response.status_code in [200, 201]:
                     result = response.json()
+                    evt_id = result.get("id")
                     return {
                         "status": "success",
-                        "event_id": result.get("id"),
+                        "sync_status": "Created in Google Calendar",
+                        "synchronized": True,
+                        "provider": "google",
+                        "provider_event_id": evt_id,
+                        "event_id": evt_id,
                         "action": "create_event",
                         "event": event_data,
                         "html_link": result.get("htmlLink"),
@@ -166,6 +224,12 @@ class CalendarExecutor:
                         "platform": "calendar"
                     }
                 else:
+                    if response.status_code == 401 and user_id:
+                        try:
+                            from app.services.connected_account_service import connected_account_service
+                            connected_account_service.mark_status(user_id, "google", "needs_reauthorization")
+                        except Exception:
+                            pass
                     return {
                         "status": "error",
                         "error": f"Calendar API error: {response.status_code} - {response.text}",

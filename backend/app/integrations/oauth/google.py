@@ -44,8 +44,8 @@ class GoogleOAuthProvider(BaseOAuthProvider):
         target_redirect = redirect_uri or self._get_default_redirect_uri()
 
         if not scopes:
-            if purpose == "login":
-                # Least privilege identity scopes for login
+            if purpose in ("login", "signup"):
+                # Least privilege identity scopes for login / signup
                 scopes = ["openid", "email", "profile"]
             else:
                 # Service connection scopes

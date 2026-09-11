@@ -3,12 +3,16 @@ import { motion, AnimatePresence } from 'framer-motion';
 import { Calendar, Clock, MapPin, Plus, ChevronLeft, ChevronRight, Trash2, X, Check } from 'lucide-react';
 import { CompanionService } from '../../services/companion.service';
 import { useCompanionStore } from '../../store/companion.store';
+import { authApi } from '../../services/authApi';
 import { showToast } from '../shell/Toast';
 
 interface CalendarEvent {
   id: string; title: string; start: string; end: string;
   color: string; description: string; location: string;
   has_time?: boolean;
+  provider?: string | null;
+  provider_event_id?: string | null;
+  sync_status?: string | null;
 }
 
 const DAYS = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
@@ -19,6 +23,19 @@ const CalendarPage: React.FC<{ onChatNavigate: (msg: string) => void }> = ({ onC
   const [loading, setLoading] = useState(true);
   const [viewDate, setViewDate] = useState(new Date());
   const [eventFilter, setEventFilter] = useState<'upcoming' | 'past' | 'all'>('upcoming');
+
+  // Provider Connection State for Calendar Sync
+  const [googleActive, setGoogleActive] = useState(false);
+  const [msActive, setMsActive] = useState(false);
+
+  useEffect(() => {
+    authApi.getConnections().then(data => {
+      const g = data.connections?.some(c => c.provider.toLowerCase() === 'google' && c.status === 'active');
+      const m = data.connections?.some(c => c.provider.toLowerCase() === 'microsoft' && c.status === 'active');
+      setGoogleActive(Boolean(g));
+      setMsActive(Boolean(m));
+    }).catch(() => {});
+  }, []);
 
   // Add Event Form State
   const [showAddForm, setShowAddForm] = useState(false);
@@ -66,7 +83,8 @@ const CalendarPage: React.FC<{ onChatNavigate: (msg: string) => void }> = ({ onC
         await fetchEvents();
       }
 
-      showToast('success', 'Event Created', `Added "${newTitle.trim()}" to calendar.`);
+      const syncStatusMsg = res?.sync_status || 'Saved only in Mitra';
+      showToast('success', 'Event Created', `"${newTitle.trim()}" — ${syncStatusMsg}`);
       setNewTitle('');
       setNewLocation('');
       setNewDescription('');
@@ -283,6 +301,46 @@ const CalendarPage: React.FC<{ onChatNavigate: (msg: string) => void }> = ({ onC
         <div className="page-loading py-8 text-center text-xs text-text-muted">Loading events...</div>
       ) : (
         <>
+          {/* Synchronization & Mobile Platform Notice Banner */}
+          <div className="mb-4 p-3.5 rounded-2xl bg-surface-overlay border border-border-subtle flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 text-xs">
+            <div className="flex items-start sm:items-center gap-2.5">
+              <div className="w-8 h-8 rounded-xl bg-brand/10 border border-brand/20 flex items-center justify-center text-brand shrink-0 mt-0.5 sm:mt-0">
+                <Calendar size={16} />
+              </div>
+              <div>
+                <div className="flex items-center gap-2 flex-wrap font-semibold text-text-primary text-xs">
+                  <span>Calendar Cloud Sync</span>
+                  {googleActive ? (
+                    <span className="px-2 py-0.5 rounded-full bg-emerald-500/10 border border-emerald-500/30 text-emerald-400 text-[10px] font-medium">
+                      ● Google Calendar Active
+                    </span>
+                  ) : msActive ? (
+                    <span className="px-2 py-0.5 rounded-full bg-emerald-500/10 border border-emerald-500/30 text-emerald-400 text-[10px] font-medium">
+                      ● Outlook Calendar Active
+                    </span>
+                  ) : (
+                    <span className="px-2 py-0.5 rounded-full bg-amber-500/10 border border-amber-500/30 text-amber-400 text-[10px] font-medium">
+                      ○ Saved Only in Mitra (Local)
+                    </span>
+                  )}
+                </div>
+                <p className="text-2xs text-text-muted mt-0.5 leading-relaxed">
+                  Notice: Web applications cannot write directly to native mobile calendars (iOS/Android) without an active Google Calendar or Microsoft Outlook connection.
+                </p>
+              </div>
+            </div>
+
+            {(!googleActive && !msActive) && (
+              <button
+                type="button"
+                onClick={() => (window as any).__MITRA_INTEGRATIONS__?.()}
+                className="px-3 py-1.5 rounded-xl bg-surface-raised hover:bg-surface-elevated border border-border-subtle hover:border-brand/40 text-text-primary text-xs font-semibold whitespace-nowrap cursor-pointer transition-all active:scale-95 shrink-0"
+              >
+                Connect Calendar
+              </button>
+            )}
+          </div>
+
           <div className="calendar-week-strip mb-6 overflow-x-auto pb-2 flex gap-2">
             {weekDays.map(day => {
               const isToday = day.toDateString() === todayStr;
@@ -380,6 +438,15 @@ const CalendarPage: React.FC<{ onChatNavigate: (msg: string) => void }> = ({ onC
                               <MapPin size={11} /> {ev.location}
                             </span>
                           )}
+                          <span className={`px-2 py-0.5 rounded-full text-[10px] font-medium border ${
+                            ev.sync_status === 'Created in Google Calendar' || ev.provider === 'google'
+                              ? 'bg-emerald-500/10 border-emerald-500/30 text-emerald-400'
+                              : ev.sync_status === 'Created in Microsoft Calendar' || ev.provider === 'microsoft'
+                              ? 'bg-blue-500/10 border-blue-500/30 text-blue-400'
+                              : 'bg-white/5 border-white/10 text-text-muted'
+                          }`}>
+                            {ev.sync_status || (ev.provider === 'google' ? 'Created in Google Calendar' : ev.provider === 'microsoft' ? 'Created in Microsoft Calendar' : 'Saved only in Mitra')}
+                          </span>
                         </div>
                       </div>
                     </div>

@@ -114,12 +114,12 @@ export const authApi = {
   },
 
   /** Initiate OAuth PKCE authorization flow */
-  async startOAuth(provider: string = 'google', purpose: string = 'connect'): Promise<{ url: string; state: string }> {
+  async startOAuth(provider: string = 'google', purpose: string = 'connect'): Promise<{ url: string; auth_url?: string; state: string }> {
     const res = await fetch(`${getApiBase()}/api/oauth/${provider}/start?purpose=${encodeURIComponent(purpose)}`, {
       method: 'GET',
       headers: getAuthHeaders(),
     });
-    return handleResponse<{ url: string; state: string }>(res);
+    return handleResponse<{ url: string; auth_url?: string; state: string }>(res);
   },
 
   /** Get user's connected accounts metadata (no secrets) */

@@ -14,8 +14,10 @@ import logging
 logger = logging.getLogger(__name__)
 
 
-def _save_event_to_db(user_id: str, title: str, date_str: str, time_str: str, trace_id: str) -> Optional[str]:
-    """Save calendar event to MongoDB. Returns event_id or None."""
+def _save_event_to_db(user_id: str, title: str, date_str: str, time_str: str, trace_id: str,
+                      provider: Optional[str] = None, provider_event_id: Optional[str] = None,
+                      sync_status: str = "Saved only in Mitra") -> Optional[str]:
+    """Save calendar event to MongoDB with provider synchronization status. Returns event_id or None."""
     try:
         from pymongo import MongoClient
         import os
@@ -50,11 +52,14 @@ def _save_event_to_db(user_id: str, title: str, date_str: str, time_str: str, tr
             "description": f"Created via Mitra companion",
             "location": "",
             "trace_id": trace_id,
+            "provider": provider,
+            "provider_event_id": provider_event_id,
+            "sync_status": sync_status,
             "created_at": now.isoformat(),
         }
 
         db["calendar_events"].insert_one(doc)
-        logger.info(f"Calendar event saved to DB: {event_id} — {title}")
+        logger.info(f"Calendar event saved to DB: {event_id} — {title} [{sync_status}]")
         return event_id
     except Exception as e:
         logger.warning(f"Failed to save calendar event to DB: {e}")
@@ -146,14 +151,67 @@ class CalendarCapability(BaseCapability):
             if not title or len(title) < 2:
                 title = "New Event"
 
-            # Save to MongoDB
-            event_id = _save_event_to_db(user_id, title, date_str, time_str, trace_id or "")
-
-            # Generate Native Device Calendar Sync URLs (Google, Outlook, Apple iCal)
+            # Parse start and end time
             now = datetime.now(timezone.utc)
-            start_dt = now + timedelta(hours=1)
+            if date_str and "T" in date_str:
+                try:
+                    start_dt = datetime.fromisoformat(date_str.replace("Z", "+00:00"))
+                except Exception:
+                    start_dt = now + timedelta(hours=1)
+            elif date_str:
+                try:
+                    start_dt = datetime.fromisoformat(date_str)
+                except Exception:
+                    start_dt = now + timedelta(hours=1)
+            else:
+                start_dt = now + timedelta(hours=1)
+
             end_dt = start_dt + timedelta(hours=1)
-            
+            user_tz = params.get("timezone", "UTC")
+            attendees = params.get("attendees")
+
+            # Execute via CalendarExecutor for Google/Microsoft synchronization
+            from app.executors.calendar_executor import CalendarExecutor
+            from app.core.gateway_auth import GatewayAuth
+
+            gw_token = GatewayAuth.issue(
+                trace_id=trace_id or f"tr_cal_{uuid4().hex[:8]}",
+                platform="calendar",
+                action="create_event",
+                decision="allow"
+            )
+
+            cal_exec = CalendarExecutor()
+            exec_res = cal_exec.create_event(
+                title=title,
+                start_time=start_dt.isoformat(),
+                end_time=end_dt.isoformat(),
+                description="Scheduled via MITRA Companion Engine",
+                trace_id=trace_id or "",
+                gateway_auth=gw_token,
+                user_id=user_id,
+                timezone=user_tz,
+                attendees=attendees
+            )
+
+            sync_status = exec_res.get("sync_status", "Saved only in Mitra")
+            provider = exec_res.get("provider")
+            provider_event_id = exec_res.get("provider_event_id")
+            synchronized = bool(exec_res.get("synchronized", False))
+
+            # Save to MongoDB
+            event_id = _save_event_to_db(
+                user_id=user_id,
+                title=title,
+                date_str=start_dt.isoformat(),
+                time_str=time_str,
+                trace_id=trace_id or "",
+                provider=provider,
+                provider_event_id=provider_event_id,
+                sync_status=sync_status
+            )
+
+            # Generate Native Device Calendar Sync URLs (Google, Outlook)
             import urllib.parse
             start_iso = start_dt.strftime("%Y%m%dT%H%M%SZ")
             end_iso = end_dt.strftime("%Y%m%dT%H%M%SZ")
@@ -163,7 +221,12 @@ class CalendarCapability(BaseCapability):
             google_url = f"https://calendar.google.com/calendar/render?action=TEMPLATE&text={encoded_title}&dates={start_iso}/{end_iso}&details={encoded_details}"
             outlook_url = f"https://outlook.live.com/calendar/0/deeplink/compose?path=/calendar/action/compose&rru=addevent&subject={encoded_title}&startdt={start_dt.isoformat()}&enddt={end_dt.isoformat()}&body={encoded_details}"
 
-            summary = f"Calendar event created: '{title}'. You can sync it directly to your device calendar below:"
+            if synchronized and provider == "google":
+                summary = f"Calendar event created: '{title}' (Created in Google Calendar)."
+            elif synchronized and provider == "microsoft":
+                summary = f"Calendar event created: '{title}' (Created in Microsoft Calendar)."
+            else:
+                summary = f"Calendar event created: '{title}' (Saved only in Mitra). You can sync it directly to your device calendar below or connect Google/Outlook in Settings:"
 
             return CapabilityResult(
                 capability=self.name, intent=intent, status="success",
@@ -171,9 +234,13 @@ class CalendarCapability(BaseCapability):
                 data={
                     "event_id": event_id,
                     "title": title,
-                    "date": date_str,
+                    "date": start_dt.isoformat(),
                     "time": time_str,
                     "persisted": event_id is not None,
+                    "sync_status": sync_status,
+                    "synchronized": synchronized,
+                    "provider": provider,
+                    "provider_event_id": provider_event_id,
                     "sync_urls": {
                         "google_calendar": google_url,
                         "outlook_calendar": outlook_url,

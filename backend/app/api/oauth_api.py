@@ -29,26 +29,30 @@ def _token_payload(user: dict) -> dict:
 @router.get("/api/auth/{provider}")  # Compatible route alias
 async def start_oauth_flow(
     provider: str,
-    purpose: str = Query("connect", description="OAuth transaction purpose: 'connect' or 'login'"),
+    purpose: str = Query("connect", description="OAuth transaction purpose: 'connect', 'login', or 'signup'"),
     user_id: Optional[str] = Query(None, description="Ignored: identity is derived strictly from Bearer token"),
     request: Request = None
 ):
     """
     Initiates secure OAuth 2.0 PKCE transaction.
-    For 'connect' purpose: requires valid JWT bearer token.
-    For 'login' purpose: public endpoint.
+    For 'connect' purpose: requires valid non-guest JWT bearer token.
+    For 'login' or 'signup' purpose: public endpoint; binds guest session ID if present.
     Returns JSON authorization URL or HTTP 302 redirect.
     """
     provider_name = provider.lower()
+    if purpose not in ("connect", "login", "signup"):
+        raise HTTPException(status_code=400, detail=f"Invalid OAuth purpose: '{purpose}'. Must be 'connect', 'login', or 'signup'.")
+
     try:
         provider_inst = oauth_provider_registry.get(provider_name)
     except KeyError:
         raise HTTPException(status_code=400, detail=f"Unsupported OAuth provider: {provider}")
 
     auth_user_id = None
+    auth_header = request.headers.get("Authorization") if request else None
+
     if purpose == "connect":
         # Extract JWT identity strictly from Authorization header
-        auth_header = request.headers.get("Authorization") if request else None
         if not auth_header or not auth_header.strip().lower().startswith("bearer "):
             raise HTTPException(status_code=401, detail="Authentication required for connecting service accounts.")
         
@@ -65,6 +69,16 @@ async def start_oauth_flow(
 
         if not auth_user_id:
             raise HTTPException(status_code=401, detail="Invalid user session.")
+    elif purpose in ("signup", "login"):
+        # For signup or login from an existing session (e.g. guest conversion), capture user_id
+        if auth_header and auth_header.strip().lower().startswith("bearer "):
+            from app.core.security import verify_token_string
+            token = auth_header.split(" ")[1]
+            try:
+                token_data = verify_token_string(token)
+                auth_user_id = token_data.user_id or token_data.username
+            except Exception:
+                pass
 
     # Create cryptographically secure OAuth transaction
     tx = oauth_transaction_service.create_transaction(
@@ -73,11 +87,14 @@ async def start_oauth_flow(
         user_id=auth_user_id
     )
 
-    auth_url = provider_inst.get_authorization_url(
-        state=tx["state"],
-        code_challenge=tx["code_challenge"],
-        purpose=purpose
-    )
+    try:
+        auth_url = provider_inst.get_authorization_url(
+            state=tx["state"],
+            code_challenge=tx["code_challenge"],
+            purpose=purpose
+        )
+    except ValueError as val_err:
+        raise HTTPException(status_code=503, detail=str(val_err))
 
     return {
         "url": auth_url,
@@ -88,6 +105,7 @@ async def start_oauth_flow(
     }
 
 @router.get("/api/oauth/{provider}/callback")
+@router.post("/api/oauth/{provider}/callback")
 async def oauth_callback(
     provider: str,
     code: Optional[str] = Query(None),
@@ -97,9 +115,20 @@ async def oauth_callback(
 ):
     """
     Handles OAuth 2.0 server-side authorization code exchange and identity verification.
+    Supports GET queries as well as POST form submissions (e.g. Apple form_post).
     Validates state, performs code exchange with PKCE, encrypts tokens, and updates connection/identity stores.
     """
     provider_name = provider.lower()
+
+    # Handle Apple Sign-In and other form_post responses
+    if request and request.method == "POST":
+        try:
+            form = await request.form()
+            code = code or form.get("code")
+            state = state or form.get("state")
+            error = error or form.get("error")
+        except Exception as form_err:
+            logger.warning(f"Error reading form data in callback: {form_err}")
     
     if error:
         logger.warning(f"OAuth callback returned error from provider {provider}: {error}")
@@ -139,12 +168,12 @@ async def oauth_callback(
     expires_in = int(raw_expires) if raw_expires is not None else 3600
     expires_at = (datetime.utcnow() + timedelta(seconds=expires_in)).isoformat()
 
-    if not access_token:
-        raise HTTPException(status_code=400, detail="Provider response did not include a valid access token.")
+    if not access_token and not tokens.get("id_token"):
+        raise HTTPException(status_code=400, detail="Provider response did not include a valid token.")
 
     # 3. Retrieve provider identity
     try:
-        identity = provider_inst.get_user_identity(access_token=access_token, id_token=tokens.get("id_token"))
+        identity = provider_inst.get_user_identity(access_token=access_token or "", id_token=tokens.get("id_token"))
     except Exception as exc:
         logger.error(f"Failed fetching user identity from {provider}: {exc}")
         raise HTTPException(status_code=400, detail="Failed to verify identity with provider.")
@@ -163,7 +192,7 @@ async def oauth_callback(
             user_id=user_id,
             provider=provider_name,
             email=email,
-            access_token=access_token,
+            access_token=access_token or "",
             refresh_token=refresh_token,
             provider_account_id=provider_subject,
             scopes=tx.get("scopes"),
@@ -187,7 +216,7 @@ async def oauth_callback(
         }
 
     else:
-        # LOGIN FLOW
+        # SIGNUP OR LOGIN FLOW
         existing_link = identity_account_service.get_identity(provider_name, provider_subject)
         
         if existing_link:
@@ -195,7 +224,8 @@ async def oauth_callback(
             user = await auth_service.get_public_user_by_id(user_id)
             if not user:
                 # User record missing; recreate user record safely
-                user = await auth_service.create_user(name=identity["name"], email=email, password=create_access_token({"sub": "oauth_user"}))
+                user_display_name = identity.get("name") or email.split("@")[0] or "Mitra User"
+                user = await auth_service.create_user(name=user_display_name, email=email, password=create_access_token({"sub": "oauth_user"}))
                 identity_account_service.link_identity(user["id"], provider_name, provider_subject, email)
         else:
             # Check if user with same email exists in auth_service
@@ -204,25 +234,45 @@ async def oauth_callback(
                 # Create new MITRA user
                 import uuid
                 random_pass = f"oauth_pass_{uuid.uuid4().hex}"
-                user = await auth_service.create_user(name=identity["name"], email=email, password=random_pass)
+                user_display_name = identity.get("name") or email.split("@")[0] or "Mitra User"
+                user = await auth_service.create_user(name=user_display_name, email=email, password=random_pass)
 
             user_id = user["id"]
             identity_account_service.link_identity(user_id, provider_name, provider_subject, email)
 
-        # Generate MITRA access token
+        # GUEST DATA MIGRATION: If transaction was bound to a guest session, migrate resources
+        guest_user_id = tx.get("user_id")
+        if guest_user_id and guest_user_id != user_id and str(guest_user_id).startswith("usr_guest_"):
+            try:
+                from pymongo import MongoClient
+                mongo_uri = os.getenv("MONGODB_URI", "mongodb://localhost:27017")
+                db_name = os.getenv("DATABASE_NAME", "ai_assistant")
+                client = MongoClient(mongo_uri, serverSelectionTimeoutMS=2000)
+                sync_db = client[db_name]
+                for col in ["user_tasks", "tasks", "reminders", "calendar_events", "companion_history", "user_facts"]:
+                    sync_db[col].update_many({"user_id": guest_user_id}, {"$set": {"user_id": user_id}})
+                logger.info(f"Successfully migrated guest data from {guest_user_id} to user {user_id}")
+            except Exception as mig_err:
+                logger.warning(f"Guest data migration warning: {mig_err}")
+
+        # Ensure user object has is_guest: False
+        user["is_guest"] = False
+
+        # Generate permanent MITRA access token
         jwt_token = create_access_token(data=_token_payload(user))
 
-        # Store connected account tokens encrypted
-        connected_account_service.create_connection(
-            user_id=user_id,
-            provider=provider_name,
-            email=email,
-            access_token=access_token,
-            refresh_token=refresh_token,
-            provider_account_id=provider_subject,
-            scopes=tx.get("scopes"),
-            expires_at=expires_at
-        )
+        # Store connected account tokens encrypted if access_token returned
+        if access_token:
+            connected_account_service.create_connection(
+                user_id=user_id,
+                provider=provider_name,
+                email=email,
+                access_token=access_token,
+                refresh_token=refresh_token,
+                provider_account_id=provider_subject,
+                scopes=tx.get("scopes"),
+                expires_at=expires_at
+            )
 
         frontend_url = os.getenv("FRONTEND_URL", "http://localhost:3000").rstrip("/")
         redirect_target = f"{frontend_url}/auth/callback?token={jwt_token}"
@@ -234,7 +284,8 @@ async def oauth_callback(
         return {
             "status": "success",
             "token": jwt_token,
-            "user": user
+            "user": user,
+            "purpose": purpose
         }
 
 @router.get("/api/connections")

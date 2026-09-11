@@ -9,7 +9,7 @@ os.environ.setdefault("JWT_SECRET_KEY", "test-secret-key")
 os.environ.setdefault("AUTH_STORE_MODE", "inmemory")
 
 from app.main import app
-from app.core.security import verify_token_string
+from app.core.security import verify_token_string, rate_limit_store
 from app.services.auth_service import auth_service
 
 client = TestClient(app)
@@ -18,6 +18,8 @@ client.headers.update({"X-API-Key": "localtest"})
 
 def setup_function():
     auth_service.reset_inmemory_store()
+    rate_limit_store.clear()
+
 
 
 def test_guest_auth_endpoint_structure_and_jwt_claims():
