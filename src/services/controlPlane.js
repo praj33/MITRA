@@ -15,7 +15,7 @@ export function getApiBaseUrl() {
   return 'https://mitra.blackholeinfiverse.com';
 }
 
-const API_KEY = 'localtest';
+const API_KEY = 'your_api_key_here';
 
 /** Build request headers strictly complying with OpenAPI requirement. */
 function buildHeaders() {
@@ -145,22 +145,6 @@ export class ControlPlane {
           duration: '0.1s',
           result: `Reminder set: "${remTitle}"`,
           data: { capability: 'reminder', reminder: { id: remId, message: remTitle, time: fireAt, status: 'pending' } }
-        });
-        return { status: 'ok' };
-      }
-
-      // ── EMAIL (Show config-pending card — SMTP not set on Render) ─────
-      if (/\b(send|email|mail)\b.+@.+\.\w+/i.test(preText) || (/\b(email|mail)\b/i.test(preText) && /@/.test(preText))) {
-        const emailAddr = preText.match(/([a-zA-Z0-9._%+\-]+@[a-zA-Z0-9.\-]+\.[a-zA-Z]{2,})/)?.[1] || 'recipient';
-        const subjMatch = preText.match(/(?:saying|subject|about)\s+(.+?)$/i);
-        const subj = subjMatch?.[1]?.slice(0, 60) || 'Message from MITRA';
-        eventBus.emit('health.changed', { status: 'Healthy' });
-        contextStore.addMessage('mitra', `Email to ${emailAddr} — pending backend config`, { intent: 'email' });
-        eventBus.emit('capability.completed', {
-          capability: 'email',
-          duration: '0.1s',
-          result: `Email to ${emailAddr}`,
-          data: { capability: 'email', email: { status: 'error', to: emailAddr, subject: subj, error: 'SMTP credentials (EMAIL_USER / EMAIL_PASSWORD) not configured on Raj\'s Render backend. Add them to enable real email sending.', method: 'none' } }
         });
         return { status: 'ok' };
       }

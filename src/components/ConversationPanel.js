@@ -260,6 +260,21 @@ export class ConversationPanel {
         const eventEnd = event.end ? ` → ${new Date(event.end).toLocaleString()}` : '';
         const eventId = event.id ? `<div style="margin-top:4px; font-size:9px; color:rgba(255,255,255,0.3);">ID: ${this.escapeHtml(event.id)}</div>` : '';
 
+        const syncUrls = backendData.sync_urls || {};
+        const googleUrl = syncUrls.google || `https://calendar.google.com/calendar/render?action=TEMPLATE&text=${encodeURIComponent(eventTitle)}`;
+        const outlookUrl = syncUrls.microsoft || `https://outlook.live.com/calendar/0/deeplink/compose?path=/calendar/action/compose&rru=addevent&subject=${encodeURIComponent(eventTitle)}`;
+        const appleUrl = syncUrls.apple || `http://localhost:8001/api/calendar/feed.ics`;
+        const zohoUrl = syncUrls.zoho || `https://calendar.zoho.com/calendar/export/event?title=${encodeURIComponent(eventTitle)}`;
+
+        const providerButtonsHtml = `
+          <div style="margin-top:10px; display:flex; flex-wrap:wrap; gap:6px;">
+            <a href="${googleUrl}" target="_blank" rel="noopener noreferrer" style="background:#4285F4; color:#fff; padding:5px 10px; border-radius:6px; font-size:10px; font-weight:600; text-decoration:none; display:inline-flex; align-items:center; gap:4px;">🟢 Sync to Google</a>
+            <a href="${outlookUrl}" target="_blank" rel="noopener noreferrer" style="background:#0078D4; color:#fff; padding:5px 10px; border-radius:6px; font-size:10px; font-weight:600; text-decoration:none; display:inline-flex; align-items:center; gap:4px;">🟦 Microsoft Outlook</a>
+            <a href="${appleUrl}" target="_blank" rel="noopener noreferrer" style="background:#A2AAAD; color:#000; padding:5px 10px; border-radius:6px; font-size:10px; font-weight:600; text-decoration:none; display:inline-flex; align-items:center; gap:4px;">🍎 Apple iCal</a>
+            <a href="${zohoUrl}" target="_blank" rel="noopener noreferrer" style="background:#C00; color:#fff; padding:5px 10px; border-radius:6px; font-size:10px; font-weight:600; text-decoration:none; display:inline-flex; align-items:center; gap:4px;">🟡 Zoho Calendar</a>
+          </div>
+        `;
+
         widgetContent = `
           <div style="display:flex; align-items:center; justify-content:space-between; margin-bottom:8px; border-bottom:1px solid rgba(255,255,255,0.1); padding-bottom:6px;">
             <div style="font-weight:700; font-size:13px; color:#6c5ce7; display:flex; align-items:center; gap:6px;">📅 CALENDAR (${currentMonth} ${currentYear})</div>
@@ -280,6 +295,7 @@ export class ConversationPanel {
             <div style="font-weight:600; color:#fff; font-size:13px; margin-bottom:4px;">📌 ${this.escapeHtml(eventTitle)}</div>
             <div style="color:rgba(255,255,255,0.6); font-size:11px;">⏰ ${this.escapeHtml(eventStart)}${this.escapeHtml(eventEnd)}</div>
             ${eventId}
+            ${providerButtonsHtml}
           </div>
         `;
       }
@@ -479,19 +495,79 @@ export class ConversationPanel {
 
 
     } else if (capability === 'whatsapp') {
-
-      // Real backend WhatsApp result: status, error, details (Twilio)
-      const waData = backendData.whatsapp || {};
+      const waData = backendData.whatsapp || backendData || {};
       const isSuccess = waData.status === 'success' || backendData.status === 'success';
-      const statusColor = isSuccess ? '#00e676' : '#ff453a';
-      const statusLabel = isSuccess ? 'Sent ✓' : 'Failed ✗';
+      const recipient = waData.to || waData.recipient || backendData.to || '';
+      let cleanPhone = (recipient || '').replace(/[^\d]/g, '');
+      if (cleanPhone.length === 10 && /^[6789]/.test(cleanPhone)) {
+        cleanPhone = '91' + cleanPhone;
+      }
+      const displayPhone = cleanPhone ? (cleanPhone.startsWith('91') && cleanPhone.length === 12 ? `+${cleanPhone.slice(0, 2)} ${cleanPhone.slice(2, 7)} ${cleanPhone.slice(7)}` : `+${cleanPhone}`) : recipient;
+      const msgText = waData.message || resultText || '';
+      const note = waData.note || backendData.note || '';
+      const statusColor = isSuccess ? '#25D366' : '#ff453a';
+      const statusLabel = isSuccess ? 'Dispatched ✓' : 'Failed ✗';
+      const waUrl = cleanPhone ? `https://wa.me/${cleanPhone}?text=${encodeURIComponent(msgText)}` : '';
+
       widgetContent = `
         <div style="display:flex; align-items:center; justify-content:space-between; margin-bottom:8px; border-bottom:1px solid rgba(255, 255, 255, 0.1); padding-bottom:6px;">
-          <div style="font-weight:700; font-size:13px; color:${statusColor}; display:flex; align-items:center; gap:6px;">💬 WHATSAPP ${isSuccess ? 'SENT' : 'FAILED'}</div>
-          <span style="font-size:10px; background:rgba(0,230,118,0.15); color:${statusColor}; padding:2px 6px; border-radius:4px;">${statusLabel}</span>
+          <div style="font-weight:700; font-size:13px; color:#25D366; display:flex; align-items:center; gap:6px;">💬 WHATSAPP ACTION</div>
+          <span style="font-size:10px; background:rgba(37,211,102,0.15); color:${statusColor}; padding:2px 6px; border-radius:4px; font-weight:600;">${statusLabel}</span>
         </div>
         <div style="background:rgba(255,255,255,0.05); padding:10px; border-radius:8px; font-size:12px;">
-          <div style="font-weight:600; color:#fff; font-size:13px;">${this.escapeHtml(resultText)}</div>
+          ${recipient ? `<div style="font-weight:600; color:#fff; font-size:12px; margin-bottom:4px;">📞 Recipient: ${this.escapeHtml(displayPhone)}</div>` : ''}
+          <div style="color:rgba(255,255,255,0.85); font-size:12px; margin-bottom:6px;">💬 "${this.escapeHtml(msgText)}"</div>
+          ${note ? `<div style="font-size:10px; color:#a29bfe; margin-bottom:6px;">ℹ️ ${this.escapeHtml(note)}</div>` : ''}
+          ${waUrl ? `<div style="margin-top:6px;"><a href="${waUrl}" target="_blank" rel="noopener noreferrer" style="background:#25D366; color:#000; padding:4px 10px; border-radius:6px; font-size:10px; font-weight:700; text-decoration:none; display:inline-flex; align-items:center; gap:4px;">📲 Open in WhatsApp Web</a></div>` : ''}
+        </div>
+      `;
+
+    } else if (capability === 'telegram' || capability === 'notification') {
+      const tgData = backendData.telegram || backendData || {};
+      const isSuccess = tgData.status === 'success' || backendData.status === 'success';
+      const recipient = tgData.recipient || tgData.to || tgData.chat_id || '';
+      const msgText = tgData.message || resultText || '';
+      const note = tgData.note || backendData.note || '';
+      const statusColor = isSuccess ? '#0088cc' : '#ff453a';
+      const statusLabel = isSuccess ? 'Sent ✓' : 'Failed ✗';
+      const tgUser = (recipient || '').replace(/^@/, '');
+      const tgUrl = tgUser ? `https://t.me/${tgUser}` : 'https://t.me/blackhole_mitra_bot';
+      const tgShareUrl = `https://t.me/msg?text=${encodeURIComponent(msgText)}`;
+
+      widgetContent = `
+        <div style="display:flex; align-items:center; justify-content:space-between; margin-bottom:8px; border-bottom:1px solid rgba(255, 255, 255, 0.1); padding-bottom:6px;">
+          <div style="font-weight:700; font-size:13px; color:#0088cc; display:flex; align-items:center; gap:6px;">✈️ TELEGRAM DISPATCH</div>
+          <span style="font-size:10px; background:rgba(0,136,204,0.2); color:#38b6ff; padding:2px 6px; border-radius:4px; font-weight:600;">${statusLabel}</span>
+        </div>
+        <div style="background:rgba(255,255,255,0.05); padding:10px; border-radius:8px; font-size:12px;">
+          ${recipient ? `<div style="font-weight:600; color:#fff; font-size:12px; margin-bottom:4px;">👤 Recipient: ${this.escapeHtml(recipient)}</div>` : ''}
+          <div style="color:rgba(255,255,255,0.85); font-size:12px; margin-bottom:6px;">💬 "${this.escapeHtml(msgText)}"</div>
+          ${note ? `<div style="font-size:10px; color:#a29bfe; margin-bottom:6px;">ℹ️ ${this.escapeHtml(note)}</div>` : ''}
+          <div style="margin-top:6px; display:flex; flex-wrap:wrap; gap:6px;">
+            ${tgUser ? `<a href="${tgUrl}" target="_blank" rel="noopener noreferrer" style="background:#0088cc; color:#fff; padding:4px 10px; border-radius:6px; font-size:10px; font-weight:700; text-decoration:none; display:inline-flex; align-items:center; gap:4px;">✈️ Open Telegram Chat (${this.escapeHtml(recipient)})</a>` : ''}
+            <a href="${tgShareUrl}" target="_blank" rel="noopener noreferrer" style="background:rgba(0,136,204,0.2); border:1px solid rgba(0,136,204,0.4); color:#38b6ff; padding:4px 10px; border-radius:6px; font-size:10px; font-weight:700; text-decoration:none; display:inline-flex; align-items:center; gap:4px;">📤 Share Pre-filled Message</a>
+          </div>
+        </div>
+      `;
+
+    } else if (capability === 'instagram') {
+      const igData = backendData.instagram || backendData || {};
+      const recipient = igData.recipient_id || igData.recipient || igData.to || '';
+      const msgText = igData.message || resultText || '';
+      const note = igData.note || backendData.note || '';
+      const igUser = (recipient || '').replace(/^@/, '');
+      const igUrl = igUser ? `https://instagram.com/direct/t/${igUser}` : 'https://instagram.com/direct/inbox/';
+
+      widgetContent = `
+        <div style="display:flex; align-items:center; justify-content:space-between; margin-bottom:8px; border-bottom:1px solid rgba(255, 255, 255, 0.1); padding-bottom:6px;">
+          <div style="font-weight:700; font-size:13px; color:#e1306c; display:flex; align-items:center; gap:6px;">📸 INSTAGRAM DM</div>
+          <span style="font-size:10px; background:linear-gradient(45deg, #f09433, #e6683c, #dc2743, #cc2366, #bc1888); color:#fff; padding:2px 6px; border-radius:4px; font-weight:600;">Dispatched ✓</span>
+        </div>
+        <div style="background:rgba(255,255,255,0.05); padding:10px; border-radius:8px; font-size:12px;">
+          ${recipient ? `<div style="font-weight:600; color:#fff; font-size:12px; margin-bottom:4px;">👤 Recipient: ${this.escapeHtml(recipient)}</div>` : ''}
+          <div style="color:rgba(255,255,255,0.85); font-size:12px; margin-bottom:6px;">💬 "${this.escapeHtml(msgText)}"</div>
+          ${note ? `<div style="font-size:10px; color:#a29bfe; margin-bottom:6px;">ℹ️ ${this.escapeHtml(note)}</div>` : ''}
+          <div style="margin-top:6px;"><a href="${igUrl}" target="_blank" rel="noopener noreferrer" style="background:linear-gradient(45deg, #f09433, #dc2743, #bc1888); color:#fff; padding:4px 10px; border-radius:6px; font-size:10px; font-weight:700; text-decoration:none; display:inline-flex; align-items:center; gap:4px;">📸 Open Instagram Direct</a></div>
         </div>
       `;
 

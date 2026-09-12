@@ -22,8 +22,9 @@ def _get_db():
         logger.warning(f"MongoDB connection error in integrations: {exc}")
         return None
 
-# Temporary memory OTP cache if DB unavailable
+# Temporary memory caches if DB unavailable
 _OTP_CACHE: Dict[str, str] = {}
+_CALENDAR_PREF_CACHE: Dict[str, str] = {}
 
 class GmailIntegrationRequest(BaseModel):
     user_id: str
@@ -39,15 +40,22 @@ class WhatsAppVerifyRequest(BaseModel):
     phone: str
     code: str
 
+class CalendarPreferenceRequest(BaseModel):
+    user_id: str
+    preferred_provider: str  # google, apple, microsoft, zoho
+
 @router.get("/api/integrations")
 async def get_integrations(user_id: str = Query(..., description="User ID")):
     """Get connected integrations for a user."""
     db = _get_db()
+    pref = _CALENDAR_PREF_CACHE.get(user_id, "google")
     result = {
         "user_id": user_id,
         "gmail": {"connected": False, "email": ""},
         "whatsapp": {"verified": False, "phone": ""},
         "calendar": {
+            "preferred_provider": pref,
+            "supported_providers": ["google", "apple", "microsoft", "zoho"],
             "webcal_url": f"http://localhost:8000/api/calendar/feed.ics?user_id={user_id}"
         }
     }
@@ -65,9 +73,45 @@ async def get_integrations(user_id: str = Query(..., description="User ID")):
                         "verified": True,
                         "phone": doc["whatsapp"].get("phone", "")
                     }
+                if "calendar" in doc and doc["calendar"].get("preferred_provider"):
+                    result["calendar"]["preferred_provider"] = doc["calendar"]["preferred_provider"]
         except Exception as exc:
             logger.warning(f"Error fetching integrations for {user_id}: {exc}")
     return result
+
+@router.post("/api/integrations/calendar/preference")
+async def save_calendar_preference(req: CalendarPreferenceRequest):
+    """Save user preferred calendar provider (Google, Apple, Microsoft, Zoho)."""
+    valid_providers = ["google", "apple", "microsoft", "zoho"]
+    provider = req.preferred_provider.lower().strip()
+    if provider not in valid_providers:
+        raise HTTPException(status_code=400, detail=f"Invalid calendar provider. Must be one of {valid_providers}")
+
+    _CALENDAR_PREF_CACHE[req.user_id] = provider
+
+    db = _get_db()
+    if db is not None:
+        try:
+            db["user_integrations"].update_one(
+                {"user_id": req.user_id},
+                {
+                    "$set": {
+                        "user_id": req.user_id,
+                        "calendar.preferred_provider": provider,
+                        "calendar.updated_at": datetime.utcnow().isoformat()
+                    }
+                },
+                upsert=True
+            )
+        except Exception as exc:
+            logger.error(f"Failed to save calendar preference: {exc}")
+
+    return {
+        "status": "success",
+        "message": f"Preferred calendar set to {provider.capitalize()} Calendar.",
+        "preferred_provider": provider,
+        "user_id": req.user_id
+    }
 
 @router.post("/api/integrations/gmail")
 async def save_gmail_integration(req: GmailIntegrationRequest):
