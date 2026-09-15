@@ -530,6 +530,26 @@ export class ConversationPanel {
       const statusColor = isSuccess ? '#ff9f43' : '#ff453a';
       const statusLabel = isSuccess ? 'Dispatched ✓' : 'Failed ✗';
 
+      // Emit event for NotificationDrawer and trigger browser notification
+      if (this.eventBus) {
+        try {
+          this.eventBus.emit('notification.received', {
+            title: '🔔 Device / Call Alert',
+            text: msgText,
+            message: msgText
+          });
+        } catch (e) {}
+      }
+      if (typeof window !== 'undefined' && 'Notification' in window) {
+        if (Notification.permission === 'granted') {
+          try { new Notification('🔔 Urgent Call Alert', { body: msgText }); } catch(e) {}
+        } else if (Notification.permission !== 'denied') {
+          Notification.requestPermission().then(p => {
+            if (p === 'granted') try { new Notification('🔔 Urgent Call Alert', { body: msgText }); } catch(e) {}
+          });
+        }
+      }
+
       widgetContent = `
         <div style="display:flex; align-items:center; justify-content:space-between; margin-bottom:8px; border-bottom:1px solid rgba(255, 255, 255, 0.1); padding-bottom:6px;">
           <div style="font-weight:700; font-size:13px; color:#ff9f43; display:flex; align-items:center; gap:6px;">🔔 DEVICE / PHONE CALL ALERT</div>
