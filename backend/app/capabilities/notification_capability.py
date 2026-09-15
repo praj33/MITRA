@@ -34,10 +34,22 @@ class NotificationCapability(BaseCapability):
 
             intent_lower = (intent or "").lower()
             msg_lower = raw_msg.lower()
-            if "instagram" in intent_lower or "instagram" in msg_lower:
+            if "device" in intent_lower or "device" in msg_lower or intent_lower in ("device", "phone", "notification", "call"):
+                channel = "device"
+            elif "instagram" in intent_lower or "instagram" in msg_lower:
                 channel = "instagram"
-            else:
+            elif "telegram" in intent_lower or "telegram" in msg_lower:
                 channel = "telegram"
+            else:
+                channel = "device"
+
+            if channel == "device":
+                summary = f"Device notification dispatched: {clean_msg}"
+                return CapabilityResult(
+                    capability="device", intent=intent, status="success",
+                    summary=summary, data={"channel": "device", "recipient": recipient or "Device Notification System", "message": clean_msg, "status": "success"},
+                    trace_id=trace_id,
+                )
 
             action_params = {
                 "intent": intent,

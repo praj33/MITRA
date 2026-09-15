@@ -522,7 +522,27 @@ export class ConversationPanel {
         </div>
       `;
 
-    } else if (capability === 'telegram' || capability === 'notification') {
+    } else if (capability === 'device' || capability === 'notification') {
+      const devData = backendData.device || backendData || {};
+      const isSuccess = devData.status === 'success' || backendData.status === 'success';
+      const msgText = devData.message || resultText || 'Urgent Call Alert';
+      const recipient = devData.recipient || 'Device Notification System';
+      const statusColor = isSuccess ? '#ff9f43' : '#ff453a';
+      const statusLabel = isSuccess ? 'Dispatched ✓' : 'Failed ✗';
+
+      widgetContent = `
+        <div style="display:flex; align-items:center; justify-content:space-between; margin-bottom:8px; border-bottom:1px solid rgba(255, 255, 255, 0.1); padding-bottom:6px;">
+          <div style="font-weight:700; font-size:13px; color:#ff9f43; display:flex; align-items:center; gap:6px;">🔔 DEVICE / PHONE CALL ALERT</div>
+          <span style="font-size:10px; background:rgba(255,159,67,0.2); color:#ff9f43; padding:2px 6px; border-radius:4px; font-weight:600;">${statusLabel}</span>
+        </div>
+        <div style="background:rgba(255,255,255,0.05); padding:10px; border-radius:8px; font-size:12px;">
+          <div style="font-weight:600; color:#fff; font-size:12px; margin-bottom:4px;">📲 System Target: ${this.escapeHtml(recipient)}</div>
+          <div style="color:rgba(255,255,255,0.85); font-size:12px; margin-bottom:6px;">🔔 Alert Content: "${this.escapeHtml(msgText)}"</div>
+          <div style="font-size:10px; color:#00e676; margin-top:4px; display:flex; align-items:center; gap:4px;">⚡ Real-time Device Push Triggered</div>
+        </div>
+      `;
+
+    } else if (capability === 'telegram') {
       const tgData = backendData.telegram || backendData || {};
       const isSuccess = tgData.status === 'success' || backendData.status === 'success';
       const recipient = tgData.recipient || tgData.to || tgData.chat_id || '';
