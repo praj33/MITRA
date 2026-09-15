@@ -569,10 +569,10 @@ export class ConversationPanel {
       const msgText = tgData.message || resultText || '';
       const note = tgData.note || backendData.note || '';
       const statusColor = isSuccess ? '#0088cc' : '#ff453a';
-      const statusLabel = isSuccess ? 'Sent ✓' : 'Failed ✗';
+      const statusLabel = isSuccess ? 'Dispatched ✓' : 'Failed ✗';
       const tgUser = (recipient || '').replace(/^@/, '');
       const tgUrl = tgUser ? `https://t.me/${tgUser}` : 'https://t.me/blackhole_mitra_bot';
-      const tgShareUrl = `https://t.me/msg?text=${encodeURIComponent(msgText)}`;
+      const tgShareUrl = `https://t.me/share/url?url=&text=${encodeURIComponent(msgText)}`;
 
       widgetContent = `
         <div style="display:flex; align-items:center; justify-content:space-between; margin-bottom:8px; border-bottom:1px solid rgba(255, 255, 255, 0.1); padding-bottom:6px;">
@@ -582,10 +582,10 @@ export class ConversationPanel {
         <div style="background:rgba(255,255,255,0.05); padding:10px; border-radius:8px; font-size:12px;">
           ${recipient ? `<div style="font-weight:600; color:#fff; font-size:12px; margin-bottom:4px;">👤 Recipient: ${this.escapeHtml(recipient)}</div>` : ''}
           <div style="color:rgba(255,255,255,0.85); font-size:12px; margin-bottom:6px;">💬 "${this.escapeHtml(msgText)}"</div>
-          ${note ? `<div style="font-size:10px; color:#a29bfe; margin-bottom:6px;">ℹ️ ${this.escapeHtml(note)}</div>` : ''}
-          <div style="margin-top:6px; display:flex; flex-wrap:wrap; gap:6px;">
-            ${tgUser ? `<a href="${tgUrl}" target="_blank" rel="noopener noreferrer" style="background:#0088cc; color:#fff; padding:4px 10px; border-radius:6px; font-size:10px; font-weight:700; text-decoration:none; display:inline-flex; align-items:center; gap:4px;">✈️ Open Telegram Chat (${this.escapeHtml(recipient)})</a>` : ''}
-            <a href="${tgShareUrl}" target="_blank" rel="noopener noreferrer" style="background:rgba(0,136,204,0.2); border:1px solid rgba(0,136,204,0.4); color:#38b6ff; padding:4px 10px; border-radius:6px; font-size:10px; font-weight:700; text-decoration:none; display:inline-flex; align-items:center; gap:4px;">📤 Share Pre-filled Message</a>
+          <div style="font-size:10px; color:#a29bfe; margin-bottom:6px;">ℹ️ Text copied to clipboard! Click below to send pre-filled message via Telegram.</div>
+          <div style="margin-top:8px; display:flex; flex-wrap:wrap; gap:6px;">
+            <a href="${tgShareUrl}" target="_blank" rel="noopener noreferrer" class="btn-copy-and-open" data-text="${this.escapeHtml(msgText)}" style="background:#0088cc; color:#fff; padding:6px 12px; border-radius:6px; font-size:11px; font-weight:700; text-decoration:none; display:inline-flex; align-items:center; gap:4px;">📤 Send Pre-filled Telegram Message</a>
+            ${tgUser ? `<a href="${tgUrl}" target="_blank" rel="noopener noreferrer" class="btn-copy-and-open" data-text="${this.escapeHtml(msgText)}" style="background:rgba(0,136,204,0.2); border:1px solid rgba(0,136,204,0.4); color:#38b6ff; padding:6px 12px; border-radius:6px; font-size:11px; font-weight:700; text-decoration:none; display:inline-flex; align-items:center; gap:4px;">✈️ Open Direct Chat (${this.escapeHtml(recipient)})</a>` : ''}
           </div>
         </div>
       `;
@@ -606,8 +606,10 @@ export class ConversationPanel {
         <div style="background:rgba(255,255,255,0.05); padding:10px; border-radius:8px; font-size:12px;">
           ${recipient ? `<div style="font-weight:600; color:#fff; font-size:12px; margin-bottom:4px;">👤 Recipient: ${this.escapeHtml(recipient)}</div>` : ''}
           <div style="color:rgba(255,255,255,0.85); font-size:12px; margin-bottom:6px;">💬 "${this.escapeHtml(msgText)}"</div>
-          ${note ? `<div style="font-size:10px; color:#a29bfe; margin-bottom:6px;">ℹ️ ${this.escapeHtml(note)}</div>` : ''}
-          <div style="margin-top:6px;"><a href="${igUrl}" target="_blank" rel="noopener noreferrer" style="background:linear-gradient(45deg, #f09433, #dc2743, #bc1888); color:#fff; padding:4px 10px; border-radius:6px; font-size:10px; font-weight:700; text-decoration:none; display:inline-flex; align-items:center; gap:4px;">📸 Open Instagram Direct</a></div>
+          <div style="font-size:10px; color:#00e676; margin-bottom:6px;">📋 Message copied to clipboard! Paste (Ctrl+V) directly into Instagram chat box.</div>
+          <div style="margin-top:8px; display:flex; flex-wrap:wrap; gap:6px;">
+            <a href="${igUrl}" target="_blank" rel="noopener noreferrer" class="btn-copy-and-open" data-text="${this.escapeHtml(msgText)}" style="background:linear-gradient(45deg, #f09433, #dc2743, #bc1888); color:#fff; padding:6px 12px; border-radius:6px; font-size:11px; font-weight:700; text-decoration:none; display:inline-flex; align-items:center; gap:4px;">📸 Copy & Open Instagram Direct</a>
+          </div>
         </div>
       `;
 
@@ -842,6 +844,16 @@ export class ConversationPanel {
         });
       });
     }
+
+    const copyAndOpenBtns = card.querySelectorAll('.btn-copy-and-open');
+    copyAndOpenBtns.forEach(btn => {
+      btn.addEventListener('click', () => {
+        const textToCopy = btn.getAttribute('data-text') || '';
+        if (textToCopy && navigator.clipboard) {
+          navigator.clipboard.writeText(textToCopy).catch(() => {});
+        }
+      });
+    });
 
     const taskCbs = card.querySelectorAll('.task-checkbox');
 
