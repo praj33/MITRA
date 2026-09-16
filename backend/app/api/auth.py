@@ -16,17 +16,22 @@ class SignupRequest(BaseModel):
     name: str
     email: EmailStr
     password: str
+    tenant_id: Optional[str] = "default_tenant"
+    org_id: Optional[str] = "bhiv_default"
 
 
 class LoginRequest(BaseModel):
     email: EmailStr
     password: str
+    tenant_id: Optional[str] = "default_tenant"
 
 
 class AuthUser(BaseModel):
     id: str
     name: str
     email: EmailStr
+    tenant_id: Optional[str] = "default_tenant"
+    org_id: Optional[str] = "bhiv_default"
 
 
 class AuthResponse(BaseModel):
@@ -59,6 +64,8 @@ def _token_payload(user: dict) -> dict:
         "user_id": user["id"],
         "email": user["email"],
         "name": user["name"],
+        "tenant_id": user.get("tenant_id", "default_tenant"),
+        "org_id": user.get("org_id", "bhiv_default"),
     }
 
 

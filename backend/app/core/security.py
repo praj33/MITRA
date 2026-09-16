@@ -33,6 +33,8 @@ class TokenData(BaseModel):
     user_id: Optional[str] = None
     email: Optional[str] = None
     name: Optional[str] = None
+    tenant_id: Optional[str] = "default_tenant"
+    org_id: Optional[str] = "bhiv_default"
 
 def verify_api_key(api_key: str = Depends(api_key_header)) -> str:
     if not api_key or api_key != API_KEY:
@@ -45,7 +47,11 @@ def create_access_token(data: dict, expires_delta: Optional[timedelta] = None):
         expire = datetime.utcnow() + expires_delta
     else:
         expire = datetime.utcnow() + timedelta(minutes=JWT_ACCESS_TOKEN_EXPIRE_MINUTES)
-    to_encode.update({"exp": expire})
+    to_encode.update({
+        "exp": expire,
+        "tenant_id": data.get("tenant_id", "default_tenant"),
+        "org_id": data.get("org_id", "bhiv_default")
+    })
     encoded_jwt = jwt.encode(to_encode, JWT_SECRET_KEY, algorithm=JWT_ALGORITHM)
     return encoded_jwt
 
@@ -65,6 +71,8 @@ def verify_token_string(token: str) -> TokenData:
             user_id=payload.get("user_id") or subject,
             email=payload.get("email"),
             name=payload.get("name"),
+            tenant_id=payload.get("tenant_id") or "default_tenant",
+            org_id=payload.get("org_id") or "bhiv_default",
         )
     except JWTError:
         raise HTTPException(status_code=401, detail="Invalid token")
