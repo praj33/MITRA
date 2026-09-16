@@ -11,7 +11,7 @@ This walkthrough documents the **live interactive browser UI testing of ALL MITR
 - **Rendered Card**: `📸 INSTAGRAM DM`
 - **Status**: `Dispatched ✓`
 - **Screenshot**:  
-  ![Instagram DM Widget](file:///C:/Users/pc/.gemini/antigravity-ide/brain/88781ab1-b483-4e9c-815c-0086ea1f445d/instagram_card_done_1789543757543.png)
+  ![Instagram DM Widget](./docs/images/instagram_card_done_1789543757543.png)
 
 ---
 
@@ -20,7 +20,7 @@ This walkthrough documents the **live interactive browser UI testing of ALL MITR
 - **Rendered Card**: `✈️ TELEGRAM DISPATCH`
 - **Status**: `Dispatched ✓` (with pre-filled share URL & clipboard auto-copy)
 - **Screenshot**:  
-  ![Telegram Dispatch Widget](file:///C:/Users/pc/.gemini/antigravity-ide/brain/88781ab1-b483-4e9c-815c-0086ea1f445d/telegram_card_done_1789543775985.png)
+  ![Telegram Dispatch Widget](./docs/images/telegram_card_done_1789543775985.png)
 
 ---
 
@@ -29,7 +29,7 @@ This walkthrough documents the **live interactive browser UI testing of ALL MITR
 - **Rendered Card**: `📰 NEWS ANALYSIS`
 - **Metrics**: Credibility `High` | Authenticity `95%`
 - **Screenshot**:  
-  ![Samachar News Card](file:///C:/Users/pc/.gemini/antigravity-ide/brain/88781ab1-b483-4e9c-815c-0086ea1f445d/samachar_card_success_1789543827741.png)
+  ![Samachar News Card](./docs/images/samachar_card_success_1789543827741.png)
 
 ---
 
@@ -38,7 +38,7 @@ This walkthrough documents the **live interactive browser UI testing of ALL MITR
 - **Rendered Card**: `🎓 UNIGURU KNOWLEDGE / 📚 KOSHA EVIDENCE CITATION`
 - **Verification Status**: `VERIFIED ✓` with textbook lineage hash
 - **Screenshot**:  
-  ![UniGuru Kosha Citation Card](file:///C:/Users/pc/.gemini/antigravity-ide/brain/88781ab1-b483-4e9c-815c-0086ea1f445d/uniguru_card_final_1789543859480.png)
+  ![UniGuru Kosha Citation Card](./docs/images/uniguru_card_final_1789543859480.png)
 
 ---
 
@@ -47,7 +47,7 @@ This walkthrough documents the **live interactive browser UI testing of ALL MITR
 - **Rendered Card**: `🌉 SETU OPERATIONAL GATEWAY`
 - **Data**: Live stock inventory table (`TEA-001`, `TEA-004`)
 - **Screenshot**:  
-  ![SETU Gateway Card](file:///C:/Users/pc/.gemini/antigravity-ide/brain/88781ab1-b483-4e9c-815c-0086ea1f445d/setu_card_final_1789543925999.png)
+  ![SETU Gateway Card](./docs/images/setu_card_final_1789543925999.png)
 
 ---
 
@@ -56,7 +56,7 @@ This walkthrough documents the **live interactive browser UI testing of ALL MITR
 - **Rendered Card**: `✉️ EMAIL SENT`
 - **Status**: `Sent ✓`
 - **Screenshot**:  
-  ![Email Card](file:///C:/Users/pc/.gemini/antigravity-ide/brain/88781ab1-b483-4e9c-815c-0086ea1f445d/email_card_done_1789543954201.png)
+  ![Email Card](./docs/images/email_card_done_1789543954201.png)
 
 ---
 
@@ -65,7 +65,7 @@ This walkthrough documents the **live interactive browser UI testing of ALL MITR
 - **Rendered Card**: `📅 EVENT SCHEDULED`
 - **Features**: Interactive monthly grid + calendar export buttons (*Google, Outlook, Apple, Zoho*)
 - **Screenshot**:  
-  ![Calendar Card](file:///C:/Users/pc/.gemini/antigravity-ide/brain/88781ab1-b483-4e9c-815c-0086ea1f445d/calendar_card_done_1789543988916.png)
+  ![Calendar Card](./docs/images/calendar_card_done_1789543988916.png)
 
 ---
 
@@ -74,7 +74,7 @@ This walkthrough documents the **live interactive browser UI testing of ALL MITR
 - **Rendered Card**: `📋 TASK CREATED`
 - **Status**: `pending` | Priority: `medium`
 - **Screenshot**:  
-  ![Task Card](file:///C:/Users/pc/.gemini/antigravity-ide/brain/88781ab1-b483-4e9c-815c-0086ea1f445d/task_card_done_1789544014505.png)
+  ![Task Card](./docs/images/task_card_done_1789544014505.png)
 
 ---
 
@@ -83,13 +83,13 @@ This walkthrough documents the **live interactive browser UI testing of ALL MITR
 - **Rendered Card**: `⏰ REMINDER SET`
 - **Features**: Live DB persistence + quick delete button (`🗑️ Delete Reminder`)
 - **Screenshot**:  
-  ![Reminder Card](file:///C:/Users/pc/.gemini/antigravity-ide/brain/88781ab1-b483-4e9c-815c-0086ea1f445d/reminder_card_result_1789544032250.png)
+  ![Reminder Card](./docs/images/reminder_card_result_1789544032250.png)
 
 ---
 
 ## 📹 Full 9-Capability Browser Session Video Recording
 
-![MITRA Complete Capabilities Live UI Session](file:///C:/Users/pc/.gemini/antigravity-ide/brain/88781ab1-b483-4e9c-815c-0086ea1f445d/mitra_full_capabilities_ui_test_1789543726451.webp)
+![MITRA Complete Capabilities Live UI Session](./docs/images/mitra_full_capabilities_ui_test_1789543726451.webp)
 
 ---
 
