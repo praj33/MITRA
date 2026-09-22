@@ -27,7 +27,7 @@ const ThinkingIndicator = () => (
 
 const EmptyState: React.FC<{ onBriefingAction: (prompt: string) => void }> = ({ onBriefingAction }) => {
   const userName = useCompanionStore(s => s.userName);
-  const displayName = !userName || ['there', 'user_default', 'using', 'anonymous'].includes(userName.toLowerCase()) ? 'User' : userName;
+  const displayName = !userName || ['there', 'user_default', 'using', 'anonymous', 'user'].includes(userName.toLowerCase()) ? 'Mitra User' : userName;
 
   return (
     <div className="flex flex-col gap-4">

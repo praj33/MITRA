@@ -1,11 +1,13 @@
 import os
+import uuid
+from datetime import datetime, timedelta
 from typing import Optional
 
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException, Request, status
 from fastapi.security import HTTPAuthorizationCredentials
 from pydantic import BaseModel, EmailStr
 
-from app.core.security import bearer_scheme, create_access_token, verify_token_string
+from app.core.security import bearer_scheme, create_access_token, verify_token_string, rate_limit
 from app.services.auth_service import UserAlreadyExistsError, auth_service
 
 
@@ -29,9 +31,10 @@ class LoginRequest(BaseModel):
 class AuthUser(BaseModel):
     id: str
     name: str
-    email: EmailStr
+    email: Optional[str] = None
     tenant_id: Optional[str] = "default_tenant"
     org_id: Optional[str] = "bhiv_default"
+    is_guest: Optional[bool] = False
 
 
 class AuthResponse(BaseModel):
@@ -80,9 +83,19 @@ async def _current_user(
     if not user_id:
         raise HTTPException(status_code=401, detail="Invalid or expired token. Please log in again.")
 
+    if getattr(token_data, "is_guest", False):
+        return {
+            "id": user_id,
+            "user_id": user_id,
+            "name": token_data.name or "Guest User",
+            "email": token_data.email or f"{user_id}@guest.local",
+            "is_guest": True,
+        }
+
     user = await auth_service.get_public_user_by_id(user_id)
     if not user:
         raise HTTPException(status_code=401, detail="User no longer exists.")
+    user["is_guest"] = False
     return user
 
 
@@ -141,158 +154,29 @@ async def apple_auth_redirect():
     return {"url": apple_url, "provider": "apple"}
 
 
-class GmailConnectRequest(BaseModel):
-    user_id: str
-    email: EmailStr
-    access_token: Optional[str] = "app_password"
-    app_password: Optional[str] = None
-    refresh_token: Optional[str] = None
+@router.post("/api/auth/guest")
+async def guest_auth(request: Request):
+    """
+    Issue a temporary guest JWT access token for anonymous users.
+    Generates a unique server-side guest identity (usr_guest_<uuid12>).
+    Applies per-IP rate limiting (20 requests/minute).
+    """
+    rate_limit(request, max_requests=20, window_seconds=60)
 
+    guest_id = f"usr_guest_{uuid.uuid4().hex[:12]}"
+    guest_name = "Guest User"
+    guest_email = f"{guest_id}@guest.local"
 
-@router.post("/api/integrations/gmail")
-async def connect_gmail(request: GmailConnectRequest):
-    """Store Gmail credentials encrypted with AES-256 in user settings store."""
-    from app.core.database import get_db
-    
-    db_inst = await get_db()
-    if db_inst is not None:
-        await db_inst.user_integrations.update_one(
-            {"user_id": request.user_id},
-            {"$set": {
-                "gmail": {
-                    "email": request.email,
-                    "app_password": request.app_password,
-                    "connected": True,
-                    "scope": "https://www.googleapis.com/auth/gmail.send",
-                    "updated_at": "2026-08-24T14:00:00Z"
-                }
-            }},
-            upsert=True
-        )
-    return {"status": "success", "message": "Gmail account connected and AES-256 encrypted.", "email": request.email}
-
-
-class WhatsAppOtpRequest(BaseModel):
-    user_id: str
-    phone: Optional[str] = None
-    phone_number: Optional[str] = None
-
-    @property
-    def target_phone(self) -> str:
-        return self.phone_number or self.phone or ""
-
-
-import random
-
-# In-memory OTP storage fallback
-_OTP_CACHE = {}
-
-@router.post("/api/integrations/whatsapp/send-otp")
-async def send_whatsapp_otp(request: WhatsAppOtpRequest):
-    """Send 6-digit WhatsApp OTP code to user's phone number."""
-    phone = request.target_phone
-    if not phone:
-        raise HTTPException(status_code=400, detail="Phone number is required.")
-    
-    otp_code = str(random.randint(100000, 999999))
-    _OTP_CACHE[f"{request.user_id}:{phone}"] = otp_code
-
-    # Save pending OTP in database (gracefully fallback if DB offline)
-    try:
-        from app.core.database import get_db
-        db_inst = await get_db()
-        if db_inst is not None:
-            await db_inst.user_integrations.update_one(
-                {"user_id": request.user_id},
-                {"$set": {
-                    "whatsapp_pending_otp": {
-                        "phone": phone,
-                        "otp": otp_code,
-                        "created_at": "2026-08-24T14:00:00Z"
-                    }
-                }},
-                upsert=True
-            )
-    except Exception as exc:
-        pass
-
-    # Attempt dispatch via WhatsAppExecutor
-    try:
-        from app.executors.whatsapp_executor import WhatsAppExecutor
-        WhatsAppExecutor().send_message(
-            to_number=phone,
-            message=f"Your MITRA WhatsApp verification code is: {otp_code}. Do not share this code.",
-            trace_id="otp_dispatch",
-            user_id=request.user_id
-        )
-    except Exception as err:
-        pass
-
-    return {
-        "status": "success",
-        "message": f"6-digit OTP code ({otp_code}) dispatched to {phone} via WhatsApp API.",
-        "phone": phone,
-        "demo_otp": otp_code
+    email: Optional[str] = None
+    tenant_id: Optional[str] = "default_tenant"
+    org_id: Optional[str] = "bhiv_default"
+    is_guest: Optional[bool] = False
     }
 
+    # Guest token lifetime: 1 hour (60 minutes)
+    token = create_access_token(data=payload, expires_delta=timedelta(hours=1))
 
-class WhatsAppVerifyRequest(BaseModel):
-    user_id: str
-    phone: Optional[str] = None
-    phone_number: Optional[str] = None
-    otp: Optional[str] = None
-    otp_code: Optional[str] = None
-
-    @property
-    def target_phone(self) -> str:
-        return self.phone_number or self.phone or ""
-
-    @property
-    def target_otp(self) -> str:
-        return self.otp_code or self.otp or ""
-
-
-@router.post("/api/integrations/whatsapp/verify")
-async def verify_whatsapp_otp(request: WhatsAppVerifyRequest):
-    """Verify 6-digit OTP code and activate WhatsApp market briefings."""
-    phone = request.target_phone
-    otp = request.target_otp
-    if len(otp) != 6:
-        raise HTTPException(status_code=400, detail="Invalid OTP code. Must be 6 digits.")
-    
-    cache_key = f"{request.user_id}:{phone}"
-    expected_otp = _OTP_CACHE.get(cache_key)
-
-    try:
-        from app.core.database import get_db
-        db_inst = await get_db()
-        if db_inst is not None and not expected_otp:
-            user_record = await db_inst.user_integrations.find_one({"user_id": request.user_id})
-            if user_record and "whatsapp_pending_otp" in user_record:
-                expected_otp = user_record["whatsapp_pending_otp"].get("otp")
-    except Exception:
-        pass
-
-    # Accept valid code or any 6-digit code for testing if Twilio credentials are in dev mode
-    if expected_otp and otp != expected_otp and otp != "123456":
-        raise HTTPException(status_code=400, detail=f"Incorrect OTP code. Please check your WhatsApp messages.")
-
-    try:
-        if db_inst is not None:
-            await db_inst.user_integrations.update_one(
-                {"user_id": request.user_id},
-                {"$set": {
-                    "whatsapp": {
-                        "phone": phone,
-                        "verified": True,
-                        "briefings_enabled": True,
-                        "updated_at": "2026-08-24T14:00:00Z"
-                    }
-                }},
-                upsert=True
-            )
-    except Exception:
-        pass
-
-    return {"status": "success", "message": "WhatsApp number verified! Daily 8:45 AM market briefings activated.", "phone": phone}
-
+    email: Optional[str] = None
+    tenant_id: Optional[str] = "default_tenant"
+    org_id: Optional[str] = "bhiv_default"
+    is_guest: Optional[bool] = False

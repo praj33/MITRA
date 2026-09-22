@@ -193,5 +193,11 @@ class AuthService:
             return None
         return _public_user(document)
 
+    async def get_user_by_email(self, email: str) -> Optional[Dict[str, str]]:
+        document = await self._find_user_by_email(email)
+        if not document:
+            return None
+        return _public_user(document)
+
 
 auth_service = AuthService()

@@ -19,6 +19,8 @@ from app.executors.email_executor import EmailExecutor
 from app.executors.instagram_executor import InstagramExecutor
 from app.executors.telegram_executor import TelegramExecutor
 
+from app.executors.github_executor import GitHubExecutor
+
 
 def _get_db():
     """Synchronous MongoDB connection for persisting tasks, reminders, and calendar events."""
@@ -34,13 +36,17 @@ def _get_db():
 
 
 class ExecutionService:
-    """Real execution service for WhatsApp, Email, Instagram, Telegram, Tasks, Reminders, and Calendar actions"""
+"""Real execution service for WhatsApp, Email, Instagram, Telegram, Tasks, Reminders, and Calendar actions"""
+
+"""Real execution service for WhatsApp, Email, Instagram, Tasks, Reminders, Calendar, and GitHub actions"""
 
     def __init__(self):
         self.whatsapp = WhatsAppExecutor()
         self.email = EmailExecutor()
         self.instagram = InstagramExecutor()
-        self.telegram = TelegramExecutor()
+self.telegram = TelegramExecutor()
+
+self.github = GitHubExecutor()
 
     def execute_action(self, action_type: str, action_data: Dict[str, Any], trace_id: str = "auto", enforcement_decision: str = "ALLOW") -> Dict[str, Any]:
         """
@@ -389,6 +395,53 @@ class ExecutionService:
                     "timestamp": datetime.utcnow().isoformat(),
                     "service": "execution_service"
                 }
+            elif action_type.lower() in (
+                "github",
+                "list_github_repos",
+                "list_repos",
+                "list_issues",
+                "create_issue",
+                "list_prs",
+            ):
+                act = action_type.lower()
+                user_id = action_data.get("user_id", "user_default")
+                owner = action_data.get("owner", "")
+                repo = action_data.get("repo", "")
+                if act in ("list_github_repos", "list_repos") or (
+                    act == "github" and not owner
+                ):
+                    return self.github.list_repositories(
+                        user_id=user_id,
+                        visibility=action_data.get("visibility", "all"),
+                        max_results=action_data.get("max_results", 30),
+                    )
+                elif act == "create_issue":
+                    return self.github.create_issue(
+                        user_id=user_id,
+                        owner=owner,
+                        repo=repo,
+                        title=action_data.get("title", "New Issue"),
+                        body=action_data.get("body", ""),
+                        labels=action_data.get("labels"),
+                    )
+                elif act == "list_issues":
+                    return self.github.list_issues(
+                        user_id=user_id,
+                        owner=owner,
+                        repo=repo,
+                        state=action_data.get("state", "open"),
+                        max_results=action_data.get("max_results", 30),
+                    )
+                elif act in ("list_prs", "list_pull_requests"):
+                    return self.github.list_pull_requests(
+                        user_id=user_id,
+                        owner=owner,
+                        repo=repo,
+                        state=action_data.get("state", "open"),
+                        max_results=action_data.get("max_results", 30),
+                    )
+                else:
+                    return self.github.list_repositories(user_id=user_id)
             elif action_type.lower() in ("search", "browser"):
                 return {
                     "status": "success",

@@ -215,6 +215,11 @@ def _get_allowed_origins() -> list[str]:
         "http://localhost:3001",
         "http://127.0.0.1:3000",
         "http://127.0.0.1:3001",
+        "https://mitra.blackholeinfiverse.com",
+        "https://artha.blackholeinfiverse.com",
+        "https://samachar.blackholeinfiverse.com",
+        "https://uniguru.blackholeinfiverse.com",
+        "https://setu.blackholeinfiverse.com",
     ]
     frontend_url = os.getenv("FRONTEND_URL", "").strip()
     if frontend_url:
@@ -260,7 +265,9 @@ async def security_middleware(request: Request, call_next):
         return response
 
     # Public endpoints manage their own validation
-    public_prefixes = ("/api/auth", "/api/integrations", "/api/pages", "/api/ecosystem", "/api/companion", "/api/replay", "/api/metrics", "/api/tantra", "/api/mitra", "/api/calendar")
+public_prefixes = ("/api/auth", "/api/integrations", "/api/pages", "/api/ecosystem", "/api/companion", "/api/replay", "/api/metrics", "/api/tantra", "/api/mitra", "/api/calendar")
+
+public_prefixes = ("/api/auth", "/api/oauth", "/api/connections", "/api/ecosystem", "/api/replay", "/api/metrics", "/api/tantra", "/api/webhooks")
     if any(request.url.path.startswith(prefix) for prefix in public_prefixes):
         response = await call_next(request)
         return response
@@ -272,8 +279,11 @@ async def security_middleware(request: Request, call_next):
         return response
 
     if request.url.path.startswith("/api"):
-        # Public auth, integration, pages, and calendar feed endpoints
+# Public auth, integration, pages, and calendar feed endpoints
         public_paths = ("/api/auth", "/api/integrations", "/api/pages", "/api/calendar/feed", "/api/companion", "/api/system", "/api/mitra")
+
+# Public auth and calendar feed endpoints
+        public_paths = ("/api/auth", "/api/calendar/feed", "/api/system")
         is_public = any(request.url.path.startswith(p) for p in public_paths)
 
         if not is_public:
@@ -288,7 +298,7 @@ async def security_middleware(request: Request, call_next):
                 logger.warning(f"Rate limit check failed: {e}. Allowing request.")
             
             api_key = request.headers.get("X-API-Key")
-            expected_api_key = os.getenv("API_KEY", "localtest")
+expected_api_key = os.getenv("API_KEY", "localtest")
             
             # Check API key (allow localtest & local dev fallback gracefully)
             if expected_api_key and expected_api_key != "localtest":
@@ -306,6 +316,27 @@ async def security_middleware(request: Request, call_next):
                         }
                     )
 
+auth_header = request.headers.get("Authorization")
+            expected_api_key = os.getenv("API_KEY")
+
+            has_valid_api_key = bool(api_key and expected_api_key and api_key == expected_api_key)
+            has_bearer_token = bool(auth_header and auth_header.strip().lower().startswith("bearer "))
+
+            # Block request if neither valid API Key nor Bearer token is provided
+            if not has_valid_api_key and not has_bearer_token and expected_api_key:
+                origin = request.headers.get("origin", "")
+                cors_origin = origin if origin else "*"
+
+                return JSONResponse(
+                    status_code=401,
+                    content={"detail": "Authentication required. Missing API Key or Bearer token."},
+                    headers={
+                        "Access-Control-Allow-Origin": cors_origin,
+                        "Access-Control-Allow-Methods": "GET, POST, PUT, DELETE, OPTIONS",
+                        "Access-Control-Allow-Headers": "*",
+                    }
+                )
+
         try:
             audit_log(request, "api_key_user")
         except Exception as e:
@@ -315,11 +346,13 @@ async def security_middleware(request: Request, call_next):
     return response
 
 from app.api.integrations import router as integrations_router
+from app.api.oauth_api import router as oauth_router
 
 # -------------------------------------------------
 # PUBLIC ROUTERS (LOCKED)
 # -------------------------------------------------
 app.include_router(auth_router)
+app.include_router(oauth_router)
 app.include_router(integrations_router)
 app.include_router(assistant_router)
 app.include_router(mitra_router)

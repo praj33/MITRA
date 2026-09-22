@@ -1,26 +1,9 @@
 import { AssistantRequest, AssistantResponse, Task } from '../types';
-
-const getBaseUrl = () => {
-  const url = process.env.REACT_APP_API_URL || 'http://localhost:8000';
-  if (url.startsWith('http')) return url;
-  return `https://${url}`;
-};
-
-const API_BASE_URL = getBaseUrl();
-const API_KEY = process.env.REACT_APP_API_KEY || 'localtest';
-const getToken = (): string | null => localStorage.getItem('authToken');
+import { getApiBase, getAuthHeaders } from './apiConfig';
 
 class ApiService {
-  private getHeaders(): HeadersInit {
-    const headers: Record<string, string> = {
-      'Content-Type': 'application/json',
-      'X-API-Key': API_KEY,
-    };
-    const token = getToken();
-    if (token) {
-      headers['Authorization'] = `Bearer ${token}`;
-    }
-    return headers;
+  private getHeaders(): Record<string, string> {
+    return getAuthHeaders();
   }
 
   /**
@@ -28,7 +11,7 @@ class ApiService {
    */
   async checkHealth(): Promise<boolean> {
     try {
-      const response = await fetch(`${API_BASE_URL}/health`, {
+      const response = await fetch(`${getApiBase()}/health`, {
         method: 'GET',
         headers: this.getHeaders(),
       });
@@ -46,17 +29,9 @@ class ApiService {
    * - version: "3.0.0"
    * - input: { message: string, summarized_payload: null }
    * - context: { platform: string, device: string, session_id: null, voice_input: boolean }
-   * 
-   * Response format (v3.0.0 contract):
-   * - version: "3.0.0"
-   * - status: "success" | "error"
-   * - result: { type, response, task?, enforcement?, safety? }
-   * - processed_at: string
    */
   async sendMessage(request: AssistantRequest): Promise<AssistantResponse> {
     try {
-      // Build request payload for AI-BEING-FINAL backend (V3.0.0 Contract)
-      // The backend expects a unified single endpoint /api/assistant
       const requestPayload = {
         version: "3.0.0",
         input: {
@@ -71,12 +46,10 @@ class ApiService {
         }
       };
 
-      // Add timeout to prevent hanging
       const controller = new AbortController();
       const timeoutId = setTimeout(() => controller.abort(), 90000); // 90 second timeout
 
-      // Call the correct endpoint: /api/assistant
-      const response = await fetch(`${API_BASE_URL}/api/assistant`, {
+      const response = await fetch(`${getApiBase()}/api/assistant`, {
         method: 'POST',
         headers: this.getHeaders(),
         body: JSON.stringify(requestPayload),
@@ -95,10 +68,6 @@ class ApiService {
       }
 
       const json = await response.json();
-
-      // MAPPING: Convert Backend V3 Response to Frontend AssistantResponse
-      // Backend returns: { version, status, result: { type, response, task, enforcement, safety }, processed_at }
-
       const result = json.result;
       const isWorkflow = result.type === 'workflow';
       const mitra = result.mitra || {};
@@ -167,47 +136,27 @@ class ApiService {
   }
 
   async getTasks(): Promise<Task[]> {
-    // STUB: Backend v3.0.0 does not support independent task fetching
     console.warn('getTasks: Not supported by current backend version');
     return [];
   }
 
   async updateTaskStatus(taskId: number, status: string): Promise<Task> {
-    // STUB: Backend v3.0.0 does not support task updates
     throw new Error('Task updates not supported by this backend');
   }
 
-
-
-  /**
-   * Web Search API
-   * Search the web with a query
-   */
   async search(request: import('../types').SearchRequest): Promise<import('../types').SearchResponse> {
-    // STUB: Search not supported
     console.warn('Search API not supported by this backend');
     return { query: request.query, results: [] };
   }
 
-  /**
-   * Web Research API
-   * Perform deep research on a topic
-   */
   async research(request: import('../types').ResearchRequest): Promise<import('../types').ResearchResponse> {
-    // STUB: Research not supported
     console.warn('Research API not supported by this backend');
     throw new Error('Deep Research is not available in this environment.');
   }
 
-
-
-  /**
-   * Create Task API
-   * Create a new task for multi-agent processing
-   */
   async createTask(request: import('../types').TaskRequest): Promise<import('../types').TaskCreateResponse> {
     try {
-      const response = await fetch(`${API_BASE_URL}/api/tasks`, {
+      const response = await fetch(`${getApiBase()}/api/tasks`, {
         method: 'POST',
         headers: this.getHeaders(),
         body: JSON.stringify(request),
@@ -226,13 +175,9 @@ class ApiService {
     }
   }
 
-  /**
-   * Get Task Status API
-   * Get the status of a specific task
-   */
   async getTaskStatus(taskId: string): Promise<import('../types').TaskStatusResponse> {
     try {
-      const response = await fetch(`${API_BASE_URL}/api/tasks/${taskId}`, {
+      const response = await fetch(`${getApiBase()}/api/tasks/${encodeURIComponent(taskId)}`, {
         method: 'GET',
         headers: this.getHeaders(),
       });
@@ -250,13 +195,9 @@ class ApiService {
     }
   }
 
-  /**
-   * System Information API
-   * Get system information
-   */
   async getSystemInfo(): Promise<import('../types').SystemInfo> {
     try {
-      const response = await fetch(`${API_BASE_URL}/api/system/info`, {
+      const response = await fetch(`${getApiBase()}/api/system/info`, {
         method: 'GET',
         headers: this.getHeaders(),
       });
@@ -274,13 +215,9 @@ class ApiService {
     }
   }
 
-  /**
-   * System Statistics API
-   * Get system statistics
-   */
   async getSystemStats(): Promise<import('../types').SystemStats> {
     try {
-      const response = await fetch(`${API_BASE_URL}/api/system/stats`, {
+      const response = await fetch(`${getApiBase()}/api/system/stats`, {
         method: 'GET',
         headers: this.getHeaders(),
       });
@@ -298,22 +235,13 @@ class ApiService {
     }
   }
 
-  /**
-   * Performance Insights API
-   * Get performance metrics and recommendations
-   */
   async getPerformanceInsights(): Promise<import('../types').PerformanceInsights> {
-    // STUB: Analytics not supported
     throw new Error('Analytics not supported');
   }
 
-  /**
-   * Generate TTS API
-   * Get high-quality AI speech audio for text
-   */
   async generateTTS(text: string, language: string = 'en'): Promise<string> {
     try {
-      const response = await fetch(`${API_BASE_URL}/api/tts`, {
+      const response = await fetch(`${getApiBase()}/api/tts`, {
         method: 'POST',
         headers: this.getHeaders(),
         body: JSON.stringify({ text, language }),
@@ -330,8 +258,6 @@ class ApiService {
       throw error;
     }
   }
-
 }
 
 export const apiService = new ApiService();
-
