@@ -169,6 +169,26 @@ export const IntegrationsModal: React.FC<IntegrationsModalProps> = ({ isOpen, on
     fetchConnections();
   }, [isOpen, fetchConnections]);
 
+  // ESC key listener and body scroll locking
+  useEffect(() => {
+    if (!isOpen) return;
+
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') {
+        onClose();
+      }
+    };
+    window.addEventListener('keydown', handleKeyDown);
+
+    const originalOverflow = document.body.style.overflow;
+    document.body.style.overflow = 'hidden';
+
+    return () => {
+      window.removeEventListener('keydown', handleKeyDown);
+      document.body.style.overflow = originalOverflow;
+    };
+  }, [isOpen, onClose]);
+
   if (!isOpen) return null;
 
   // 1. Real Google OAuth Flow Handler (Redirects to Google Consent)
@@ -403,74 +423,89 @@ export const IntegrationsModal: React.FC<IntegrationsModalProps> = ({ isOpen, on
   };
 
   return (
-    <div className="fixed inset-0 bg-black/80 backdrop-blur-md flex items-center justify-center p-4 z-50 animate-fade-in">
-      <div className="bg-[#141414] border border-white/10 rounded-3xl p-6 md:p-8 max-w-xl w-full text-white shadow-2xl relative">
-        {/* Close Button */}
-        <button
-          onClick={onClose}
-          className="absolute top-6 right-6 text-gray-400 hover:text-white transition-colors cursor-pointer"
-        >
-          <svg className="w-6 h-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
-          </svg>
-        </button>
-
-        {/* Modal Title */}
-        <div className="mb-6">
-          <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-blue-500/10 border border-blue-500/20 text-blue-400 text-xs font-semibold uppercase tracking-wider mb-2">
-            🔒 AES-256 Connections Vault
-          </div>
-          <h2 className="text-2xl font-bold text-gray-100">MITRA Service Connections</h2>
-          <p className="text-sm text-gray-400 mt-1">
-            Connect your personal accounts to enable automated email sending, calendar sync, and executive briefings.
-          </p>
-        </div>
-
-        {/* Web Application Calendar Sync Notice */}
-        <div className="mb-4 p-3 rounded-xl bg-white/5 border border-white/10 flex items-start gap-2.5 text-xs text-gray-300">
-          <span className="text-blue-400 text-sm">ℹ️</span>
+    <div
+      className="fixed inset-0 bg-black/80 backdrop-blur-md flex items-center justify-center p-3 sm:p-4 md:p-6 z-50 animate-fade-in"
+      onClick={(e) => {
+        if (e.target === e.currentTarget) onClose();
+      }}
+      role="dialog"
+      aria-modal="true"
+      aria-labelledby="integrations-modal-title"
+    >
+      <div
+        className="bg-[#141414] border border-white/10 rounded-3xl max-w-xl w-full text-white shadow-2xl flex flex-col max-h-[calc(100dvh-2rem)] sm:max-h-[calc(100dvh-3rem)] overflow-hidden relative"
+        onClick={(e) => e.stopPropagation()}
+      >
+        {/* Header - Fixed */}
+        <div className="p-5 sm:p-6 border-b border-white/10 flex-shrink-0 flex items-start justify-between gap-4">
           <div>
-            <strong className="text-white">Mobile Sync Notice:</strong> Web browsers cannot directly write to native mobile device calendars without an active Google Calendar or Microsoft Outlook connection.
+            <div className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full bg-brand/15 border border-brand/30 text-brand-light text-3xs font-semibold uppercase tracking-wider mb-1.5">
+              <span>🔒</span> Encrypted Connections Vault
+            </div>
+            <h2 id="integrations-modal-title" className="text-xl sm:text-2xl font-bold text-gray-100 tracking-tight">
+              MITRA Service Connections
+            </h2>
+            <p className="text-xs sm:text-sm text-gray-400 mt-1 leading-relaxed">
+              Connect your personal accounts to enable automated email sending, calendar sync, and executive briefings.
+            </p>
           </div>
+
+          <button
+            onClick={onClose}
+            className="w-8 h-8 rounded-xl flex items-center justify-center text-gray-400 hover:text-white hover:bg-white/10 transition-colors cursor-pointer flex-shrink-0 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand"
+            aria-label="Close dialog (Escape)"
+          >
+            <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+            </svg>
+          </button>
         </div>
 
-        {statusMessage && (
-          <div className="mb-4 p-4 rounded-xl bg-emerald-950/40 border border-emerald-500/30 text-emerald-300 text-xs flex items-center gap-2">
-            <svg className="w-4 h-4 shrink-0 fill-current text-emerald-400" viewBox="0 0 20 20">
-              <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clipRule="evenodd" />
-            </svg>
-            <span>{statusMessage}</span>
-          </div>
-        )}
-
-        {errorMessage && (
-          <div className="mb-4 p-4 rounded-xl bg-red-950/40 border border-red-500/30 text-red-300 text-xs flex items-center gap-2">
-            <span>⚠️ {errorMessage}</span>
-          </div>
-        )}
-
-        {/* Guest Session Notice */}
-        {isGuest && (
-          <div className="mb-4 p-3.5 rounded-2xl bg-amber-500/10 border border-amber-500/30 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 text-xs">
-            <div className="flex items-center gap-2">
-              <span className="text-amber-400 text-sm">⚠️</span>
-              <span className="text-amber-200">
-                You are in a Guest session. External integrations require an authenticated account.
-              </span>
+        {/* Modal Scrollable Body */}
+        <div className="flex-1 overflow-y-auto p-4 sm:p-6 space-y-4 overscroll-contain">
+          {/* Guest Session Notice */}
+          {isGuest && (
+            <div className="p-3.5 rounded-2xl bg-amber-500/10 border border-amber-500/30 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 text-xs">
+              <div className="flex items-center gap-2">
+                <span className="text-amber-400 text-sm">⚠️</span>
+                <span className="text-amber-200">
+                  You are in a Guest session. External integrations require an authenticated account.
+                </span>
+              </div>
+              <button
+                onClick={() => {
+                  onClose();
+                  setAuthModalOpen(true);
+                }}
+                className="px-3 py-1.5 bg-amber-500 hover:bg-amber-400 text-black font-semibold text-xs rounded-xl transition-all shrink-0 cursor-pointer"
+              >
+                Create Account
+              </button>
             </div>
-            <button
-              onClick={() => {
-                onClose();
-                setAuthModalOpen(true);
-              }}
-              className="px-3 py-1 bg-amber-500 hover:bg-amber-400 text-black font-semibold text-xs rounded-xl transition-all shrink-0 cursor-pointer"
-            >
-              Create Account
-            </button>
-          </div>
-        )}
+          )}
 
-        <div className="space-y-6 max-h-[60vh] overflow-y-auto pr-1">
+          {/* Web Application Calendar Sync Notice */}
+          <div className="p-3 rounded-xl bg-white/5 border border-white/10 flex items-start gap-2.5 text-xs text-gray-300">
+            <span className="text-blue-400 text-sm">ℹ️</span>
+            <div>
+              <strong className="text-white">Mobile Sync Notice:</strong> Web browsers cannot directly write to native mobile device calendars without an active Google Calendar or Microsoft Outlook connection.
+            </div>
+          </div>
+
+          {statusMessage && (
+            <div className="p-3.5 rounded-xl bg-emerald-950/40 border border-emerald-500/30 text-emerald-300 text-xs flex items-center gap-2">
+              <svg className="w-4 h-4 shrink-0 fill-current text-emerald-400" viewBox="0 0 20 20">
+                <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clipRule="evenodd" />
+              </svg>
+              <span>{statusMessage}</span>
+            </div>
+          )}
+
+          {errorMessage && (
+            <div className="p-3.5 rounded-xl bg-red-950/40 border border-red-500/30 text-red-300 text-xs flex items-center gap-2">
+              <span>⚠️ {errorMessage}</span>
+            </div>
+          )}
           {/* 1. GOOGLE INTEGRATION CARD */}
           <div className="p-5 rounded-2xl bg-[#1A1A1A] border border-white/10">
             <div className="flex items-center justify-between mb-3">

@@ -13,6 +13,8 @@ from app.integrations.oauth.registry import oauth_provider_registry
 from app.services.auth_service import auth_service
 from app.core.security import create_access_token
 
+from urllib.parse import quote_plus
+
 logger = logging.getLogger(__name__)
 
 router = APIRouter()
@@ -24,6 +26,45 @@ def _token_payload(user: dict) -> dict:
         "email": user["email"],
         "name": user["name"],
     }
+
+def _get_frontend_base_url(request: Optional[Request] = None) -> str:
+    """
+    Derives canonical frontend base URL, respecting proxy headers (X-Forwarded-Proto, X-Forwarded-Host).
+    Prevents localhost redirection when serving behind reverse proxy in production.
+    """
+    env_frontend = os.getenv("FRONTEND_URL", "").strip().rstrip("/")
+    if env_frontend and not env_frontend.startswith("http://localhost") and not env_frontend.startswith("http://127.0.0.1"):
+        return env_frontend
+    if request:
+        proto = request.headers.get("x-forwarded-proto") or request.url.scheme or "https"
+        host = request.headers.get("x-forwarded-host") or request.headers.get("host") or request.url.netloc
+        if host and not host.startswith("localhost") and not host.startswith("127.0.0.1"):
+            return f"{proto}://{host}"
+    return env_frontend or "http://localhost:3000"
+
+def _resolve_redirect_uri(provider_name: str, request: Optional[Request] = None) -> str:
+    """
+    Returns the canonical redirect URI for a provider.
+    Checks provider-specific env variable first, otherwise derives from request headers.
+    """
+    env_key = f"{provider_name.upper()}_REDIRECT_URI"
+    configured = os.getenv(env_key, "").strip()
+    if configured:
+        return configured
+
+    if request:
+        proto = request.headers.get("x-forwarded-proto") or request.url.scheme or "https"
+        host = request.headers.get("x-forwarded-host") or request.headers.get("host") or request.url.netloc
+        if host:
+            return f"{proto}://{host}/api/oauth/{provider_name}/callback"
+
+    return f"http://localhost:8000/api/oauth/{provider_name}/callback"
+
+def _is_browser_request(request: Optional[Request]) -> bool:
+    if not request:
+        return False
+    accept = request.headers.get("accept", "").lower()
+    return "text/html" in accept
 
 @router.get("/api/oauth/{provider}/start")
 @router.get("/api/auth/{provider}")  # Compatible route alias
@@ -80,18 +121,35 @@ async def start_oauth_flow(
             except Exception:
                 pass
 
+    canonical_redirect = _resolve_redirect_uri(provider_name, request)
+
+    # Safe diagnostic logging (no secrets/tokens)
+    logger.info(
+        "OAuth start flow initiated | provider: %s | purpose: %s | user_bound: %s | "
+        "has_client_id: %s | has_client_secret: %s | has_encryption_key: %s | redirect_uri: %s",
+        provider_name,
+        purpose,
+        bool(auth_user_id),
+        bool(os.getenv(f"{provider_name.upper()}_CLIENT_ID")),
+        bool(os.getenv(f"{provider_name.upper()}_CLIENT_SECRET")),
+        bool(os.getenv("TOKEN_ENCRYPTION_KEY")),
+        canonical_redirect
+    )
+
     # Create cryptographically secure OAuth transaction
     tx = oauth_transaction_service.create_transaction(
         provider=provider_name,
         purpose=purpose,
-        user_id=auth_user_id
+        user_id=auth_user_id,
+        redirect_uri=canonical_redirect
     )
 
     try:
         auth_url = provider_inst.get_authorization_url(
             state=tx["state"],
             code_challenge=tx["code_challenge"],
-            purpose=purpose
+            purpose=purpose,
+            redirect_uri=canonical_redirect
         )
     except ValueError as val_err:
         raise HTTPException(status_code=503, detail=str(val_err))
@@ -117,226 +175,265 @@ async def oauth_callback(
     Handles OAuth 2.0 server-side authorization code exchange and identity verification.
     Supports GET queries as well as POST form submissions (e.g. Apple form_post).
     Validates state, performs code exchange with PKCE, encrypts tokens, and updates connection/identity stores.
+    Guarantees clean user-facing redirects rather than raw 500 errors on any exception.
     """
     provider_name = provider.lower()
-
-    # Handle Apple Sign-In and other form_post responses
-    if request and request.method == "POST":
-        try:
-            form = await request.form()
-            code = code or form.get("code")
-            state = state or form.get("state")
-            error = error or form.get("error")
-        except Exception as form_err:
-            logger.warning(f"Error reading form data in callback: {form_err}")
-    
-    if not code and request:
-        code = request.query_params.get("code")
-    if not state and request:
-        state = request.query_params.get("state")
-    if not error and request:
-        error = request.query_params.get("error")
-
-    if code:
-        code = str(code).strip()
-    if state:
-        state = str(state).strip()
-
-    if error:
-        logger.warning(f"OAuth callback returned error from provider {provider}: {error}")
-        accept = request.headers.get("accept", "") if request else ""
-        if "text/html" in accept:
-            frontend_url = os.getenv("FRONTEND_URL", "http://localhost:3000").rstrip("/")
-            return RedirectResponse(url=f"{frontend_url}/?error=authorization_denied", status_code=302)
-        return JSONResponse(
-            status_code=400,
-            content={"status": "error", "error": "authorization_denied", "detail": f"OAuth provider error: {error}"}
-        )
-
-    if not code or not state:
-        accept = request.headers.get("accept", "") if request else ""
-        if "text/html" in accept:
-            frontend_url = os.getenv("FRONTEND_URL", "http://localhost:3000").rstrip("/")
-            return RedirectResponse(url=f"{frontend_url}/?error=missing_code_or_state", status_code=302)
-        raise HTTPException(status_code=400, detail="Missing required authorization code or state parameter.")
-
-    # 1. Validate and consume OAuth state transaction (enforces expiration, single-use, provider match)
-    try:
-        tx = oauth_transaction_service.validate_and_consume_transaction(
-            state=state,
-            provider=provider_name
-        )
-    except Exception as exc:
-        accept = request.headers.get("accept", "") if request else ""
-        if "text/html" in accept:
-            frontend_url = os.getenv("FRONTEND_URL", "http://localhost:3000").rstrip("/")
-            return RedirectResponse(url=f"{frontend_url}/?error=invalid_state", status_code=302)
-        raise exc
-
-    purpose = tx.get("purpose")
-    if not purpose or purpose not in ("connect", "login", "signup"):
-        accept = request.headers.get("accept", "") if request else ""
-        if "text/html" in accept:
-            frontend_url = os.getenv("FRONTEND_URL", "http://localhost:3000").rstrip("/")
-            return RedirectResponse(url=f"{frontend_url}/?error=invalid_purpose", status_code=302)
-        raise HTTPException(status_code=400, detail="Invalid or missing OAuth purpose in transaction state.")
+    current_stage = "INIT"
+    purpose = "connect"
+    frontend_url = _get_frontend_base_url(request)
+    is_browser = _is_browser_request(request)
 
     try:
-        provider_inst = oauth_provider_registry.get(provider_name)
-    except KeyError:
-        accept = request.headers.get("accept", "") if request else ""
-        if "text/html" in accept:
-            frontend_url = os.getenv("FRONTEND_URL", "http://localhost:3000").rstrip("/")
-            return RedirectResponse(url=f"{frontend_url}/?error=unsupported_provider", status_code=302)
-        raise HTTPException(status_code=400, detail=f"Unsupported OAuth provider: {provider}")
-
-    # 2. Server-side code exchange with PKCE code_verifier
-    try:
-        tokens = provider_inst.exchange_code(
-            code=code,
-            code_verifier=tx.get("code_verifier"),
-            redirect_uri=tx.get("redirect_uri")
-        )
-    except Exception as exc:
-        logger.error(f"OAuth code exchange failed: {exc}")
-        accept = request.headers.get("accept", "") if request else ""
-        if "text/html" in accept:
-            frontend_url = os.getenv("FRONTEND_URL", "http://localhost:3000").rstrip("/")
-            return RedirectResponse(url=f"{frontend_url}/?error=exchange_failed", status_code=302)
-        raise HTTPException(status_code=400, detail="Authorization code exchange failed. Please try again.")
-
-    access_token = tokens.get("access_token")
-    refresh_token = tokens.get("refresh_token")
-    raw_expires = tokens.get("expires_in")
-    expires_in = int(raw_expires) if raw_expires is not None else 3600
-    expires_at = (datetime.utcnow() + timedelta(seconds=expires_in)).isoformat()
-
-    if not access_token and not tokens.get("id_token"):
-        accept = request.headers.get("accept", "") if request else ""
-        if "text/html" in accept:
-            frontend_url = os.getenv("FRONTEND_URL", "http://localhost:3000").rstrip("/")
-            return RedirectResponse(url=f"{frontend_url}/?error=missing_token", status_code=302)
-        raise HTTPException(status_code=400, detail="Provider response did not include a valid token.")
-
-    # 3. Retrieve provider identity
-    try:
-        identity = provider_inst.get_user_identity(access_token=access_token or "", id_token=tokens.get("id_token"))
-    except Exception as exc:
-        logger.error(f"Failed fetching user identity from {provider}: {exc}")
-        accept = request.headers.get("accept", "") if request else ""
-        if "text/html" in accept:
-            frontend_url = os.getenv("FRONTEND_URL", "http://localhost:3000").rstrip("/")
-            return RedirectResponse(url=f"{frontend_url}/?error=identity_failed", status_code=302)
-        raise HTTPException(status_code=400, detail="Failed to verify identity with provider.")
-
-    provider_subject = identity["provider_subject"]
-    email = identity["email"]
-
-    if purpose == "connect":
-        user_id = tx.get("user_id")
-        if not user_id:
-            raise HTTPException(status_code=400, detail="Invalid connection transaction state.")
-
-        # Persist connected account with encrypted tokens
-        connected_account_service.create_connection(
-            user_id=user_id,
-            provider=provider_name,
-            email=email,
-            access_token=access_token or "",
-            refresh_token=refresh_token,
-            provider_account_id=provider_subject,
-            scopes=tx.get("scopes"),
-            expires_at=expires_at
-        )
-
-        frontend_url = os.getenv("FRONTEND_URL", "http://localhost:3000").rstrip("/")
-        redirect_target = f"{frontend_url}/settings?status=success&provider={provider_name}&email={email}"
-        
-        # Check if browser requested JSON API or HTML redirect
-        accept = request.headers.get("accept", "") if request else ""
-        if "text/html" in accept:
-            return RedirectResponse(url=redirect_target, status_code=302)
-
-        return {
-            "status": "success",
-            "message": f"Successfully connected {provider_name.capitalize()} account ({email}).",
-            "provider": provider_name,
-            "email": email,
-            "user_id": user_id
-        }
-
-    else:
-        # SIGNUP OR LOGIN FLOW
-        existing_link = identity_account_service.get_identity(provider_name, provider_subject)
-        
-        if existing_link:
-            user_id = existing_link["user_id"]
-            user = await auth_service.get_public_user_by_id(user_id)
-            if not user:
-                # User record missing; recreate user record safely
-                user_display_name = identity.get("name") or email.split("@")[0] or "Mitra User"
-                user = await auth_service.create_user(name=user_display_name, email=email, password=create_access_token({"sub": "oauth_user"}))
-                identity_account_service.link_identity(user["id"], provider_name, provider_subject, email)
-        else:
-            # Check if user with same email exists in auth_service
-            user = await auth_service.get_user_by_email(email)
-            if not user:
-                # Create new MITRA user
-                import uuid
-                random_pass = f"oauth_pass_{uuid.uuid4().hex}"
-                user_display_name = identity.get("name") or email.split("@")[0] or "Mitra User"
-                user = await auth_service.create_user(name=user_display_name, email=email, password=random_pass)
-
-            user_id = user["id"]
-            identity_account_service.link_identity(user_id, provider_name, provider_subject, email)
-
-        # GUEST DATA MIGRATION: If transaction was bound to a guest session, migrate resources
-        guest_user_id = tx.get("user_id")
-        if guest_user_id and guest_user_id != user_id and str(guest_user_id).startswith("usr_guest_"):
+        current_stage = "PARSE_INPUT"
+        # Handle Apple Sign-In and other form_post responses
+        if request and request.method == "POST":
             try:
-                from pymongo import MongoClient
-                mongo_uri = os.getenv("MONGODB_URI", "mongodb://localhost:27017")
-                db_name = os.getenv("DATABASE_NAME", "ai_assistant")
-                client = MongoClient(mongo_uri, serverSelectionTimeoutMS=2000)
-                sync_db = client[db_name]
-                for col in ["user_tasks", "tasks", "reminders", "calendar_events", "companion_history", "user_facts", "connected_accounts", "user_preferences"]:
-                    sync_db[col].update_many({"user_id": guest_user_id}, {"$set": {"user_id": user_id}})
-                logger.info(f"Successfully migrated guest data from {guest_user_id} to user {user_id}")
-            except Exception as mig_err:
-                logger.warning(f"Guest data migration warning: {mig_err}")
+                form = await request.form()
+                code = code or form.get("code")
+                state = state or form.get("state")
+                error = error or form.get("error")
+            except Exception as form_err:
+                logger.warning(f"Error reading form data in callback: {form_err}")
 
-        # Ensure user object has is_guest: False
-        user["is_guest"] = False
+        if not code and request:
+            code = request.query_params.get("code")
+        if not state and request:
+            state = request.query_params.get("state")
+        if not error and request:
+            error = request.query_params.get("error")
 
-        # Generate permanent MITRA access token
-        jwt_token = create_access_token(data=_token_payload(user))
+        if code:
+            code = str(code).strip()
+        if state:
+            state = str(state).strip()
 
-        # Store connected account tokens encrypted if access_token returned
-        if access_token:
+        # Safe diagnostic logging of callback entry
+        logger.info(
+            "OAuth callback received | provider: %s | has_code: %s | has_state: %s | has_error: %s | is_browser: %s | path: %s",
+            provider_name,
+            bool(code),
+            bool(state),
+            bool(error),
+            is_browser,
+            request.url.path if request else "unknown"
+        )
+
+        if error:
+            logger.warning(f"OAuth callback returned error from provider {provider}: {error}")
+            if is_browser:
+                return RedirectResponse(url=f"{frontend_url}/?error=authorization_denied", status_code=302)
+            return JSONResponse(
+                status_code=400,
+                content={"status": "error", "error": "authorization_denied", "detail": f"OAuth provider error: {error}"}
+            )
+
+        if not code or not state:
+            logger.warning(f"OAuth callback missing code or state | provider: {provider_name}")
+            if is_browser:
+                return RedirectResponse(url=f"{frontend_url}/?error=missing_code_or_state", status_code=302)
+            raise HTTPException(status_code=400, detail="Missing required authorization code or state parameter.")
+
+        # 1. Validate and consume OAuth state transaction
+        current_stage = "STATE_CONSUMPTION"
+        try:
+            tx = oauth_transaction_service.validate_and_consume_transaction(
+                state=state,
+                provider=provider_name
+            )
+        except Exception as exc:
+            logger.warning(f"OAuth state consumption failed: {exc}")
+            if is_browser:
+                return RedirectResponse(url=f"{frontend_url}/?error=invalid_state", status_code=302)
+            raise exc
+
+        purpose = tx.get("purpose", "connect")
+        if purpose not in ("connect", "login", "signup"):
+            if is_browser:
+                return RedirectResponse(url=f"{frontend_url}/?error=invalid_purpose", status_code=302)
+            raise HTTPException(status_code=400, detail="Invalid or missing OAuth purpose in transaction state.")
+
+        try:
+            provider_inst = oauth_provider_registry.get(provider_name)
+        except KeyError:
+            if is_browser:
+                return RedirectResponse(url=f"{frontend_url}/?error=unsupported_provider", status_code=302)
+            raise HTTPException(status_code=400, detail=f"Unsupported OAuth provider: {provider}")
+
+        # 2. Server-side code exchange with PKCE code_verifier
+        current_stage = "CODE_EXCHANGE"
+        target_redirect_uri = tx.get("redirect_uri") or _resolve_redirect_uri(provider_name, request)
+        try:
+            tokens = provider_inst.exchange_code(
+                code=code,
+                code_verifier=tx.get("code_verifier"),
+                redirect_uri=target_redirect_uri
+            )
+        except Exception as exc:
+            logger.error(f"OAuth code exchange failed: {exc.__class__.__name__}: {exc}")
+            if is_browser:
+                return RedirectResponse(url=f"{frontend_url}/?error=exchange_failed", status_code=302)
+            raise HTTPException(status_code=400, detail="Authorization code exchange failed. Please try again.")
+
+        access_token = tokens.get("access_token")
+        refresh_token = tokens.get("refresh_token")
+        raw_expires = tokens.get("expires_in")
+        expires_in = int(raw_expires) if raw_expires is not None else 3600
+        expires_at = (datetime.utcnow() + timedelta(seconds=expires_in)).isoformat()
+
+        if not access_token and not tokens.get("id_token"):
+            if is_browser:
+                return RedirectResponse(url=f"{frontend_url}/?error=missing_token", status_code=302)
+            raise HTTPException(status_code=400, detail="Provider response did not include a valid token.")
+
+        # 3. Retrieve provider identity
+        current_stage = "IDENTITY_RETRIEVAL"
+        try:
+            identity = provider_inst.get_user_identity(access_token=access_token or "", id_token=tokens.get("id_token"))
+        except Exception as exc:
+            logger.error(f"Failed fetching user identity from {provider_name}: {exc.__class__.__name__}: {exc}")
+            if is_browser:
+                return RedirectResponse(url=f"{frontend_url}/?error=identity_failed", status_code=302)
+            raise HTTPException(status_code=400, detail="Failed to verify identity with provider.")
+
+        provider_subject = identity["provider_subject"]
+        email = identity["email"]
+
+        # 4. Handle connection or login/signup persistence
+        if purpose == "connect":
+            current_stage = "PERSIST_CONNECTION"
+            user_id = tx.get("user_id")
+            if not user_id:
+                if is_browser:
+                    return RedirectResponse(url=f"{frontend_url}/settings?status=error&provider={provider_name}&message={quote_plus('Invalid connection transaction state.')}", status_code=302)
+                raise HTTPException(status_code=400, detail="Invalid connection transaction state.")
+
+            # Persist connected account with encrypted tokens
             connected_account_service.create_connection(
                 user_id=user_id,
                 provider=provider_name,
                 email=email,
-                access_token=access_token,
+                access_token=access_token or "",
                 refresh_token=refresh_token,
                 provider_account_id=provider_subject,
                 scopes=tx.get("scopes"),
                 expires_at=expires_at
             )
 
-        frontend_url = os.getenv("FRONTEND_URL", "http://localhost:3000").rstrip("/")
-        redirect_target = f"{frontend_url}/auth/callback?token={jwt_token}"
+            logger.info(
+                "OAuth connection persisted successfully | provider: %s | email_domain: %s | user_id: %s",
+                provider_name,
+                email.split("@")[-1] if "@" in email else "unknown",
+                user_id
+            )
 
-        accept = request.headers.get("accept", "") if request else ""
-        if "text/html" in accept:
-            return RedirectResponse(url=redirect_target, status_code=302)
+            redirect_target = f"{frontend_url}/settings?status=success&provider={provider_name}&email={quote_plus(email)}"
 
-        return {
-            "status": "success",
-            "token": jwt_token,
-            "user": user,
-            "purpose": purpose
-        }
+            if is_browser:
+                return RedirectResponse(url=redirect_target, status_code=302)
+
+            return {
+                "status": "success",
+                "message": f"Successfully connected {provider_name.capitalize()} account ({email}).",
+                "provider": provider_name,
+                "email": email,
+                "user_id": user_id
+            }
+
+        else:
+            # SIGNUP OR LOGIN FLOW
+            current_stage = "PERSIST_IDENTITY"
+            existing_link = identity_account_service.get_identity(provider_name, provider_subject)
+
+            if existing_link:
+                user_id = existing_link["user_id"]
+                user = await auth_service.get_public_user_by_id(user_id)
+                if not user:
+                    user_display_name = identity.get("name") or email.split("@")[0] or "Mitra User"
+                    user = await auth_service.create_user(name=user_display_name, email=email, password=create_access_token({"sub": "oauth_user"}))
+                    identity_account_service.link_identity(user["id"], provider_name, provider_subject, email)
+            else:
+                user = await auth_service.get_user_by_email(email)
+                if not user:
+                    import uuid
+                    random_pass = f"oauth_pass_{uuid.uuid4().hex}"
+                    user_display_name = identity.get("name") or email.split("@")[0] or "Mitra User"
+                    user = await auth_service.create_user(name=user_display_name, email=email, password=random_pass)
+
+                user_id = user["id"]
+                identity_account_service.link_identity(user_id, provider_name, provider_subject, email)
+
+            # GUEST DATA MIGRATION
+            current_stage = "MIGRATE_GUEST_DATA"
+            guest_user_id = tx.get("user_id")
+            if guest_user_id and guest_user_id != user_id and str(guest_user_id).startswith("usr_guest_"):
+                try:
+                    from pymongo import MongoClient
+                    mongo_uri = os.getenv("MONGODB_URI", "mongodb://localhost:27017")
+                    db_name = os.getenv("DATABASE_NAME", "ai_assistant")
+                    client = MongoClient(mongo_uri, serverSelectionTimeoutMS=2000)
+                    sync_db = client[db_name]
+                    for col in ["user_tasks", "tasks", "reminders", "calendar_events", "companion_history", "user_facts", "connected_accounts", "user_preferences"]:
+                        sync_db[col].update_many({"user_id": guest_user_id}, {"$set": {"user_id": user_id}})
+                    logger.info(f"Successfully migrated guest data from {guest_user_id} to user {user_id}")
+                except Exception as mig_err:
+                    logger.warning(f"Guest data migration warning: {mig_err}")
+
+            user["is_guest"] = False
+            jwt_token = create_access_token(data=_token_payload(user))
+
+            if access_token:
+                try:
+                    connected_account_service.create_connection(
+                        user_id=user_id,
+                        provider=provider_name,
+                        email=email,
+                        access_token=access_token,
+                        refresh_token=refresh_token,
+                        provider_account_id=provider_subject,
+                        scopes=tx.get("scopes"),
+                        expires_at=expires_at
+                    )
+                except Exception as conn_err:
+                    logger.warning(f"Connected account token save warning during {purpose}: {conn_err}")
+
+            redirect_target = f"{frontend_url}/auth/callback?token={jwt_token}"
+
+            if is_browser:
+                return RedirectResponse(url=redirect_target, status_code=302)
+
+            return {
+                "status": "success",
+                "token": jwt_token,
+                "user": user,
+                "purpose": purpose
+            }
+
+    except Exception as top_exc:
+        # If it's already an HTTPException and not a browser request, re-raise it
+        if isinstance(top_exc, HTTPException) and not is_browser:
+            raise top_exc
+
+        # Safe diagnostic logging of unhandled exception
+        logger.error(
+            "OAuth callback unexpected failure | stage: %s | provider: %s | exception: %s | error: %s | path: %s",
+            current_stage,
+            provider_name,
+            top_exc.__class__.__name__,
+            str(top_exc),
+            request.url.path if request else "unknown"
+        )
+
+        user_friendly_msg = f"{provider_name.capitalize()} connection could not be completed. Please try again."
+        if is_browser:
+            target_path = "/settings" if purpose == "connect" else "/auth/callback"
+            return RedirectResponse(
+                url=f"{frontend_url}{target_path}?status=error&provider={provider_name}&message={quote_plus(user_friendly_msg)}",
+                status_code=302
+            )
+        return JSONResponse(
+            status_code=400,
+            content={"status": "error", "message": user_friendly_msg, "detail": str(top_exc)}
+        )
 
 @router.get("/api/connections")
 async def list_user_connections(

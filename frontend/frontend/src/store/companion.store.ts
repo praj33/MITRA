@@ -182,7 +182,7 @@ export const useCompanionStore = create<CompanionStore>()(
         isLoading: false,
 
         sidebar:      'expanded',
-        contextPanel: 'open',
+        contextPanel: 'closed',
 
         // Mobile defaults
         isMobile:         false,

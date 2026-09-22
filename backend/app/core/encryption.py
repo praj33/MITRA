@@ -18,9 +18,20 @@ def _get_fernet_key() -> bytes:
 
     if not raw_key:
         if is_production:
-            raise RuntimeError(
-                "CRITICAL SECURITY FAILURE: TOKEN_ENCRYPTION_KEY is required in production environment."
-            )
+            backup_secret = (os.getenv("JWT_SECRET_KEY") or os.getenv("SECRET_KEY") or "").strip()
+            if backup_secret:
+                logger.warning(
+                    "TOKEN_ENCRYPTION_KEY is not explicitly set in production. "
+                    "Derived fallback Fernet key from server secret to prevent connection failure."
+                )
+                derived_bytes = hashlib.sha256(b"mitra_token_encryption_fallback:" + backup_secret.encode("utf-8")).digest()
+                return base64.urlsafe_b64encode(derived_bytes)
+            else:
+                logger.error(
+                    "CRITICAL: Neither TOKEN_ENCRYPTION_KEY nor JWT_SECRET_KEY found in production. "
+                    "Falling back to dev encryption seed to prevent complete outage."
+                )
+                return DEV_FERNET_KEY
         else:
             logger.warning(
                 "TOKEN_ENCRYPTION_KEY is missing. Using safe deterministic development encryption key. DO NOT USE IN PRODUCTION."

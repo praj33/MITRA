@@ -39,19 +39,19 @@ const TopBar: React.FC<Props> = ({ onSearch }) => {
   };
 
   return (
-    <header className="zone-topbar glass w-full select-none z-30">
-      <div className="w-full max-w-7xl mx-auto h-full flex items-center px-2.5 sm:px-4 md:px-6 gap-2 sm:gap-3 justify-between">
-        {/* Left: Hamburger (mobile), Logo & Status Pill */}
-        <div className="flex items-center gap-1.5 sm:gap-2.5 flex-shrink-0 min-w-0">
+    <header className="zone-topbar glass w-full select-none z-30 border-b border-border-subtle/80">
+      <div className="w-full max-w-7xl mx-auto h-full flex items-center px-3 sm:px-5 md:px-6 justify-between gap-3">
+        {/* ── ZONE 1 (LEFT): MITRA Logo + Brand + Status ── */}
+        <div className="flex items-center gap-2 sm:gap-3 flex-shrink-0 min-w-0">
           {/* Mobile hamburger */}
           {isMobile && (
             <button
               id="topbar-mobile-menu"
               onClick={toggleMobileMenu}
-              className="w-10 h-10 min-w-[40px] flex items-center justify-center rounded-xl hover:bg-surface-overlay active:scale-95 transition-all text-text-secondary"
+              className="w-9 h-9 min-w-[36px] flex items-center justify-center rounded-xl hover:bg-surface-overlay active:scale-95 transition-all text-text-secondary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand"
               aria-label="Open navigation menu"
             >
-              <Menu size={19} />
+              <Menu size={18} />
             </button>
           )}
 
@@ -59,21 +59,21 @@ const TopBar: React.FC<Props> = ({ onSearch }) => {
           <div
             onClick={() => handleNav('chat')}
             className="flex items-center gap-2 cursor-pointer group py-1"
-            title="Mitra Home"
+            title="MITRA Home"
           >
-            <div className="w-8 h-8 rounded-xl bg-brand-muted border border-brand/30 flex items-center justify-center group-hover:scale-105 transition-transform flex-shrink-0">
-              <Zap size={16} className="text-brand-light" />
+            <div className="w-8 h-8 rounded-xl bg-brand/15 border border-brand/30 flex items-center justify-center group-hover:scale-105 group-hover:border-brand/50 transition-all flex-shrink-0 shadow-sm">
+              <Zap size={15} className="text-brand-light" />
             </div>
-            <span className="text-sm sm:text-base font-bold text-text-primary tracking-tight">Mitra</span>
+            <span className="text-sm sm:text-base font-extrabold text-text-primary tracking-tight">MITRA</span>
           </div>
 
-          {/* Companion status indicator */}
-          <div className="flex items-center gap-1.5 px-2 py-1 rounded-full bg-surface-overlay border border-border-subtle flex-shrink-0">
+          {/* Companion status indicator pill */}
+          <div className="flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-surface-overlay border border-border-subtle/80 flex-shrink-0">
             <CompanionDot status={status} size="sm" />
             <span className={cn(
               'text-2xs font-semibold hidden min-[480px]:inline',
               status === 'active'   ? 'text-state-success' :
-              status === 'thinking' ? 'text-brand-light' :
+              status === 'thinking' ? 'text-brand-light animate-pulse' :
               status === 'error'    ? 'text-state-error' :
               'text-text-muted',
             )}>
@@ -82,16 +82,18 @@ const TopBar: React.FC<Props> = ({ onSearch }) => {
           </div>
         </div>
 
-        {/* Center: Dynamic Greeting (Desktop ≥1024px) */}
-        <div className="hidden lg:flex items-center justify-center flex-1 min-w-0 px-4">
-          <span className="text-xs text-text-muted truncate">
-            Hey, <strong className="font-semibold text-text-secondary">{displayName}</strong> 👋
-          </span>
+        {/* ── ZONE 2 (CENTER): Context & Greeting ── */}
+        <div className="hidden md:flex items-center justify-center flex-1 min-w-0 px-4">
+          <div className="inline-flex items-center gap-2 px-3.5 py-1 rounded-full bg-surface-overlay/60 border border-border-subtle/60 text-xs text-text-muted max-w-sm truncate shadow-xs">
+            <span className="text-brand-light font-medium">Hey,</span>
+            <strong className="font-semibold text-text-primary truncate">{displayName}</strong>
+            <span className="text-text-muted">👋</span>
+          </div>
         </div>
 
-        {/* Right: Actions, Tools, Notifications, Profile */}
-        <div className="flex items-center gap-1 sm:gap-2 flex-shrink-0">
-          {/* Search Trigger (Hidden on 320px-small screens, visible ≥640px) */}
+        {/* ── ZONE 3 (RIGHT): Search, Tools, Notifications, Profile, Context ── */}
+        <div className="flex items-center gap-1.5 sm:gap-2 flex-shrink-0">
+          {/* Search Trigger */}
           <button
             id="topbar-search"
             onClick={() => {
@@ -99,7 +101,7 @@ const TopBar: React.FC<Props> = ({ onSearch }) => {
               const searchFn = (window as any).__MITRA_SEARCH__;
               if (searchFn) searchFn();
             }}
-            className="hidden sm:flex min-w-[36px] min-h-[36px] w-9 h-9 items-center justify-center rounded-xl bg-surface-overlay border border-border-subtle text-text-muted hover:border-border-default hover:text-text-primary transition-all text-xs focus-visible:ring-2 focus-visible:ring-brand"
+            className="hidden sm:flex min-w-[36px] min-h-[36px] w-9 h-9 items-center justify-center rounded-xl bg-surface-overlay border border-border-subtle text-text-muted hover:border-border-default hover:text-text-primary transition-all text-xs focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand"
             aria-label="Search or press Ctrl+K"
             title="Search & Commands (⌘K / Ctrl+K)"
           >
@@ -112,17 +114,17 @@ const TopBar: React.FC<Props> = ({ onSearch }) => {
               id="topbar-tools-dropdown-btn"
               onClick={() => setToolsOpen(!toolsOpen)}
               className={cn(
-                "h-9 sm:h-9 min-h-[36px] px-2.5 sm:px-3 flex items-center gap-1.5 rounded-xl border transition-all text-xs font-semibold cursor-pointer active:scale-95",
+                "h-9 min-h-[36px] px-2.5 sm:px-3 flex items-center gap-1.5 rounded-xl border transition-all text-xs font-semibold cursor-pointer active:scale-95 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand",
                 toolsOpen
                   ? "bg-brand text-white border-brand shadow-glow"
-                  : "bg-brand-muted/70 hover:bg-brand-muted border-brand/30 text-brand-light"
+                  : "bg-surface-overlay hover:bg-surface-hover border-border-subtle text-text-secondary hover:text-text-primary"
               )}
-              aria-label="Mitra Tools Menu"
+              aria-label="MITRA Tools Menu"
               aria-expanded={toolsOpen}
             >
-              <Zap size={13} className="text-brand-light group-hover:text-white" />
-              <span className="text-xs font-semibold">Tools</span>
-              <ChevronDown size={12} className={cn("transition-transform duration-200", toolsOpen && "rotate-180")} />
+              <Zap size={13} className={cn(toolsOpen ? "text-white" : "text-brand-light")} />
+              <span className="text-xs font-medium">Tools</span>
+              <ChevronDown size={12} className={cn("transition-transform duration-200 opacity-60", toolsOpen && "rotate-180")} />
             </button>
 
             {/* Tools Menu Dropdown */}
