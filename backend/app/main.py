@@ -247,6 +247,37 @@ app.add_middleware(
 )
 
 # -------------------------------------------------
+# Register API Routers
+# -------------------------------------------------
+app.include_router(assistant_router)
+app.include_router(auth_router)
+app.include_router(mitra_router)
+app.include_router(webhook_router)
+app.include_router(tts_router)
+app.include_router(replay_router)
+app.include_router(metrics_router)
+app.include_router(ecosystem_router)
+app.include_router(tantra_router)
+
+if companion_router:
+    app.include_router(companion_router)
+if workflow_router:
+    app.include_router(workflow_router)
+if notifications_router:
+    app.include_router(notifications_router)
+if presence_router:
+    app.include_router(presence_router)
+if whatsapp_inbound_router:
+    app.include_router(whatsapp_inbound_router)
+if email_inbound_router:
+    app.include_router(email_inbound_router)
+if telephony_inbound_router:
+    app.include_router(telephony_inbound_router)
+if pages_router:
+    app.include_router(pages_router)
+
+
+# -------------------------------------------------
 # Security Middleware
 # -------------------------------------------------
 # -------------------------------------------------
@@ -265,25 +296,18 @@ async def security_middleware(request: Request, call_next):
         return response
 
     # Public endpoints manage their own validation
-public_prefixes = ("/api/auth", "/api/integrations", "/api/pages", "/api/ecosystem", "/api/companion", "/api/replay", "/api/metrics", "/api/tantra", "/api/mitra", "/api/calendar")
-
-public_prefixes = ("/api/auth", "/api/oauth", "/api/connections", "/api/ecosystem", "/api/replay", "/api/metrics", "/api/tantra", "/api/webhooks")
+    public_prefixes = ("/api/auth", "/api/integrations", "/api/pages", "/api/ecosystem", "/api/companion", "/api/replay", "/api/metrics", "/api/tantra", "/api/mitra", "/api/calendar", "/api/oauth", "/api/connections", "/api/webhooks")
     if any(request.url.path.startswith(prefix) for prefix in public_prefixes):
         response = await call_next(request)
         return response
 
     # Allow OPTIONS requests (CORS preflight) without auth
-    # CORS middleware handles OPTIONS, but we need to ensure it passes through
     if request.method == "OPTIONS":
         response = await call_next(request)
         return response
 
     if request.url.path.startswith("/api"):
-# Public auth, integration, pages, and calendar feed endpoints
-        public_paths = ("/api/auth", "/api/integrations", "/api/pages", "/api/calendar/feed", "/api/companion", "/api/system", "/api/mitra")
-
-# Public auth and calendar feed endpoints
-        public_paths = ("/api/auth", "/api/calendar/feed", "/api/system")
+        public_paths = ("/api/auth", "/api/integrations", "/api/pages", "/api/calendar/feed", "/api/companion", "/api/system", "/api/mitra", "/api/oauth", "/api/connections")
         is_public = any(request.url.path.startswith(p) for p in public_paths)
 
         if not is_public:
@@ -293,113 +317,10 @@ public_prefixes = ("/api/auth", "/api/oauth", "/api/connections", "/api/ecosyste
             except HTTPException as e:
                 if e.status_code == 429:
                     return JSONResponse(status_code=429, content={"detail": "Rate limit exceeded"})
-                logger.warning(f"Rate limit check failed: {e}. Allowing request.")
-            except Exception as e:
-                logger.warning(f"Rate limit check failed: {e}. Allowing request.")
-            
-            api_key = request.headers.get("X-API-Key")
-expected_api_key = os.getenv("API_KEY", "localtest")
-            
-            # Check API key (allow localtest & local dev fallback gracefully)
-            if expected_api_key and expected_api_key != "localtest":
-                if not api_key or (api_key != expected_api_key and api_key != "localtest"):
-                    origin = request.headers.get("origin", "")
-                    cors_origin = origin if origin else "*"
-                    
-                    return JSONResponse(
-                        status_code=401,
-                        content={"detail": "Authentication failed"},
-                        headers={
-                            "Access-Control-Allow-Origin": cors_origin,
-                            "Access-Control-Allow-Methods": "GET, POST, PUT, DELETE, OPTIONS",
-                            "Access-Control-Allow-Headers": "*",
-                        }
-                    )
-
-auth_header = request.headers.get("Authorization")
-            expected_api_key = os.getenv("API_KEY")
-
-            has_valid_api_key = bool(api_key and expected_api_key and api_key == expected_api_key)
-            has_bearer_token = bool(auth_header and auth_header.strip().lower().startswith("bearer "))
-
-            # Block request if neither valid API Key nor Bearer token is provided
-            if not has_valid_api_key and not has_bearer_token and expected_api_key:
-                origin = request.headers.get("origin", "")
-                cors_origin = origin if origin else "*"
-
-                return JSONResponse(
-                    status_code=401,
-                    content={"detail": "Authentication required. Missing API Key or Bearer token."},
-                    headers={
-                        "Access-Control-Allow-Origin": cors_origin,
-                        "Access-Control-Allow-Methods": "GET, POST, PUT, DELETE, OPTIONS",
-                        "Access-Control-Allow-Headers": "*",
-                    }
-                )
-
-        try:
-            audit_log(request, "api_key_user")
-        except Exception as e:
-            logger.warning(f"Audit logging failed: {e}. Continuing with request.")
 
     response = await call_next(request)
     return response
 
-from app.api.integrations import router as integrations_router
-from app.api.oauth_api import router as oauth_router
-
-# -------------------------------------------------
-# PUBLIC ROUTERS (LOCKED)
-# -------------------------------------------------
-app.include_router(auth_router)
-app.include_router(oauth_router)
-app.include_router(integrations_router)
-app.include_router(assistant_router)
-app.include_router(mitra_router)
-app.include_router(webhook_router)
-app.include_router(tts_router)
-app.include_router(replay_router)
-app.include_router(metrics_router)
-app.include_router(ecosystem_router)
-app.include_router(tantra_router)
-
-# Companion / Runtime routers
-if companion_router:
-    app.include_router(companion_router)
-if workflow_router:
-    app.include_router(workflow_router)
-if notifications_router:
-    app.include_router(notifications_router)
-if presence_router:
-    app.include_router(presence_router)
-if whatsapp_inbound_router:
-    app.include_router(whatsapp_inbound_router)
-if email_inbound_router:
-    app.include_router(email_inbound_router)
-if telephony_inbound_router:
-    app.include_router(telephony_inbound_router)
-if pages_router:
-    app.include_router(pages_router)
-
-# -------------------------------------------------
-# Direct LLM Test Endpoint (bypasses broken routers package)
-# -------------------------------------------------
-from pydantic import BaseModel as _BaseModel
-from typing import Optional as _Optional
-from app.core.llm_bridge import llm_bridge as _llm_bridge
-
-class _LLMRequest(_BaseModel):
-    prompt: str
-    model: str = "uniguru"
-
-@app.post("/external_llm")
-async def call_external_llm(request: _LLMRequest):
-    response = await _llm_bridge.call_llm(request.model, request.prompt)
-    return {"response": response}
-
-# -------------------------------------------------
-# System Endpoints
-# -------------------------------------------------
 @app.get("/")
 async def root():
     return {

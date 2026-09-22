@@ -291,10 +291,8 @@ class CalendarCapability(BaseCapability):
             apple_url = f"webcal://localhost:8000/api/calendar/feed.ics?user_id={urllib.parse.quote(user_id)}"
             outlook_url = f"https://outlook.live.com/calendar/0/deeplink/compose?path=/calendar/action/compose&rru=addevent&subject={encoded_title}&startdt={start_dt.isoformat()}&enddt={end_dt.isoformat()}&body={encoded_details}"
             zoho_url = f"https://calendar.zoho.com/calendar/export/event?title={encoded_title}&start={start_iso}&end={end_iso}&description={encoded_details}"
-            outlook_url = f"https://outlook.live.com/calendar/0/deeplink/compose?path=/calendar/action/compose&rru=addevent&subject={encoded_title}&startdt={start_dt.isoformat()}&enddt={end_dt.isoformat()}&body={encoded_details}"
-            zoho_url = f"https://calendar.zoho.com/calendar/export/event?title={encoded_title}&start={start_iso}&end={end_iso}&description={encoded_details}"
 
-sync_urls = {
+            sync_urls = {
                 "google": google_url,
                 "apple": apple_url,
                 "microsoft": outlook_url,
@@ -317,7 +315,7 @@ sync_urls = {
                 f"🟡 Zoho Calendar: {zoho_url}"
             )
 
-if synchronized and provider == "google":
+            if synchronized and provider == "google":
                 summary = f"Calendar event created: '{title}' (Created in Google Calendar)."
             elif synchronized and provider == "microsoft":
                 summary = f"Calendar event created: '{title}' (Created in Microsoft Calendar)."
@@ -340,8 +338,8 @@ if synchronized and provider == "google":
                         "title": title,
                         "start": start_dt.isoformat(),
                         "end": end_dt.isoformat()
-
-"sync_status": sync_status,
+                    },
+                    "sync_status": sync_status,
                     "synchronized": synchronized,
                     "provider": provider,
                     "provider_event_id": provider_event_id,
