@@ -35,7 +35,7 @@ export class ConversationPanel {
 
       // Real-time listener: when capability finishes execution successfully
       eventBus.on('capability.completed', (data) => {
-        this.addCapabilityCard(data.capability, data.result, data.duration, data.data || {});
+        this.addCapabilityCard(data.capability, data.result, data.duration, data.data || {}, true);
       });
 
       // Real-time listener: when capability execution fails or errors out
@@ -59,7 +59,7 @@ export class ConversationPanel {
           this.addUserMessage(msg.text, new Date(msg.timestamp));
         } else if (msg.role === 'mitra') {
           if (msg.isCapability) {
-            this.addCapabilityCard(msg.capabilityName, msg.result, msg.duration, msg.data);
+            this.addCapabilityCard(msg.capabilityName, msg.result, msg.duration, msg.data, false);
           } else {
             this.addMitraMessage(msg.text, new Date(msg.timestamp), msg.intent, msg.suggestedActions, msg.capabilityResult);
           }
@@ -185,7 +185,7 @@ export class ConversationPanel {
   /**
    * Render rich visual widgets for Calendar, OCR, Tasks, Voice, Health, etc.
    */
-  addCapabilityCard(capability, resultText, duration, backendData = {}) {
+  addCapabilityCard(capability, resultText, duration, backendData = {}, isRealtime = false) {
     const card = document.createElement('div');
     card.className = 'chat-bubble mitra capability-widget';
     card.style.background = 'rgba(21, 21, 29, 0.95)';
@@ -530,23 +530,25 @@ export class ConversationPanel {
       const statusColor = isSuccess ? '#ff9f43' : '#ff453a';
       const statusLabel = isSuccess ? 'Dispatched ✓' : 'Failed ✗';
 
-      // Emit event for NotificationDrawer and trigger browser notification
-      if (this.eventBus) {
-        try {
-          this.eventBus.emit('notification.received', {
-            title: '🔔 Device / Call Alert',
-            text: msgText,
-            message: msgText
-          });
-        } catch (e) {}
-      }
-      if (typeof window !== 'undefined' && 'Notification' in window) {
-        if (Notification.permission === 'granted') {
-          try { new Notification('🔔 Urgent Call Alert', { body: msgText }); } catch(e) {}
-        } else if (Notification.permission !== 'denied') {
-          Notification.requestPermission().then(p => {
-            if (p === 'granted') try { new Notification('🔔 Urgent Call Alert', { body: msgText }); } catch(e) {}
-          });
+      // Emit event for NotificationDrawer and trigger browser notification ONLY on real-time execution
+      if (isRealtime) {
+        if (this.eventBus) {
+          try {
+            this.eventBus.emit('notification.received', {
+              title: '🔔 Device / Call Alert',
+              text: msgText,
+              message: msgText
+            });
+          } catch (e) {}
+        }
+        if (typeof window !== 'undefined' && 'Notification' in window) {
+          if (Notification.permission === 'granted') {
+            try { new Notification('🔔 Urgent Call Alert', { body: msgText }); } catch(e) {}
+          } else if (Notification.permission !== 'denied') {
+            Notification.requestPermission().then(p => {
+              if (p === 'granted') try { new Notification('🔔 Urgent Call Alert', { body: msgText }); } catch(e) {}
+            });
+          }
         }
       }
 
