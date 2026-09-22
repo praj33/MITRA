@@ -225,14 +225,14 @@ export const AnalyticsPage: React.FC<{ onChatNavigate: (msg: string) => void }> 
           </div>
 
           {/* Weekly Focus Breakdown */}
-          <div className="bg-surface-elevated border border-border-subtle rounded-xl p-4">
-            <h3 className="text-xs font-semibold text-text-primary mb-3 flex items-center justify-between">
+          <div className="bg-surface-elevated border border-border-subtle rounded-xl p-3.5 sm:p-4 w-full max-w-full overflow-hidden">
+            <h3 className="text-xs font-semibold text-text-primary mb-3 flex items-center justify-between flex-wrap gap-1">
               <span className="flex items-center gap-2">
                 <Target size={14} className="text-brand-light" /> Weekly Activity & Task Velocity
               </span>
               <span className="text-3xs text-text-muted font-normal">Calculated live from MongoDB activity</span>
             </h3>
-            <div className="flex items-end justify-between gap-2 h-28 pt-4 px-2">
+            <div className="flex items-end justify-between gap-1 sm:gap-2 h-28 pt-4 px-1 sm:px-2 w-full">
               {(data?.weekly_activity || [
                 { day: 'Mon', focus_mins: 90 },
                 { day: 'Tue', focus_mins: 120 },
@@ -244,15 +244,15 @@ export const AnalyticsPage: React.FC<{ onChatNavigate: (msg: string) => void }> 
               ]).map((item: any) => {
                 const heightPercent = Math.min(100, Math.max(15, (item.focus_mins / 150) * 100));
                 return (
-                  <div key={item.day} className="flex-1 flex flex-col items-center gap-1.5 h-full justify-end">
-                    <div className="w-full bg-surface-overlay rounded-t-md relative flex items-end overflow-hidden" style={{ height: '70px' }}>
+                  <div key={item.day} className="flex-1 min-w-0 flex flex-col items-center gap-1.5 h-full justify-end">
+                    <div className="w-full max-w-[28px] bg-surface-overlay rounded-t-md relative flex items-end overflow-hidden" style={{ height: '70px' }}>
                       <motion.div
                         initial={{ height: 0 }}
                         animate={{ height: `${heightPercent}%` }}
                         className="w-full bg-gradient-to-t from-brand/50 to-brand-light rounded-t-md"
                       />
                     </div>
-                    <span className="text-2xs text-text-muted font-medium">{item.day}</span>
+                    <span className="text-[10px] sm:text-2xs text-text-muted font-medium truncate w-full text-center">{item.day}</span>
                   </div>
                 );
               })}

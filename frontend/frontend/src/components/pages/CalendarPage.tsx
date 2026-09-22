@@ -1,6 +1,6 @@
 import React, { useEffect, useState, useCallback } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { Calendar, Clock, MapPin, Plus, ChevronLeft, ChevronRight, Trash2, X, Check } from 'lucide-react';
+import { Calendar, Clock, MapPin, Plus, ChevronLeft, ChevronRight, Trash2, X, Check, Download } from 'lucide-react';
 import { CompanionService } from '../../services/companion.service';
 import { useCompanionStore } from '../../store/companion.store';
 import { authApi } from '../../services/authApi';
@@ -106,6 +106,47 @@ const CalendarPage: React.FC<{ onChatNavigate: (msg: string) => void }> = ({ onC
       console.error('Delete failed:', err);
       showToast('error', 'Error', 'Failed to delete event.');
     }
+  };
+
+  const downloadIcs = (event: CalendarEvent) => {
+    const formatIcsDate = (dateStr: string) => {
+      const d = new Date(dateStr);
+      return d.toISOString().replace(/[-:]/g, '').split('.')[0] + 'Z';
+    };
+
+    const start = formatIcsDate(event.start);
+    const end = formatIcsDate(event.end || event.start);
+    const uid = `${event.id || Math.random().toString(36).slice(2)}@mitra.ai`;
+
+    const icsContent = [
+      'BEGIN:VCALENDAR',
+      'VERSION:2.0',
+      'PRODID:-//Mitra AI//Companion Calendar//EN',
+      'CALSCALE:GREGORIAN',
+      'METHOD:PUBLISH',
+      'BEGIN:VEVENT',
+      `UID:${uid}`,
+      `DTSTAMP:${formatIcsDate(new Date().toISOString())}`,
+      `DTSTART:${start}`,
+      `DTEND:${end}`,
+      `SUMMARY:${(event.title || 'Event').replace(/\n/g, ' ')}`,
+      `DESCRIPTION:${(event.description || 'Created via Mitra AI Companion').replace(/\n/g, ' ')}`,
+      `LOCATION:${(event.location || '').replace(/\n/g, ' ')}`,
+      'STATUS:CONFIRMED',
+      'END:VEVENT',
+      'END:VCALENDAR'
+    ].join('\r\n');
+
+    const blob = new Blob([icsContent], { type: 'text/calendar;charset=utf-8' });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement('a');
+    link.href = url;
+    link.setAttribute('download', `${(event.title || 'event').replace(/[^a-zA-Z0-9_-]/g, '_')}.ics`);
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+    URL.revokeObjectURL(url);
+    showToast('info', 'Calendar File (.ics)', 'Downloaded .ics event. Open to add to Apple Calendar or native device calendar.');
   };
 
   const handleClearPast = async () => {
@@ -323,9 +364,12 @@ const CalendarPage: React.FC<{ onChatNavigate: (msg: string) => void }> = ({ onC
                       ○ Saved Only in Mitra (Local)
                     </span>
                   )}
+                  <span className="px-2 py-0.5 rounded-full bg-blue-500/10 border border-blue-500/30 text-blue-400 text-[10px] font-medium">
+                    🍏 Native Device: .ics Export
+                  </span>
                 </div>
                 <p className="text-2xs text-text-muted mt-0.5 leading-relaxed">
-                  Notice: Web applications cannot write directly to native mobile calendars (iOS/Android) without an active Google Calendar or Microsoft Outlook connection.
+                  Notice: Web applications cannot write directly to native mobile device calendars without an active Google Calendar or Microsoft Outlook connection. Use the .ics button to import events directly into Apple Calendar.
                 </p>
               </div>
             </div>
@@ -439,25 +483,43 @@ const CalendarPage: React.FC<{ onChatNavigate: (msg: string) => void }> = ({ onC
                             </span>
                           )}
                           <span className={`px-2 py-0.5 rounded-full text-[10px] font-medium border ${
-                            ev.sync_status === 'Created in Google Calendar' || ev.provider === 'google'
+                            ev.sync_status?.toLowerCase().includes('fail') || ev.sync_status?.toLowerCase().includes('error')
+                              ? 'bg-red-500/10 border-red-500/30 text-red-400'
+                              : ev.sync_status === 'Created in Google Calendar' || ev.sync_status === 'Synchronized with Google Calendar' || ev.provider === 'google'
                               ? 'bg-emerald-500/10 border-emerald-500/30 text-emerald-400'
-                              : ev.sync_status === 'Created in Microsoft Calendar' || ev.provider === 'microsoft'
+                              : ev.sync_status === 'Created in Microsoft Calendar' || ev.sync_status === 'Synchronized with Microsoft Calendar' || ev.provider === 'microsoft'
                               ? 'bg-blue-500/10 border-blue-500/30 text-blue-400'
-                              : 'bg-white/5 border-white/10 text-text-muted'
+                              : 'bg-amber-500/10 border-amber-500/20 text-amber-400'
                           }`}>
-                            {ev.sync_status || (ev.provider === 'google' ? 'Created in Google Calendar' : ev.provider === 'microsoft' ? 'Created in Microsoft Calendar' : 'Saved only in Mitra')}
+                            {ev.sync_status?.toLowerCase().includes('fail') || ev.sync_status?.toLowerCase().includes('error')
+                              ? (ev.sync_status || 'Sync failed')
+                              : (ev.sync_status === 'Created in Google Calendar' || ev.provider === 'google')
+                              ? 'Synced to Google Calendar'
+                              : (ev.sync_status === 'Created in Microsoft Calendar' || ev.provider === 'microsoft')
+                              ? 'Synced to Microsoft Calendar'
+                              : 'Saved only in Mitra'}
                           </span>
                         </div>
                       </div>
                     </div>
 
-                    <button
-                      onClick={() => deleteEvent(ev.id)}
-                      className="text-text-muted hover:text-red-400 p-1.5 rounded-lg hover:bg-red-500/10 transition-colors flex-shrink-0"
-                      title="Delete event"
-                    >
-                      <Trash2 size={14} />
-                    </button>
+                    <div className="flex items-center gap-1 flex-shrink-0">
+                      <button
+                        onClick={() => downloadIcs(ev)}
+                        className="text-text-muted hover:text-brand-light p-1.5 rounded-lg hover:bg-brand/10 transition-colors cursor-pointer"
+                        title="Add to Apple Calendar / Device (.ics)"
+                        aria-label="Download .ics event"
+                      >
+                        <Download size={14} />
+                      </button>
+                      <button
+                        onClick={() => deleteEvent(ev.id)}
+                        className="text-text-muted hover:text-red-400 p-1.5 rounded-lg hover:bg-red-500/10 transition-colors flex-shrink-0 cursor-pointer"
+                        title="Delete event"
+                      >
+                        <Trash2 size={14} />
+                      </button>
+                    </div>
                   </div>
                 </motion.div>
               ))}

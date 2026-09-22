@@ -130,25 +130,64 @@ async def oauth_callback(
         except Exception as form_err:
             logger.warning(f"Error reading form data in callback: {form_err}")
     
+    if not code and request:
+        code = request.query_params.get("code")
+    if not state and request:
+        state = request.query_params.get("state")
+    if not error and request:
+        error = request.query_params.get("error")
+
+    if code:
+        code = str(code).strip()
+    if state:
+        state = str(state).strip()
+
     if error:
         logger.warning(f"OAuth callback returned error from provider {provider}: {error}")
+        accept = request.headers.get("accept", "") if request else ""
+        if "text/html" in accept:
+            frontend_url = os.getenv("FRONTEND_URL", "http://localhost:3000").rstrip("/")
+            return RedirectResponse(url=f"{frontend_url}/?error=authorization_denied", status_code=302)
         return JSONResponse(
             status_code=400,
             content={"status": "error", "error": "authorization_denied", "detail": f"OAuth provider error: {error}"}
         )
 
     if not code or not state:
+        accept = request.headers.get("accept", "") if request else ""
+        if "text/html" in accept:
+            frontend_url = os.getenv("FRONTEND_URL", "http://localhost:3000").rstrip("/")
+            return RedirectResponse(url=f"{frontend_url}/?error=missing_code_or_state", status_code=302)
         raise HTTPException(status_code=400, detail="Missing required authorization code or state parameter.")
 
     # 1. Validate and consume OAuth state transaction (enforces expiration, single-use, provider match)
-    tx = oauth_transaction_service.validate_and_consume_transaction(
-        state=state,
-        provider=provider_name
-    )
+    try:
+        tx = oauth_transaction_service.validate_and_consume_transaction(
+            state=state,
+            provider=provider_name
+        )
+    except Exception as exc:
+        accept = request.headers.get("accept", "") if request else ""
+        if "text/html" in accept:
+            frontend_url = os.getenv("FRONTEND_URL", "http://localhost:3000").rstrip("/")
+            return RedirectResponse(url=f"{frontend_url}/?error=invalid_state", status_code=302)
+        raise exc
+
+    purpose = tx.get("purpose")
+    if not purpose or purpose not in ("connect", "login", "signup"):
+        accept = request.headers.get("accept", "") if request else ""
+        if "text/html" in accept:
+            frontend_url = os.getenv("FRONTEND_URL", "http://localhost:3000").rstrip("/")
+            return RedirectResponse(url=f"{frontend_url}/?error=invalid_purpose", status_code=302)
+        raise HTTPException(status_code=400, detail="Invalid or missing OAuth purpose in transaction state.")
 
     try:
         provider_inst = oauth_provider_registry.get(provider_name)
     except KeyError:
+        accept = request.headers.get("accept", "") if request else ""
+        if "text/html" in accept:
+            frontend_url = os.getenv("FRONTEND_URL", "http://localhost:3000").rstrip("/")
+            return RedirectResponse(url=f"{frontend_url}/?error=unsupported_provider", status_code=302)
         raise HTTPException(status_code=400, detail=f"Unsupported OAuth provider: {provider}")
 
     # 2. Server-side code exchange with PKCE code_verifier
@@ -160,6 +199,10 @@ async def oauth_callback(
         )
     except Exception as exc:
         logger.error(f"OAuth code exchange failed: {exc}")
+        accept = request.headers.get("accept", "") if request else ""
+        if "text/html" in accept:
+            frontend_url = os.getenv("FRONTEND_URL", "http://localhost:3000").rstrip("/")
+            return RedirectResponse(url=f"{frontend_url}/?error=exchange_failed", status_code=302)
         raise HTTPException(status_code=400, detail="Authorization code exchange failed. Please try again.")
 
     access_token = tokens.get("access_token")
@@ -169,6 +212,10 @@ async def oauth_callback(
     expires_at = (datetime.utcnow() + timedelta(seconds=expires_in)).isoformat()
 
     if not access_token and not tokens.get("id_token"):
+        accept = request.headers.get("accept", "") if request else ""
+        if "text/html" in accept:
+            frontend_url = os.getenv("FRONTEND_URL", "http://localhost:3000").rstrip("/")
+            return RedirectResponse(url=f"{frontend_url}/?error=missing_token", status_code=302)
         raise HTTPException(status_code=400, detail="Provider response did not include a valid token.")
 
     # 3. Retrieve provider identity
@@ -176,11 +223,14 @@ async def oauth_callback(
         identity = provider_inst.get_user_identity(access_token=access_token or "", id_token=tokens.get("id_token"))
     except Exception as exc:
         logger.error(f"Failed fetching user identity from {provider}: {exc}")
+        accept = request.headers.get("accept", "") if request else ""
+        if "text/html" in accept:
+            frontend_url = os.getenv("FRONTEND_URL", "http://localhost:3000").rstrip("/")
+            return RedirectResponse(url=f"{frontend_url}/?error=identity_failed", status_code=302)
         raise HTTPException(status_code=400, detail="Failed to verify identity with provider.")
 
     provider_subject = identity["provider_subject"]
     email = identity["email"]
-    purpose = tx.get("purpose", "connect")
 
     if purpose == "connect":
         user_id = tx.get("user_id")
@@ -249,7 +299,7 @@ async def oauth_callback(
                 db_name = os.getenv("DATABASE_NAME", "ai_assistant")
                 client = MongoClient(mongo_uri, serverSelectionTimeoutMS=2000)
                 sync_db = client[db_name]
-                for col in ["user_tasks", "tasks", "reminders", "calendar_events", "companion_history", "user_facts"]:
+                for col in ["user_tasks", "tasks", "reminders", "calendar_events", "companion_history", "user_facts", "connected_accounts", "user_preferences"]:
                     sync_db[col].update_many({"user_id": guest_user_id}, {"$set": {"user_id": user_id}})
                 logger.info(f"Successfully migrated guest data from {guest_user_id} to user {user_id}")
             except Exception as mig_err:

@@ -59,6 +59,8 @@ export interface UserMemory {
   facts?:       Record<string, any>;
 }
 
+export type AuthStateStatus = 'LOADING' | 'GUEST' | 'AUTHENTICATED' | 'AUTH_ERROR';
+
 // ── Store Interface ─────────────────────────────────────
 interface CompanionStore {
   // Identity
@@ -68,6 +70,7 @@ interface CompanionStore {
   authToken: string;
   isAuthenticated: boolean;
   isGuest: boolean;
+  authStatus: AuthStateStatus;
   authModalOpen:   boolean;
   apiKey:    string;
   apiBase:   string;
@@ -127,6 +130,7 @@ interface CompanionStore {
   setUserName: (name: string) => void;
 
   setAuth: (user: { id: string; name: string; email: string; is_guest?: boolean }, token: string, isGuest?: boolean) => void;
+  setAuthStatus: (status: AuthStateStatus) => void;
   logoutUser: () => void;
   setAuthModalOpen: (open: boolean) => void;
 }
@@ -166,6 +170,7 @@ export const useCompanionStore = create<CompanionStore>()(
         authToken:       initialToken,
         isAuthenticated: Boolean(initialToken),
         isGuest:         false,
+        authStatus:      initialToken ? 'LOADING' : 'GUEST',
         authModalOpen:   false,
         apiKey:          getApiKey(),
         apiBase:         getApiBase(),
@@ -271,9 +276,12 @@ export const useCompanionStore = create<CompanionStore>()(
             authToken:       token,
             isAuthenticated: Boolean(token),
             isGuest:         isGuest,
+            authStatus:      isGuest ? 'GUEST' : 'AUTHENTICATED',
             authModalOpen:   false,
           });
         },
+
+        setAuthStatus: (authStatus) => set({ authStatus }),
 
         logoutUser: () => {
           clearCanonicalToken();
@@ -287,7 +295,8 @@ export const useCompanionStore = create<CompanionStore>()(
             userEmail:       '',
             authToken:       '',
             isAuthenticated: false,
-            isGuest:         false,
+            isGuest:         true,
+            authStatus:      'GUEST',
             messages:        [],
           });
         },

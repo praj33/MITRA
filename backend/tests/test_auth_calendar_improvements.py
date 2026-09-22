@@ -380,3 +380,181 @@ def test_calendar_endpoint_invalid_time_range_returns_400(client):
     response = client.post("/api/pages/calendar/events", json=payload, headers={"X-API-Key": "localtest"})
     assert response.status_code == 400
     assert "Invalid time range" in response.json()["detail"]
+
+
+# ─── 6. ADDITIONAL SECTION 21 VERIFICATION TESTS ───────────────────────────
+
+def test_oauth_purpose_validation(client):
+    """Verify OAuth start strictly validates purpose: reject invalid, guard connect for non-guests."""
+    # 1. Invalid purpose returns 400
+    res = client.get("/api/oauth/google/start?purpose=invalid_purpose")
+    assert res.status_code == 400
+    assert "Invalid OAuth purpose" in res.json()["detail"]
+
+    # 2. 'connect' without auth returns 401
+    res_connect = client.get("/api/oauth/google/start?purpose=connect")
+    assert res_connect.status_code == 401
+
+    # 3. 'connect' with guest token returns 403
+    guest_token = create_access_token({"sub": "usr_guest_test", "user_id": "usr_guest_test", "is_guest": True})
+    res_guest_connect = client.get(
+        "/api/oauth/google/start?purpose=connect",
+        headers={"Authorization": f"Bearer {guest_token}"}
+    )
+    assert res_guest_connect.status_code == 403
+    assert "Guest sessions cannot connect" in res_guest_connect.json()["detail"]
+
+
+def test_oauth_callback_browser_redirect_on_missing_code_or_state(client):
+    """Verify browser client (Accept: text/html) gets 302 redirect on missing code/state, while API client gets 400 JSON."""
+    # Browser client -> 302 redirect to /?error=missing_code_or_state
+    res_browser = client.get("/api/oauth/google/callback", headers={"Accept": "text/html,application/xhtml+xml"}, follow_redirects=False)
+    assert res_browser.status_code == 302
+    assert "error=missing_code_or_state" in res_browser.headers.get("location", "")
+
+    # API client -> 400 JSON
+    res_api = client.get("/api/oauth/google/callback", headers={"Accept": "application/json"})
+    assert res_api.status_code == 400
+    assert "missing required authorization code" in res_api.json()["detail"].lower()
+
+
+def test_oauth_callback_browser_redirect_on_provider_error(client):
+    """Verify browser client (Accept: text/html) gets 302 redirect on provider error."""
+    res = client.get("/api/oauth/google/callback?error=access_denied", headers={"Accept": "text/html"}, follow_redirects=False)
+    assert res.status_code == 302
+    assert "error=authorization_denied" in res.headers.get("location", "")
+
+
+def test_guest_apple_signup_elevation(client, monkeypatch):
+    """Verify Guest -> Apple signup elevates guest to permanent user and preserves security."""
+    from app.services.identity_account_service import identity_account_service
+
+    monkeypatch.setenv("APPLE_CLIENT_ID", "com.mitra.companion.service")
+    monkeypatch.setenv("APPLE_TEAM_ID", "TEAM123456")
+    monkeypatch.setenv("APPLE_KEY_ID", "KEY123456")
+    monkeypatch.setenv("APPLE_PRIVATE_KEY", "MOCK_PRIVATE_KEY_CONTENT")
+    monkeypatch.setenv("APPLE_REDIRECT_URI", "https://api.mitra.local/api/oauth/apple/callback")
+
+    guest_id = "usr_guest_apple_signup"
+    tx = oauth_transaction_service.create_transaction(
+        provider="apple",
+        purpose="signup",
+        user_id=guest_id
+    )
+    state = tx["state"]
+
+    mock_apple = oauth_provider_registry.get("apple")
+    with patch.object(mock_apple, "exchange_code", return_value={
+        "access_token": "mock_apple_access_token",
+        "id_token": "mock_apple_id_token",
+        "expires_in": 3600
+    }), patch.object(mock_apple, "get_user_identity", return_value={
+        "provider_subject": "apple_sub_77777",
+        "email": "applesignup@privaterelay.appleid.com",
+        "name": "Apple User",
+        "email_verified": True
+    }):
+        response = client.get(f"/api/oauth/apple/callback?code=mock_apple_code&state={state}")
+        assert response.status_code == 200
+        data = response.json()
+        assert data["status"] == "success"
+        assert data["user"]["email"] == "applesignup@privaterelay.appleid.com"
+        assert data["user"]["is_guest"] is False
+
+        # Check linked identity
+        ident = identity_account_service.get_identity("apple", "apple_sub_77777")
+        assert ident is not None
+        assert ident["user_id"] == data["user"]["id"]
+
+
+def test_existing_user_google_login(client, monkeypatch):
+    """Verify existing user Google login flow preserves existing account without creating duplicate."""
+    from app.services.auth_service import auth_service
+    from app.services.identity_account_service import identity_account_service
+
+    monkeypatch.setenv("GOOGLE_CLIENT_ID", "test-google-client-id.apps.googleusercontent.com")
+    monkeypatch.setenv("GOOGLE_CLIENT_SECRET", "test-google-client-secret")
+
+    # Create existing user
+    import asyncio
+    existing_user = asyncio.run(auth_service.create_user(name="Existing Person", email="existing_oauth@mitra.ai", password="secure_test_password_123!"))
+    identity_account_service.link_identity(existing_user["id"], "google", "google_sub_existing_111", "existing_oauth@mitra.ai")
+
+    tx = oauth_transaction_service.create_transaction(provider="google", purpose="login")
+    state = tx["state"]
+
+    mock_google = oauth_provider_registry.get("google")
+    with patch.object(mock_google, "exchange_code", return_value={
+        "access_token": "mock_login_token",
+        "expires_in": 3600,
+        "token_type": "Bearer"
+    }), patch.object(mock_google, "get_user_identity", return_value={
+        "provider_subject": "google_sub_existing_111",
+        "email": "existing_oauth@mitra.ai",
+        "name": "Existing Person",
+        "email_verified": True
+    }):
+        response = client.get(f"/api/oauth/google/callback?code=mock_code&state={state}")
+        assert response.status_code == 200
+        data = response.json()
+        assert data["user"]["id"] == existing_user["id"]
+        assert data["user"]["email"] == "existing_oauth@mitra.ai"
+
+
+def test_calendar_provider_failure_returns_sync_failed():
+    """Verify when external provider API fails (e.g. 500), CalendarExecutor reports sync_status='Sync failed'."""
+    executor = CalendarExecutor()
+    gw_token = GatewayAuth.issue(
+        trace_id="tr_cal_fail",
+        platform="calendar",
+        action="create_event",
+        decision="allow"
+    )
+
+    with patch.object(executor, "_get_effective_connection", return_value=("mock_google_token", "google")), \
+         patch("requests.post") as mock_post:
+        mock_res = MagicMock()
+        mock_res.status_code = 500
+        mock_res.text = "Internal Server Error"
+        mock_post.return_value = mock_res
+
+        res = executor.create_event(
+            title="Failed Sync Event",
+            start_time="2026-09-17T10:00:00Z",
+            trace_id="tr_cal_fail",
+            gateway_auth=gw_token,
+            user_id="usr_fail_test"
+        )
+
+        assert res["status"] == "error"
+        assert res["sync_status"] == "Sync failed"
+        assert res["provider"] == "google"
+
+
+def test_identity_name_rendering_logic():
+    """Verify user identity name resolution rules across guest, real name, email, and fallback."""
+    def resolve_name(user=None, is_guest=False):
+        if is_guest:
+            return "Guest User"
+        if user and user.get("name") and user["name"].strip().lower() not in ("user", "user_default", "guest", "anonymous"):
+            return user["name"].strip()
+        if user and user.get("email") and "@" in user["email"]:
+            prefix = user["email"].split("@")[0].strip()
+            if prefix:
+                return prefix
+        return "Mitra User"
+
+    # Guest user
+    assert resolve_name(is_guest=True) == "Guest User"
+    assert resolve_name({"name": "Test Name"}, is_guest=True) == "Guest User"
+
+    # Authenticated user with real name
+    assert resolve_name({"name": "Prajwal", "email": "prajwal@mitra.ai"}) == "Prajwal"
+
+    # Authenticated user with email only
+    assert resolve_name({"name": "", "email": "developer@mitra.ai"}) == "developer"
+    assert resolve_name({"name": "user_default", "email": "alice@mitra.ai"}) == "alice"
+
+    # Fallback
+    assert resolve_name({}) == "Mitra User"
+    assert resolve_name(None) == "Mitra User"

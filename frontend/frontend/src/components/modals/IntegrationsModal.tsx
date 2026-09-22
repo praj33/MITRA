@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { authApi } from '../../services/authApi';
 import { getApiBase, getAuthHeaders } from '../../services/apiConfig';
+import { useCompanionStore } from '../../store/companion.store';
 
 interface IntegrationsModalProps {
   isOpen: boolean;
@@ -8,6 +9,8 @@ interface IntegrationsModalProps {
 }
 
 export const IntegrationsModal: React.FC<IntegrationsModalProps> = ({ isOpen, onClose }) => {
+  const { isGuest, setAuthModalOpen } = useCompanionStore();
+
   // Google Connection State (backed by backend GET /api/connections)
   const [googleConnected, setGoogleConnected] = useState(false);
   const [googleStatus, setGoogleStatus] = useState<'not_connected' | 'active' | 'needs_reauthorization'>('not_connected');
@@ -51,8 +54,23 @@ export const IntegrationsModal: React.FC<IntegrationsModalProps> = ({ isOpen, on
   // Global Feedback Messages
   const [statusMessage, setStatusMessage] = useState<string | null>(null);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
+  const [syncingProvider, setSyncingProvider] = useState<string | null>(null);
 
   const API_BASE = getApiBase();
+
+  const handleSync = async (provider: string) => {
+    setSyncingProvider(provider);
+    setStatusMessage(`Synchronizing ${provider === 'google' ? 'Google' : 'Microsoft'} Calendar events...`);
+    setErrorMessage(null);
+    try {
+      await fetchConnections();
+      setStatusMessage(`${provider === 'google' ? 'Google' : 'Microsoft'} Calendar synchronized.`);
+    } catch (err: any) {
+      setErrorMessage(`Failed to synchronize ${provider} Calendar.`);
+    } finally {
+      setSyncingProvider(null);
+    }
+  };
 
   const fetchConnections = useCallback(async () => {
     try {
@@ -431,6 +449,27 @@ export const IntegrationsModal: React.FC<IntegrationsModalProps> = ({ isOpen, on
           </div>
         )}
 
+        {/* Guest Session Notice */}
+        {isGuest && (
+          <div className="mb-4 p-3.5 rounded-2xl bg-amber-500/10 border border-amber-500/30 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 text-xs">
+            <div className="flex items-center gap-2">
+              <span className="text-amber-400 text-sm">⚠️</span>
+              <span className="text-amber-200">
+                You are in a Guest session. External integrations require an authenticated account.
+              </span>
+            </div>
+            <button
+              onClick={() => {
+                onClose();
+                setAuthModalOpen(true);
+              }}
+              className="px-3 py-1 bg-amber-500 hover:bg-amber-400 text-black font-semibold text-xs rounded-xl transition-all shrink-0 cursor-pointer"
+            >
+              Create Account
+            </button>
+          </div>
+        )}
+
         <div className="space-y-6 max-h-[60vh] overflow-y-auto pr-1">
           {/* 1. GOOGLE INTEGRATION CARD */}
           <div className="p-5 rounded-2xl bg-[#1A1A1A] border border-white/10">
@@ -456,9 +495,16 @@ export const IntegrationsModal: React.FC<IntegrationsModalProps> = ({ isOpen, on
                     Connected
                   </span>
                   <button
+                    onClick={() => handleSync('google')}
+                    disabled={syncingProvider === 'google'}
+                    className="px-3 py-1 bg-white/10 hover:bg-white/20 text-white border border-white/20 text-xs font-medium rounded-xl transition-colors cursor-pointer active:scale-95"
+                  >
+                    {syncingProvider === 'google' ? 'Syncing...' : 'Sync'}
+                  </button>
+                  <button
                     onClick={handleDisconnectGoogle}
                     disabled={isDisconnectingGoogle}
-                    className="px-3 py-1 bg-red-500/10 hover:bg-red-500/20 text-red-400 border border-red-500/30 text-xs font-medium rounded-xl transition-colors cursor-pointer"
+                    className="px-3 py-1 bg-red-500/10 hover:bg-red-500/20 text-red-400 border border-red-500/30 text-xs font-medium rounded-xl transition-colors cursor-pointer active:scale-95"
                   >
                     {isDisconnectingGoogle ? "Disconnecting..." : "Disconnect"}
                   </button>
@@ -571,9 +617,16 @@ export const IntegrationsModal: React.FC<IntegrationsModalProps> = ({ isOpen, on
                     Connected
                   </span>
                   <button
+                    onClick={() => handleSync('microsoft')}
+                    disabled={syncingProvider === 'microsoft'}
+                    className="px-3 py-1 bg-white/10 hover:bg-white/20 text-white border border-white/20 text-xs font-medium rounded-xl transition-colors cursor-pointer active:scale-95"
+                  >
+                    {syncingProvider === 'microsoft' ? 'Syncing...' : 'Sync'}
+                  </button>
+                  <button
                     onClick={handleDisconnectMicrosoft}
                     disabled={isDisconnectingMicrosoft}
-                    className="px-3 py-1 bg-red-500/10 hover:bg-red-500/20 text-red-400 border border-red-500/30 text-xs font-medium rounded-xl transition-colors cursor-pointer"
+                    className="px-3 py-1 bg-red-500/10 hover:bg-red-500/20 text-red-400 border border-red-500/30 text-xs font-medium rounded-xl transition-colors cursor-pointer active:scale-95"
                   >
                     {isDisconnectingMicrosoft ? "Disconnecting..." : "Disconnect"}
                   </button>
@@ -766,7 +819,35 @@ export const IntegrationsModal: React.FC<IntegrationsModalProps> = ({ isOpen, on
             )}
           </div>
 
-          {/* 4. WHATSAPP INTEGRATION CARD */}
+          {/* 4. APPLE CALENDAR & NATIVE CALENDAR (VISUALLY SEPARATE FROM APPLE SIGN-IN) */}
+          <div className="p-5 rounded-2xl bg-[#1A1A1A] border border-white/10">
+            <div className="flex items-center justify-between mb-3">
+              <div className="flex items-center gap-3">
+                <div className="w-10 h-10 rounded-xl bg-white/5 border border-white/10 flex items-center justify-center text-lg">
+                  📅
+                </div>
+                <div>
+                  <h3 className="font-semibold text-gray-200">Apple Calendar & Native iOS Calendar</h3>
+                  <p className="text-xs text-gray-400">Direct device calendar access & local sandbox bridge</p>
+                </div>
+              </div>
+              <span className="px-3 py-1 rounded-full bg-white/5 border border-white/10 text-gray-400 text-xs font-medium">
+                Unavailable via Web
+              </span>
+            </div>
+            <div className="mt-3 pt-3 border-t border-white/5 text-xs text-gray-400 leading-relaxed space-y-1.5">
+              <p>
+                Due to Apple iOS and macOS browser sandbox security restrictions, web applications cannot write directly to native Apple Calendars or Reminders without an intermediary cloud connection.
+              </p>
+              <div className="flex items-center gap-2 pt-1">
+                <span className="px-2 py-0.5 rounded bg-blue-500/10 border border-blue-500/20 text-blue-300 text-[10px]">
+                  💡 Tip: Connect Google Calendar or Microsoft Outlook to sync with iOS Calendar
+                </span>
+              </div>
+            </div>
+          </div>
+
+          {/* 5. WHATSAPP INTEGRATION CARD */}
           <div className="p-5 rounded-2xl bg-[#1A1A1A] border border-white/10">
             <div className="flex items-center gap-3 mb-4">
               <div className="w-10 h-10 rounded-xl bg-emerald-500/10 border border-emerald-500/20 flex items-center justify-center text-emerald-400">

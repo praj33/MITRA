@@ -17,19 +17,28 @@
   --surface-overlay:  #1F1F28;
   --surface-hover:    #25252F;
 
-  --border-subtle:  rgba(255,255,255,0.06);
-  --border-default: rgba(255,255,255,0.10);
-  --border-strong:  rgba(255,255,255,0.18);
+  --border-subtle:  rgba(255,255,255,0.08);
+  --border-default: rgba(255,255,255,0.14);
+  --border-strong:  rgba(255,255,255,0.24);
 
-  --text-primary:   #F0EFFF;
-  --text-secondary: #A09DB5;
-  --text-muted:     #5C5A72;
+  --text-primary:   #F5F4FF;
+  --text-secondary: #B0ADC8;
+  --text-muted:     #787594;
   --text-brand:     #9D94FF;
 
   --success: #34D399;
   --warning: #FBBF24;
   --error:   #F87171;
   --info:    #60A5FA;
+
+  /* Action States */
+  --btn-primary-bg:      #7C6FF7;
+  --btn-primary-hover:   #9D94FF;
+  --btn-primary-text:    #FFFFFF;
+  --btn-secondary-bg:    #1F1F28;
+  --btn-secondary-hover: #25252F;
+  --btn-secondary-text:  #F5F4FF;
+  --btn-disabled-opacity: 0.45;
 
   --radius-sm:  4px;
   --radius-md:  8px;
@@ -47,6 +56,7 @@
   --topbar-height:       52px;
   --inputbar-height:     72px;
   --bottomnav-height:    56px;
+  --min-touch-target:    44px;
 
   /* Safe area insets for notched phones */
   --safe-top:    env(safe-area-inset-top, 0px);
@@ -311,11 +321,7 @@ body {
   box-shadow: -4px 0 24px rgba(0, 0, 0, 0.5);
 }
 
-/* ── Bottom Navigation (Mobile Only) ─────────────────── */
-.bottom-nav {
-  display: none;
-}
-
+/* ── Bottom Navigation (Mobile/Tablet Only) ─────────────────── */
 .bottom-nav,
 .mobile-bottom-nav {
   display: flex !important;
@@ -330,38 +336,133 @@ body {
   width: 100%;
   user-select: none;
   -webkit-user-select: none;
+  z-index: 40;
 }
 
-  .bottom-nav-item {
-    display: flex;
-    flex-direction: column;
-    align-items: center;
-    justify-content: center;
-    gap: 2px;
-    padding: 4px 12px;
-    border-radius: var(--radius-md);
-    color: var(--text-muted);
-    font-size: 10px;
-    font-weight: 500;
-    transition: color 150ms ease, background 150ms ease;
-    -webkit-tap-highlight-color: transparent;
-    cursor: pointer;
-    border: none;
-    background: none;
-    outline: none;
+@media (min-width: 1024px) {
+  .bottom-nav,
+  .mobile-bottom-nav,
+  .zone-bottomnav {
+    display: none !important;
   }
+}
 
-  .bottom-nav-item:active {
-    background: var(--surface-overlay);
-  }
+.bottom-nav-item {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 2px;
+  padding: 4px 8px;
+  min-height: var(--min-touch-target);
+  min-width: var(--min-touch-target);
+  border-radius: var(--radius-md);
+  color: var(--text-muted);
+  font-size: 11px;
+  font-weight: 500;
+  transition: color 150ms ease, background 150ms ease;
+  -webkit-tap-highlight-color: transparent;
+  cursor: pointer;
+  border: none;
+  background: none;
+  outline: none;
+}
 
-  .bottom-nav-item.active {
-    color: var(--brand-light);
-  }
+.bottom-nav-item:active {
+  background: var(--surface-overlay);
+}
 
-  .bottom-nav-item.active .bottom-nav-icon {
-    color: var(--brand-light);
-  }
+.bottom-nav-item.active {
+  color: var(--brand-light);
+  font-weight: 600;
+}
+
+.bottom-nav-item.active .bottom-nav-icon {
+  color: var(--brand-light);
+}
+
+/* ── Touch Target & Action State Utilities ───────────── */
+.touch-target {
+  min-height: var(--min-touch-target);
+  min-width: var(--min-touch-target);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.companion-container {
+  width: 100%;
+  max-width: 860px;
+  margin-left: auto;
+  margin-right: auto;
+}
+
+.companion-quick-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 8px 14px;
+  min-height: 40px;
+  border-radius: var(--radius-xl);
+  background: var(--surface-overlay);
+  border: 1px solid var(--border-subtle);
+  color: var(--text-secondary);
+  font-size: 12px;
+  font-weight: 500;
+  transition: all 180ms cubic-bezier(0.16, 1, 0.3, 1);
+  cursor: pointer;
+  user-select: none;
+}
+
+.companion-quick-chip:hover {
+  background: var(--surface-hover);
+  border-color: rgba(124, 111, 247, 0.4);
+  color: var(--text-primary);
+  transform: translateY(-1px);
+}
+
+.companion-quick-chip:active {
+  transform: scale(0.97);
+}
+
+/* Action Button Distinct States */
+.action-primary {
+  background-color: var(--brand);
+  color: #FFFFFF;
+  font-weight: 600;
+  transition: background-color 150ms ease, transform 100ms ease, box-shadow 150ms ease;
+}
+.action-primary:hover:not(:disabled) {
+  background-color: var(--brand-light);
+  box-shadow: 0 0 16px rgba(124, 111, 247, 0.35);
+}
+.action-primary:active:not(:disabled) {
+  transform: scale(0.97);
+}
+.action-primary:disabled {
+  opacity: var(--btn-disabled-opacity);
+  cursor: not-allowed;
+  box-shadow: none;
+}
+
+.action-secondary {
+  background-color: var(--surface-overlay);
+  color: var(--text-primary);
+  border: 1px solid var(--border-default);
+  font-weight: 500;
+  transition: all 150ms ease;
+}
+.action-secondary:hover:not(:disabled) {
+  background-color: var(--surface-hover);
+  border-color: var(--border-strong);
+}
+.action-secondary:active:not(:disabled) {
+  transform: scale(0.97);
+}
+.action-secondary:disabled {
+  opacity: var(--btn-disabled-opacity);
+  cursor: not-allowed;
+}
 
 /* ── Card Base ───────────────────────────────────────── */
 .card {

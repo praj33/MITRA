@@ -139,28 +139,28 @@ const TasksPage: React.FC<{ onChatNavigate: (msg: string) => void }> = ({ onChat
           <button onClick={() => setShowAddForm(true)} className="page-btn-primary mt-2"><Plus size={14} /> Create Task</button>
         </div>
       ) : (
-        <div className="page-card-list">
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-2.5">
           {filtered.map(task => (
-            <motion.div key={task.id} className="page-card task-card" whileHover={{ scale: 1.01 }}>
+            <motion.div key={task.id} className="page-card task-card p-3 rounded-xl bg-surface-elevated border border-border-subtle hover:border-brand/30 transition-all" whileHover={{ scale: 1.005 }}>
               <div className="flex items-start justify-between gap-3">
                 <div className="flex items-start gap-3 flex-1 min-w-0">
-                  <button onClick={() => toggleStatus(task)} className="task-check-btn mt-0.5" title="Toggle status">
+                  <button onClick={() => toggleStatus(task)} className="task-check-btn mt-0.5 p-1 rounded-lg hover:bg-surface-overlay transition-colors" title="Toggle status" aria-label="Toggle task status">
                     {statusIcons[task.status] || statusIcons.pending}
                   </button>
                   <div className="flex-1 min-w-0">
-                    <h4 className={`page-card-title ${task.status === 'completed' ? 'line-through opacity-50' : ''}`}>{task.title}</h4>
-                    <div className="flex items-center gap-2 mt-1 flex-wrap">
-                      <span className="page-card-badge" style={{ background: (priorityColors[task.priority] || '#888') + '22', color: priorityColors[task.priority] || '#888' }}>
+                    <h4 className={`page-card-title text-xs font-semibold ${task.status === 'completed' ? 'line-through opacity-50' : 'text-text-primary'}`}>{task.title}</h4>
+                    <div className="flex items-center gap-2 mt-1.5 flex-wrap">
+                      <span className="page-card-badge px-2 py-0.5 rounded-md text-[10px] font-semibold flex items-center gap-1" style={{ background: (priorityColors[task.priority] || '#888') + '22', color: priorityColors[task.priority] || '#888' }}>
                         {task.priority === 'high' && <AlertTriangle size={10} />} {task.priority}
                       </span>
-                      <span className="page-card-badge">{task.category}</span>
+                      <span className="page-card-badge px-2 py-0.5 rounded-md bg-surface-overlay text-text-muted text-[10px]">{task.category}</span>
                       {task.due_date && (
-                        <span className="page-card-meta"><Clock size={10} /> {new Date(task.due_date).toLocaleDateString()}</span>
+                        <span className="page-card-meta text-[10px] text-text-muted flex items-center gap-1"><Clock size={10} /> {new Date(task.due_date).toLocaleDateString()}</span>
                       )}
                     </div>
                   </div>
                 </div>
-                <button onClick={() => deleteTask(task.id)} className="page-btn-icon text-text-muted hover:text-red-400" title="Delete Task">
+                <button onClick={() => deleteTask(task.id)} className="page-btn-icon text-text-muted hover:text-red-400 p-1.5 rounded-lg hover:bg-red-500/10 transition-colors flex-shrink-0" title="Delete Task" aria-label="Delete task">
                   <Trash2 size={14} />
                 </button>
               </div>

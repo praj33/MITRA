@@ -225,8 +225,10 @@ class CalendarCapability(BaseCapability):
                 summary = f"Calendar event created: '{title}' (Created in Google Calendar)."
             elif synchronized and provider == "microsoft":
                 summary = f"Calendar event created: '{title}' (Created in Microsoft Calendar)."
+            elif sync_status == "Sync failed":
+                summary = f"Saved in Mitra, but sync to {provider.title() if provider else 'external'} Calendar failed. Connect Google Calendar or Microsoft Calendar to sync it to your calendar."
             else:
-                summary = f"Calendar event created: '{title}' (Saved only in Mitra). You can sync it directly to your device calendar below or connect Google/Outlook in Settings:"
+                summary = f"Saved in Mitra. Connect Google Calendar or Microsoft Calendar to sync it to your calendar."
 
             return CapabilityResult(
                 capability=self.name, intent=intent, status="success",

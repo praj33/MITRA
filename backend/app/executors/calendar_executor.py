@@ -183,6 +183,8 @@ class CalendarExecutor:
                     return {
                         "status": "error",
                         "error": f"Microsoft Graph API error: {response.status_code} - {response.text}",
+                        "provider": "microsoft",
+                        "sync_status": "Sync failed",
                         "trace_id": trace_id,
                         "timestamp": datetime.utcnow().isoformat()
                     }
@@ -233,6 +235,8 @@ class CalendarExecutor:
                     return {
                         "status": "error",
                         "error": f"Calendar API error: {response.status_code} - {response.text}",
+                        "provider": "google",
+                        "sync_status": "Sync failed",
                         "trace_id": trace_id,
                         "timestamp": datetime.utcnow().isoformat()
                     }
