@@ -87,4 +87,4 @@ FastAPI Backend (/api/companion/chat)
 ## 6. 🚀 Summary & Next Steps for Nyai
 
 - **MITRA Companion**: 100% verified, tenanted auth architecture complete, pushed to `master1` branch (`commit 8ae0744` & `0487b1f`).
-- **Nyai Companion**: Ready to replicate the exact same Tenanted Auth, MongoDB Motor pooling, and Capability Registry architecture for Nyai in collaboration with Raj, Ranjit, and Vednath Chaudhary.
+
