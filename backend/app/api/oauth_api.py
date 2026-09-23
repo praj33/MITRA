@@ -136,12 +136,27 @@ async def start_oauth_flow(
         canonical_redirect
     )
 
+    # Determine scopes based on purpose and provider
+    req_scopes = None
+    if provider_name == "google":
+        if purpose in ("login", "signup"):
+            req_scopes = ["openid", "email", "profile"]
+        else:
+            req_scopes = [
+                "openid",
+                "email",
+                "profile",
+                "https://www.googleapis.com/auth/gmail.send",
+                "https://www.googleapis.com/auth/calendar"
+            ]
+
     # Create cryptographically secure OAuth transaction
     tx = oauth_transaction_service.create_transaction(
         provider=provider_name,
         purpose=purpose,
         user_id=auth_user_id,
-        redirect_uri=canonical_redirect
+        redirect_uri=canonical_redirect,
+        scopes=req_scopes
     )
 
     try:
@@ -149,7 +164,8 @@ async def start_oauth_flow(
             state=tx["state"],
             code_challenge=tx["code_challenge"],
             purpose=purpose,
-            redirect_uri=canonical_redirect
+            redirect_uri=canonical_redirect,
+            scopes=req_scopes
         )
     except ValueError as val_err:
         raise HTTPException(status_code=503, detail=str(val_err))
@@ -298,6 +314,18 @@ async def oauth_callback(
         provider_subject = identity["provider_subject"]
         email = identity["email"]
 
+        # Resolve granted scopes: prefer tokens response scope, fall back to transaction requested scopes
+        raw_scope = tokens.get("scope")
+        if isinstance(raw_scope, str):
+            granted_scopes = [s.strip() for s in raw_scope.split() if s.strip()]
+        elif isinstance(raw_scope, list):
+            granted_scopes = raw_scope
+        else:
+            granted_scopes = tx.get("scopes") or []
+
+        if purpose in ("login", "signup") and not granted_scopes:
+            granted_scopes = ["openid", "email", "profile"]
+
         # 4. Handle connection or login/signup persistence
         if purpose == "connect":
             current_stage = "PERSIST_CONNECTION"
@@ -315,7 +343,7 @@ async def oauth_callback(
                 access_token=access_token or "",
                 refresh_token=refresh_token,
                 provider_account_id=provider_subject,
-                scopes=tx.get("scopes"),
+                scopes=granted_scopes,
                 expires_at=expires_at
             )
 
@@ -390,7 +418,7 @@ async def oauth_callback(
                         access_token=access_token,
                         refresh_token=refresh_token,
                         provider_account_id=provider_subject,
-                        scopes=tx.get("scopes"),
+                        scopes=granted_scopes,
                         expires_at=expires_at
                     )
                 except Exception as conn_err:

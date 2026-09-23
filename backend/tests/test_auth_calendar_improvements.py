@@ -527,7 +527,7 @@ def test_calendar_provider_failure_returns_sync_failed():
         )
 
         assert res["status"] == "error"
-        assert res["sync_status"] == "Sync failed"
+        assert "Saved in Mitra" in res["sync_status"] and "sync failed" in res["sync_status"]
         assert res["provider"] == "google"
 
 

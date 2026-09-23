@@ -232,14 +232,24 @@ export const CompanionService = {
     location = '',
     description = '',
     color = '#7c5cfc',
-    userId = getCurrentUserId()
+    userId = getCurrentUserId(),
+    timezone = Intl.DateTimeFormat().resolvedOptions().timeZone || 'UTC'
   ): Promise<any> {
     const resp = await fetch(`${getApiBase()}/api/pages/calendar/events?user_id=${encodeURIComponent(userId)}`, {
       method: 'POST',
       headers: getAuthHeaders(),
-      body: JSON.stringify({ title, start, end, location, description, color }),
+      body: JSON.stringify({ title, start, end, location, description, color, timezone }),
     });
-    if (!resp.ok) throw new Error(`HTTP ${resp.status}`);
+    if (!resp.ok) {
+      let errorMsg = `HTTP ${resp.status}`;
+      try {
+        const errJson = await resp.json();
+        errorMsg = errJson.detail || errJson.error || errJson.message || errorMsg;
+      } catch {
+        // Fallback to HTTP status
+      }
+      throw new Error(errorMsg);
+    }
     return resp.json();
   },
 

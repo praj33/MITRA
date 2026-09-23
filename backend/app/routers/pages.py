@@ -71,10 +71,13 @@ async def get_calendar_events(user_id: str = "user_default"):
                     "title": doc.get("title", "Untitled"),
                     "start": doc.get("start", ""),
                     "end": doc.get("end", ""),
+                    "timezone": doc.get("timezone", "UTC"),
                     "color": doc.get("color", "#7c5cfc"),
                     "description": doc.get("description", ""),
                     "location": doc.get("location", ""),
                     "provider": doc.get("provider"),
+                    "external_event_id": doc.get("external_event_id") or doc.get("provider_event_id"),
+                    "external_event_link": doc.get("external_event_link"),
                     "provider_event_id": doc.get("provider_event_id"),
                     "sync_status": doc.get("sync_status", "Saved only in Mitra"),
                 })
@@ -115,14 +118,17 @@ async def create_calendar_event(event: CalendarEventCreate, user_id: str = "user
     sync_status = "Saved only in Mitra"
     provider = None
     provider_event_id = None
+    html_link = None
     synchronized = False
+    user_tz = event.timezone or "UTC"
 
     try:
         from app.executors.calendar_executor import CalendarExecutor
         from app.core.gateway_auth import GatewayAuth
 
+        cal_trace_id = f"page_cal_{uuid4().hex[:8]}"
         gw_token = GatewayAuth.issue(
-            trace_id=f"page_cal_{uuid4().hex[:8]}",
+            trace_id=cal_trace_id,
             platform="calendar",
             action="create_event",
             decision="allow"
@@ -134,22 +140,34 @@ async def create_calendar_event(event: CalendarEventCreate, user_id: str = "user
             end_time=end_time,
             description=event.description,
             location=event.location,
-            trace_id=f"page_cal_{uuid4().hex[:8]}",
+            trace_id=cal_trace_id,
             gateway_auth=gw_token,
             user_id=user_id,
-            timezone=event.timezone or "UTC",
+            timezone=user_tz,
             attendees=event.attendees
         )
-        if exec_res.get("status") == "error":
-            raise HTTPException(status_code=400, detail=exec_res.get("error", "Calendar event creation failed."))
-        sync_status = exec_res.get("sync_status", "Saved only in Mitra")
-        provider = exec_res.get("provider")
-        provider_event_id = exec_res.get("provider_event_id")
+
         synchronized = bool(exec_res.get("synchronized", False))
-    except HTTPException:
-        raise
+        if synchronized:
+            sync_status = exec_res.get("sync_status", "Created in Google Calendar")
+            provider = exec_res.get("provider")
+            provider_event_id = exec_res.get("provider_event_id")
+            html_link = exec_res.get("html_link")
+        else:
+            # Sync failed or external provider not connected, but event must be saved in Mitra
+            provider = None
+            provider_event_id = None
+            html_link = None
+            raw_sync = exec_res.get("sync_status")
+            if raw_sync:
+                sync_status = raw_sync
+            elif exec_res.get("error"):
+                sync_status = f"Saved in Mitra — Calendar sync failed: {exec_res.get('error')}"
+            else:
+                sync_status = "Saved only in Mitra"
     except Exception as e:
         logger.warning(f"Calendar executor sync attempt warning: {e}")
+        sync_status = "Saved only in Mitra"
 
     doc = {
         "_id": event_id,
@@ -157,10 +175,13 @@ async def create_calendar_event(event: CalendarEventCreate, user_id: str = "user
         "title": event.title,
         "start": event.start,
         "end": end_time,
+        "timezone": user_tz,
         "color": event.color,
         "description": event.description,
         "location": event.location,
         "provider": provider,
+        "external_event_id": provider_event_id,
+        "external_event_link": html_link,
         "provider_event_id": provider_event_id,
         "sync_status": sync_status,
         "created_at": now.isoformat(),
@@ -180,10 +201,18 @@ async def create_calendar_event(event: CalendarEventCreate, user_id: str = "user
         "synchronized": synchronized,
         "provider": provider,
         "event": {
-            "id": event_id, "title": event.title, "start": event.start,
-            "end": end_time, "color": event.color,
-            "description": event.description, "location": event.location,
-            "provider": provider, "provider_event_id": provider_event_id,
+            "id": event_id,
+            "title": event.title,
+            "start": event.start,
+            "end": end_time,
+            "timezone": user_tz,
+            "color": event.color,
+            "description": event.description,
+            "location": event.location,
+            "provider": provider,
+            "external_event_id": provider_event_id,
+            "external_event_link": html_link,
+            "provider_event_id": provider_event_id,
             "sync_status": sync_status
         },
     }

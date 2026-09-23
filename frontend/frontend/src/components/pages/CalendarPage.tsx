@@ -25,14 +25,18 @@ const CalendarPage: React.FC<{ onChatNavigate: (msg: string) => void }> = ({ onC
   const [eventFilter, setEventFilter] = useState<'upcoming' | 'past' | 'all'>('upcoming');
 
   // Provider Connection State for Calendar Sync
-  const [googleActive, setGoogleActive] = useState(false);
+  const [googleCalendarActive, setGoogleCalendarActive] = useState(false);
+  const [googleIdentityOnly, setGoogleIdentityOnly] = useState(false);
   const [msActive, setMsActive] = useState(false);
 
   useEffect(() => {
     authApi.getConnections().then(data => {
-      const g = data.connections?.some(c => c.provider.toLowerCase() === 'google' && c.status === 'active');
-      const m = data.connections?.some(c => c.provider.toLowerCase() === 'microsoft' && c.status === 'active');
-      setGoogleActive(Boolean(g));
+      const g = data.connections?.find(c => c.provider.toLowerCase() === 'google' && (c.status === 'active' || c.status === 'connected'));
+      const m = data.connections?.find(c => c.provider.toLowerCase() === 'microsoft' && (c.status === 'active' || c.status === 'connected'));
+
+      const hasGoogleCalScope = Boolean(g?.scopes?.some((s: string) => s.toLowerCase().includes('calendar')));
+      setGoogleCalendarActive(Boolean(g && hasGoogleCalScope));
+      setGoogleIdentityOnly(Boolean(g && !hasGoogleCalScope));
       setMsActive(Boolean(m));
     }).catch(() => {});
   }, []);
@@ -66,6 +70,7 @@ const CalendarPage: React.FC<{ onChatNavigate: (msg: string) => void }> = ({ onC
     try {
       const startIso = newStartTime ? `${newDate}T${newStartTime}:00` : newDate;
       const endIso = newEndTime ? `${newDate}T${newEndTime}:00` : newDate;
+      const userTimezone = Intl.DateTimeFormat().resolvedOptions().timeZone || 'UTC';
 
       const res = await CompanionService.createCalendarEvent(
         newTitle.trim(),
@@ -74,7 +79,8 @@ const CalendarPage: React.FC<{ onChatNavigate: (msg: string) => void }> = ({ onC
         newLocation.trim(),
         newDescription.trim(),
         '#7c5cfc',
-        userId
+        userId,
+        userTimezone
       );
 
       if (res && res.event) {
@@ -84,14 +90,24 @@ const CalendarPage: React.FC<{ onChatNavigate: (msg: string) => void }> = ({ onC
       }
 
       const syncStatusMsg = res?.sync_status || 'Saved only in Mitra';
-      showToast('success', 'Event Created', `"${newTitle.trim()}" — ${syncStatusMsg}`);
+      if (res?.synchronized) {
+        showToast('success', 'Event Created', `"${newTitle.trim()}" — Event created and synced to Google Calendar.`);
+      } else if (syncStatusMsg.toLowerCase().includes('permission required') || syncStatusMsg.toLowerCase().includes('permission')) {
+        showToast('warning', 'Saved in Mitra', `"${newTitle.trim()}" — Google Calendar permission is required. Connect Google Calendar in Integrations.`);
+      } else if (syncStatusMsg.toLowerCase().includes('sync failed') || syncStatusMsg.toLowerCase().includes('failed') || syncStatusMsg.toLowerCase().includes('disabled')) {
+        showToast('warning', 'Saved in Mitra', `"${newTitle.trim()}" — Event saved in Mitra, but Google Calendar sync failed. Please try Sync again.`);
+      } else {
+        showToast('success', 'Event Created', `"${newTitle.trim()}" — Saved only in Mitra. Connect Google Calendar or Microsoft Calendar to sync externally.`);
+      }
+
       setNewTitle('');
       setNewLocation('');
       setNewDescription('');
       setShowAddForm(false);
-    } catch (err) {
+    } catch (err: any) {
       console.error('Failed to create event:', err);
-      showToast('error', 'Error', 'Failed to create calendar event.');
+      const msg = err?.message || 'Failed to create calendar event.';
+      showToast('error', 'Error', msg);
     } finally {
       setSubmitting(false);
     }
@@ -351,9 +367,13 @@ const CalendarPage: React.FC<{ onChatNavigate: (msg: string) => void }> = ({ onC
               <div>
                 <div className="flex items-center gap-2 flex-wrap font-semibold text-text-primary text-xs">
                   <span>Calendar Cloud Sync</span>
-                  {googleActive ? (
+                  {googleCalendarActive ? (
                     <span className="px-2 py-0.5 rounded-full bg-emerald-500/10 border border-emerald-500/30 text-emerald-400 text-[10px] font-medium">
-                      ● Google Calendar Active
+                      ● Google Calendar Connected
+                    </span>
+                  ) : googleIdentityOnly ? (
+                    <span className="px-2 py-0.5 rounded-full bg-amber-500/10 border border-amber-500/30 text-amber-400 text-[10px] font-medium">
+                      ⚠ Google Account Connected (Calendar access required)
                     </span>
                   ) : msActive ? (
                     <span className="px-2 py-0.5 rounded-full bg-emerald-500/10 border border-emerald-500/30 text-emerald-400 text-[10px] font-medium">
@@ -374,13 +394,13 @@ const CalendarPage: React.FC<{ onChatNavigate: (msg: string) => void }> = ({ onC
               </div>
             </div>
 
-            {(!googleActive && !msActive) && (
+            {(!googleCalendarActive && !msActive) && (
               <button
                 type="button"
                 onClick={() => (window as any).__MITRA_INTEGRATIONS__?.()}
                 className="px-3 py-1.5 rounded-xl bg-surface-raised hover:bg-surface-elevated border border-border-subtle hover:border-brand/40 text-text-primary text-xs font-semibold whitespace-nowrap cursor-pointer transition-all active:scale-95 shrink-0"
               >
-                Connect Calendar
+                {googleIdentityOnly ? 'Connect Google Calendar' : 'Connect Calendar'}
               </button>
             )}
           </div>
