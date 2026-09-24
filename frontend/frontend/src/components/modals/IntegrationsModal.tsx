@@ -1,7 +1,13 @@
 import React, { useState, useEffect, useCallback } from 'react';
+import {
+  X, Mail, Calendar, ShieldCheck,
+  Package, Bug, GitPullRequest, Lock, AlertTriangle
+} from 'lucide-react';
 import { authApi } from '../../services/authApi';
 import { getApiBase, getAuthHeaders } from '../../services/apiConfig';
 import { useCompanionStore } from '../../store/companion.store';
+import { ServiceLogo } from '../primitives/ServiceLogo';
+import { ConnectionStatusBadge } from '../primitives/ConnectionStatusBadge';
 
 interface IntegrationsModalProps {
   isOpen: boolean;
@@ -10,6 +16,16 @@ interface IntegrationsModalProps {
 
 export const IntegrationsModal: React.FC<IntegrationsModalProps> = ({ isOpen, onClose }) => {
   const { isGuest, setAuthModalOpen } = useCompanionStore();
+
+  // Escape key to close modal
+  useEffect(() => {
+    if (!isOpen) return;
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') onClose();
+    };
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [isOpen, onClose]);
 
   // Google Connection State (backed by backend GET /api/connections)
   const [googleConnected, setGoogleConnected] = useState(false);
@@ -433,31 +449,29 @@ export const IntegrationsModal: React.FC<IntegrationsModalProps> = ({ isOpen, on
       aria-labelledby="integrations-modal-title"
     >
       <div
-        className="bg-[#141414] border border-white/10 rounded-3xl max-w-xl w-full text-white shadow-2xl flex flex-col max-h-[calc(100dvh-2rem)] sm:max-h-[calc(100dvh-3rem)] overflow-hidden relative"
+        className="bg-surface-raised border border-border-subtle rounded-3xl max-w-2xl w-full text-white shadow-2xl flex flex-col max-h-[calc(100dvh-2rem)] sm:max-h-[calc(100dvh-3rem)] overflow-hidden relative"
         onClick={(e) => e.stopPropagation()}
       >
         {/* Header - Fixed */}
-        <div className="p-5 sm:p-6 border-b border-white/10 flex-shrink-0 flex items-start justify-between gap-4">
+        <div className="p-5 sm:p-6 border-b border-border-subtle flex-shrink-0 flex items-start justify-between gap-4">
           <div>
             <div className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full bg-brand/15 border border-brand/30 text-brand-light text-3xs font-semibold uppercase tracking-wider mb-1.5">
-              <span>🔒</span> Encrypted Connections Vault
+              <Lock size={11} className="text-brand" /> Encrypted Connections Vault
             </div>
             <h2 id="integrations-modal-title" className="text-xl sm:text-2xl font-bold text-gray-100 tracking-tight">
               MITRA Service Connections
             </h2>
             <p className="text-xs sm:text-sm text-gray-400 mt-1 leading-relaxed">
-              Connect your personal accounts to enable automated email sending, calendar sync, and executive briefings.
+              Connect your personal accounts to enable automated email dispatch, calendar synchronization, and executive briefings.
             </p>
           </div>
 
           <button
             onClick={onClose}
-            className="w-8 h-8 rounded-xl flex items-center justify-center text-gray-400 hover:text-white hover:bg-white/10 transition-colors cursor-pointer flex-shrink-0 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand"
+            className="w-9 h-9 rounded-xl flex items-center justify-center text-gray-400 hover:text-white hover:bg-white/10 transition-colors cursor-pointer flex-shrink-0 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand"
             aria-label="Close dialog (Escape)"
           >
-            <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
-            </svg>
+            <X size={18} />
           </button>
         </div>
 
@@ -465,10 +479,10 @@ export const IntegrationsModal: React.FC<IntegrationsModalProps> = ({ isOpen, on
         <div className="flex-1 overflow-y-auto p-4 sm:p-6 space-y-4 overscroll-contain">
           {/* Guest Session Notice */}
           {isGuest && (
-            <div className="p-3.5 rounded-2xl bg-amber-500/10 border border-amber-500/30 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 text-xs">
-              <div className="flex items-center gap-2">
-                <span className="text-amber-400 text-sm">⚠️</span>
-                <span className="text-amber-200">
+            <div className="p-4 rounded-2xl bg-amber-500/10 border border-amber-500/30 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 text-xs">
+              <div className="flex items-center gap-2.5">
+                <AlertTriangle size={16} className="text-amber-400 shrink-0" />
+                <span className="text-amber-200 leading-snug">
                   You are in a Guest session. External integrations require an authenticated account.
                 </span>
               </div>
@@ -477,7 +491,7 @@ export const IntegrationsModal: React.FC<IntegrationsModalProps> = ({ isOpen, on
                   onClose();
                   setAuthModalOpen(true);
                 }}
-                className="px-3 py-1.5 bg-amber-500 hover:bg-amber-400 text-black font-semibold text-xs rounded-xl transition-all shrink-0 cursor-pointer"
+                className="px-3.5 py-1.5 bg-amber-500 hover:bg-amber-400 active:bg-amber-600 text-black font-semibold text-xs rounded-xl transition-all shrink-0 cursor-pointer"
               >
                 Create Account
               </button>
@@ -485,102 +499,95 @@ export const IntegrationsModal: React.FC<IntegrationsModalProps> = ({ isOpen, on
           )}
 
           {/* Web Application Calendar Sync Notice */}
-          <div className="p-3 rounded-xl bg-white/5 border border-white/10 flex items-start gap-2.5 text-xs text-gray-300">
-            <span className="text-blue-400 text-sm">ℹ️</span>
-            <div>
+          <div className="p-3.5 rounded-xl bg-white/5 border border-white/10 flex items-start gap-2.5 text-xs text-gray-300">
+            <span className="text-blue-400 text-sm mt-0.5">ℹ️</span>
+            <div className="leading-relaxed">
               <strong className="text-white">Mobile Sync Notice:</strong> Web browsers cannot directly write to native mobile device calendars without an active Google Calendar or Microsoft Outlook connection.
             </div>
           </div>
 
           {statusMessage && (
-            <div className="p-3.5 rounded-xl bg-emerald-950/40 border border-emerald-500/30 text-emerald-300 text-xs flex items-center gap-2">
-              <svg className="w-4 h-4 shrink-0 fill-current text-emerald-400" viewBox="0 0 20 20">
-                <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clipRule="evenodd" />
-              </svg>
+            <div className="p-3.5 rounded-xl bg-emerald-950/40 border border-emerald-500/30 text-emerald-300 text-xs flex items-center gap-2.5">
+              <ShieldCheck size={16} className="text-emerald-400 shrink-0" />
               <span>{statusMessage}</span>
             </div>
           )}
 
           {errorMessage && (
-            <div className="p-3.5 rounded-xl bg-red-950/40 border border-red-500/30 text-red-300 text-xs flex items-center gap-2">
-              <span>⚠️ {errorMessage}</span>
+            <div className="p-3.5 rounded-xl bg-red-950/40 border border-red-500/30 text-red-300 text-xs flex items-center gap-2.5">
+              <AlertTriangle size={16} className="text-red-400 shrink-0" />
+              <span>{errorMessage}</span>
             </div>
           )}
+
           {/* 1. GOOGLE INTEGRATION CARD */}
-          <div className="p-5 rounded-2xl bg-[#1A1A1A] border border-white/10">
-            <div className="flex items-center justify-between mb-3">
-              <div className="flex items-center gap-3">
-                <div className="w-10 h-10 rounded-xl bg-white/5 border border-white/10 flex items-center justify-center">
-                  <svg className="w-5 h-5" viewBox="0 0 24 24">
-                    <path fill="#4285F4" d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z" />
-                    <path fill="#34A853" d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z" />
-                    <path fill="#FBBC05" d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.06H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.94l2.85-2.22.81-.63z" />
-                    <path fill="#EA4335" d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.06l3.66 2.84c.87-2.6 3.3-4.52 6.16-4.52z" />
-                  </svg>
-                </div>
-                <div>
-                  <h3 className="font-semibold text-gray-200">Google Account</h3>
+          <div className="p-5 rounded-2xl bg-[#1A1A1A] border border-white/10 hover:border-white/15 transition-all">
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 mb-3">
+              <div className="flex items-center gap-3.5 min-w-0 flex-1">
+                <ServiceLogo service="google" size="md" />
+                <div className="min-w-0">
+                  <h3 className="font-semibold text-gray-200 text-sm sm:text-base">Google Account</h3>
                   <p className="text-xs text-gray-400">Gmail dispatch & Google Calendar sync</p>
                 </div>
               </div>
 
-              {googleStatus === 'active' ? (
-                <div className="flex items-center gap-2">
-                  <span className="px-3 py-1 rounded-full bg-emerald-500/10 border border-emerald-500/30 text-emerald-400 text-xs font-medium">
-                    Connected
-                  </span>
-                  <button
-                    onClick={() => handleSync('google')}
-                    disabled={syncingProvider === 'google'}
-                    className="px-3 py-1 bg-white/10 hover:bg-white/20 text-white border border-white/20 text-xs font-medium rounded-xl transition-colors cursor-pointer active:scale-95"
-                  >
-                    {syncingProvider === 'google' ? 'Syncing...' : 'Sync'}
-                  </button>
-                  <button
-                    onClick={handleDisconnectGoogle}
-                    disabled={isDisconnectingGoogle}
-                    className="px-3 py-1 bg-red-500/10 hover:bg-red-500/20 text-red-400 border border-red-500/30 text-xs font-medium rounded-xl transition-colors cursor-pointer active:scale-95"
-                  >
-                    {isDisconnectingGoogle ? "Disconnecting..." : "Disconnect"}
-                  </button>
-                </div>
-              ) : googleStatus === 'needs_reauthorization' ? (
-                <div className="flex items-center gap-2">
-                  <span className="px-3 py-1 rounded-full bg-amber-500/10 border border-amber-500/30 text-amber-400 text-xs font-medium">
-                    Needs Reauthorization
-                  </span>
+              <div className="flex items-center gap-2 self-start sm:self-center shrink-0">
+                {googleStatus === 'active' ? (
+                  <>
+                    <ConnectionStatusBadge status={syncingProvider === 'google' ? 'SYNCING' : 'CONNECTED'} />
+                    <button
+                      onClick={() => handleSync('google')}
+                      disabled={syncingProvider === 'google'}
+                      className="px-3 py-1.5 bg-white/10 hover:bg-white/20 text-white border border-white/20 text-xs font-medium rounded-xl transition-colors cursor-pointer active:scale-95 disabled:opacity-50"
+                    >
+                      {syncingProvider === 'google' ? 'Syncing...' : 'Sync'}
+                    </button>
+                    <button
+                      onClick={handleDisconnectGoogle}
+                      disabled={isDisconnectingGoogle}
+                      className="px-3 py-1.5 bg-red-500/10 hover:bg-red-500/20 text-red-400 border border-red-500/30 text-xs font-medium rounded-xl transition-colors cursor-pointer active:scale-95 disabled:opacity-50"
+                    >
+                      {isDisconnectingGoogle ? "Disconnecting..." : "Disconnect"}
+                    </button>
+                  </>
+                ) : googleStatus === 'needs_reauthorization' ? (
+                  <>
+                    <ConnectionStatusBadge status="NEEDS_REAUTH" />
+                    <button
+                      onClick={handleConnectGoogle}
+                      disabled={isConnectingGoogle}
+                      className="px-3.5 py-1.5 bg-amber-500 hover:bg-amber-600 text-black font-semibold text-xs rounded-xl transition-colors cursor-pointer"
+                    >
+                      {isConnectingGoogle ? "Redirecting..." : "Reconnect Google"}
+                    </button>
+                  </>
+                ) : (
                   <button
                     onClick={handleConnectGoogle}
                     disabled={isConnectingGoogle}
-                    className="px-3 py-1 bg-amber-500 hover:bg-amber-600 text-black font-semibold text-xs rounded-xl transition-colors cursor-pointer"
+                    className="px-4 py-2 bg-white text-black hover:bg-gray-200 font-semibold text-xs rounded-xl transition-colors cursor-pointer disabled:opacity-50"
                   >
-                    {isConnectingGoogle ? "Redirecting..." : "Reconnect Google"}
+                    {isConnectingGoogle ? "Connecting..." : "Connect Google"}
                   </button>
-                </div>
-              ) : (
-                <button
-                  onClick={handleConnectGoogle}
-                  disabled={isConnectingGoogle}
-                  className="px-4 py-2 bg-white text-black hover:bg-gray-200 font-semibold text-xs rounded-xl transition-colors cursor-pointer disabled:opacity-50"
-                >
-                  {isConnectingGoogle ? "Connecting..." : "Connect Google"}
-                </button>
-              )}
+                )}
+              </div>
             </div>
 
             {/* Google Account Metadata & Capabilities */}
             {googleConnected && (
-              <div className="mt-3 pt-3 border-t border-white/5 space-y-2 text-xs">
+              <div className="mt-3 pt-3 border-t border-white/5 space-y-2.5 text-xs">
                 <div className="flex items-center justify-between text-gray-400">
                   <span>Account: <strong className="text-gray-200">{googleAddress}</strong></span>
-                  <span className="text-emerald-400 font-medium">AES-256 Encrypted</span>
-                </div>
-                <div className="flex flex-wrap gap-2 pt-1">
-                  <span className="px-2 py-0.5 rounded bg-white/5 border border-white/10 text-gray-300 text-[10px]">
-                    ✉️ Gmail API (Send)
+                  <span className="inline-flex items-center gap-1 text-emerald-400 font-medium">
+                    <ShieldCheck size={12} /> AES-256 Encrypted
                   </span>
-                  <span className="px-2 py-0.5 rounded bg-white/5 border border-white/10 text-gray-300 text-[10px]">
-                    📅 Google Calendar API
+                </div>
+                <div className="flex flex-wrap gap-2 pt-0.5">
+                  <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-white/5 border border-white/10 text-gray-300 text-[11px]">
+                    <Mail size={12} className="text-blue-400" /> Gmail API (Send)
+                  </span>
+                  <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-white/5 border border-white/10 text-gray-300 text-[11px]">
+                    <Calendar size={12} className="text-emerald-400" /> Google Calendar API
                   </span>
                 </div>
               </div>
@@ -588,11 +595,11 @@ export const IntegrationsModal: React.FC<IntegrationsModalProps> = ({ isOpen, on
 
             {/* App Password Fallback Trigger */}
             {!googleConnected && (
-              <div className="mt-3 pt-2 border-t border-white/5 flex items-center justify-between text-[11px] text-gray-500">
+              <div className="mt-3 pt-2.5 border-t border-white/5 flex items-center justify-between text-[11px] text-gray-500">
                 <span>OAuth unavailable or using app passwords?</span>
                 <button
                   onClick={() => setAppPasswordMode(!appPasswordMode)}
-                  className="text-blue-400 hover:underline cursor-pointer"
+                  className="text-brand-light hover:underline cursor-pointer"
                 >
                   {appPasswordMode ? "Hide App Password Form" : "Use App Password"}
                 </button>
@@ -607,7 +614,7 @@ export const IntegrationsModal: React.FC<IntegrationsModalProps> = ({ isOpen, on
                   value={inputGmail}
                   onChange={(e) => setInputGmail(e.target.value)}
                   placeholder="your.email@gmail.com"
-                  className="w-full px-4 py-2 rounded-xl bg-[#242424] text-white text-xs border border-white/10 focus:outline-none"
+                  className="w-full px-4 py-2.5 rounded-xl bg-[#242424] text-white text-xs border border-white/10 focus:outline-none focus:border-brand"
                 />
                 <input
                   type="password"
@@ -615,12 +622,12 @@ export const IntegrationsModal: React.FC<IntegrationsModalProps> = ({ isOpen, on
                   value={inputAppPassword}
                   onChange={(e) => setInputAppPassword(e.target.value)}
                   placeholder="Gmail 16-character App Password"
-                  className="w-full px-4 py-2 rounded-xl bg-[#242424] text-white text-xs border border-white/10 focus:outline-none"
+                  className="w-full px-4 py-2.5 rounded-xl bg-[#242424] text-white text-xs border border-white/10 focus:outline-none focus:border-brand"
                 />
                 <button
                   type="submit"
                   disabled={isVerifying}
-                  className="w-full py-2 bg-emerald-500 hover:bg-emerald-600 text-black font-bold text-xs rounded-xl transition-colors"
+                  className="w-full py-2.5 bg-emerald-500 hover:bg-emerald-600 text-black font-bold text-xs rounded-xl transition-colors cursor-pointer"
                 >
                   {isVerifying ? "Encrypting & Connecting..." : "Save Gmail App Password"}
                 </button>
@@ -629,80 +636,73 @@ export const IntegrationsModal: React.FC<IntegrationsModalProps> = ({ isOpen, on
           </div>
 
           {/* 2. MICROSOFT INTEGRATION CARD */}
-          <div className="p-5 rounded-2xl bg-[#1A1A1A] border border-white/10">
-            <div className="flex items-center justify-between mb-3">
-              <div className="flex items-center gap-3">
-                <div className="w-10 h-10 rounded-xl bg-white/5 border border-white/10 flex items-center justify-center">
-                  <div className="w-5 h-5 grid grid-cols-2 gap-0.5">
-                    <div className="bg-[#F25022] rounded-xs" />
-                    <div className="bg-[#7FBA00] rounded-xs" />
-                    <div className="bg-[#00A4EF] rounded-xs" />
-                    <div className="bg-[#FFB900] rounded-xs" />
-                  </div>
-                </div>
-                <div>
-                  <h3 className="font-semibold text-gray-200">Microsoft Account</h3>
+          <div className="p-5 rounded-2xl bg-[#1A1A1A] border border-white/10 hover:border-white/15 transition-all">
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 mb-3">
+              <div className="flex items-center gap-3.5 min-w-0 flex-1">
+                <ServiceLogo service="microsoft" size="md" />
+                <div className="min-w-0">
+                  <h3 className="font-semibold text-gray-200 text-sm sm:text-base">Microsoft Account</h3>
                   <p className="text-xs text-gray-400">Outlook mail dispatch & Microsoft Calendar sync</p>
                 </div>
               </div>
 
-              {microsoftStatus === 'active' ? (
-                <div className="flex items-center gap-2">
-                  <span className="px-3 py-1 rounded-full bg-emerald-500/10 border border-emerald-500/30 text-emerald-400 text-xs font-medium">
-                    Connected
-                  </span>
-                  <button
-                    onClick={() => handleSync('microsoft')}
-                    disabled={syncingProvider === 'microsoft'}
-                    className="px-3 py-1 bg-white/10 hover:bg-white/20 text-white border border-white/20 text-xs font-medium rounded-xl transition-colors cursor-pointer active:scale-95"
-                  >
-                    {syncingProvider === 'microsoft' ? 'Syncing...' : 'Sync'}
-                  </button>
-                  <button
-                    onClick={handleDisconnectMicrosoft}
-                    disabled={isDisconnectingMicrosoft}
-                    className="px-3 py-1 bg-red-500/10 hover:bg-red-500/20 text-red-400 border border-red-500/30 text-xs font-medium rounded-xl transition-colors cursor-pointer active:scale-95"
-                  >
-                    {isDisconnectingMicrosoft ? "Disconnecting..." : "Disconnect"}
-                  </button>
-                </div>
-              ) : microsoftStatus === 'needs_reauthorization' ? (
-                <div className="flex items-center gap-2">
-                  <span className="px-3 py-1 rounded-full bg-amber-500/10 border border-amber-500/30 text-amber-400 text-xs font-medium">
-                    Needs Reauthorization
-                  </span>
+              <div className="flex items-center gap-2 self-start sm:self-center shrink-0">
+                {microsoftStatus === 'active' ? (
+                  <>
+                    <ConnectionStatusBadge status={syncingProvider === 'microsoft' ? 'SYNCING' : 'CONNECTED'} />
+                    <button
+                      onClick={() => handleSync('microsoft')}
+                      disabled={syncingProvider === 'microsoft'}
+                      className="px-3 py-1.5 bg-white/10 hover:bg-white/20 text-white border border-white/20 text-xs font-medium rounded-xl transition-colors cursor-pointer active:scale-95 disabled:opacity-50"
+                    >
+                      {syncingProvider === 'microsoft' ? 'Syncing...' : 'Sync'}
+                    </button>
+                    <button
+                      onClick={handleDisconnectMicrosoft}
+                      disabled={isDisconnectingMicrosoft}
+                      className="px-3 py-1.5 bg-red-500/10 hover:bg-red-500/20 text-red-400 border border-red-500/30 text-xs font-medium rounded-xl transition-colors cursor-pointer active:scale-95 disabled:opacity-50"
+                    >
+                      {isDisconnectingMicrosoft ? "Disconnecting..." : "Disconnect"}
+                    </button>
+                  </>
+                ) : microsoftStatus === 'needs_reauthorization' ? (
+                  <>
+                    <ConnectionStatusBadge status="NEEDS_REAUTH" />
+                    <button
+                      onClick={handleConnectMicrosoft}
+                      disabled={isConnectingMicrosoft}
+                      className="px-3.5 py-1.5 bg-amber-500 hover:bg-amber-600 text-black font-semibold text-xs rounded-xl transition-colors cursor-pointer"
+                    >
+                      {isConnectingMicrosoft ? "Redirecting..." : "Reconnect Microsoft"}
+                    </button>
+                  </>
+                ) : (
                   <button
                     onClick={handleConnectMicrosoft}
                     disabled={isConnectingMicrosoft}
-                    className="px-3 py-1 bg-amber-500 hover:bg-amber-600 text-black font-semibold text-xs rounded-xl transition-colors cursor-pointer"
+                    className="px-4 py-2 bg-blue-600 hover:bg-blue-500 text-white font-semibold text-xs rounded-xl transition-colors cursor-pointer disabled:opacity-50"
                   >
-                    {isConnectingMicrosoft ? "Redirecting..." : "Reconnect Microsoft"}
+                    {isConnectingMicrosoft ? "Connecting..." : "Connect Microsoft"}
                   </button>
-                </div>
-              ) : (
-                <button
-                  onClick={handleConnectMicrosoft}
-                  disabled={isConnectingMicrosoft}
-                  className="px-4 py-2 bg-blue-600 hover:bg-blue-500 text-white font-semibold text-xs rounded-xl transition-colors cursor-pointer disabled:opacity-50"
-                >
-                  {isConnectingMicrosoft ? "Connecting..." : "Connect Microsoft"}
-                </button>
-              )}
+                )}
+              </div>
             </div>
 
             {/* Microsoft Account Metadata & Capabilities */}
             {microsoftConnected && (
-              <div className="mt-3 pt-3 border-t border-white/5 space-y-2 text-xs">
+              <div className="mt-3 pt-3 border-t border-white/5 space-y-2.5 text-xs">
                 <div className="flex items-center justify-between text-gray-400">
                   <span>Account: <strong className="text-gray-200">{microsoftAddress}</strong></span>
-                  <span className="text-emerald-400 font-medium">AES-256 Encrypted</span>
-                </div>
-                <div className="flex flex-wrap gap-2 pt-1">
-                  <span className="px-2 py-0.5 rounded bg-white/5 border border-white/10 text-gray-300 text-[10px]">
-                    ✉️ Outlook Graph API (Send)
+                  <span className="inline-flex items-center gap-1 text-emerald-400 font-medium">
+                    <ShieldCheck size={12} /> AES-256 Encrypted
                   </span>
-                  <span className="px-2 py-0.5 rounded bg-white/5 border border-white/10 text-gray-300 text-[10px]">
-                    📅 Microsoft Calendar API
+                </div>
+                <div className="flex flex-wrap gap-2 pt-0.5">
+                  <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-white/5 border border-white/10 text-gray-300 text-[11px]">
+                    <Mail size={12} className="text-blue-400" /> Outlook Graph API (Send)
+                  </span>
+                  <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-white/5 border border-white/10 text-gray-300 text-[11px]">
+                    <Calendar size={12} className="text-emerald-400" /> Microsoft Calendar API
                   </span>
                 </div>
               </div>
@@ -710,212 +710,203 @@ export const IntegrationsModal: React.FC<IntegrationsModalProps> = ({ isOpen, on
           </div>
 
           {/* 3. GITHUB DEVELOPER INTEGRATION CARD */}
-          <div className="p-5 rounded-2xl bg-[#1A1A1A] border border-white/10">
-            <div className="flex items-center justify-between mb-3">
-              <div className="flex items-center gap-3">
-                <div className="w-10 h-10 rounded-xl bg-white/5 border border-white/10 flex items-center justify-center">
-                  <svg className="w-6 h-6 fill-current text-white" viewBox="0 0 24 24">
-                    <path fillRule="evenodd" clipRule="evenodd" d="M12 2C6.477 2 2 6.484 2 12.017c0 4.425 2.865 8.18 6.839 9.504.5.092.682-.217.682-.483 0-.237-.008-.868-.013-1.703-2.782.605-3.369-1.343-3.369-1.343-.454-1.158-1.11-1.466-1.11-1.466-.908-.62.069-.608.069-.608 1.003.07 1.53 1.032 1.53 1.032.892 1.53 2.341 1.088 2.91.832.092-.647.35-1.088.636-1.338-2.22-.253-4.555-1.113-4.555-4.951 0-1.093.39-1.988 1.029-2.688-.103-.253-.446-1.272.098-2.65 0 0 .84-.27 2.75 1.026A9.564 9.564 0 0112 6.844c.85.004 1.705.115 2.504.337 1.909-1.296 2.747-1.027 2.747-1.027.546 1.379.202 2.398.1 2.651.64.7 1.028 1.595 1.028 2.688 0 3.848-2.339 4.695-4.566 4.943.359.309.678.92.678 1.855 0 1.338-.012 2.419-.012 2.747 0 .268.18.58.688.482A10.019 10.019 0 0022 12.017C22 6.484 17.522 2 12 2z" />
-                  </svg>
-                </div>
-                <div>
-                  <h3 className="font-semibold text-gray-200">GitHub Developer Account</h3>
+          <div className="p-5 rounded-2xl bg-[#1A1A1A] border border-white/10 hover:border-white/15 transition-all">
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 mb-3">
+              <div className="flex items-center gap-3.5 min-w-0 flex-1">
+                <ServiceLogo service="github" size="md" />
+                <div className="min-w-0">
+                  <h3 className="font-semibold text-gray-200 text-sm sm:text-base">GitHub Developer Account</h3>
                   <p className="text-xs text-gray-400">Repositories, GitHub Issues & Pull Requests API</p>
                 </div>
               </div>
 
-              {githubStatus === 'active' ? (
-                <div className="flex items-center gap-2">
-                  <span className="px-3 py-1 rounded-full bg-emerald-500/10 border border-emerald-500/30 text-emerald-400 text-xs font-medium">
-                    Connected
-                  </span>
-                  <button
-                    onClick={handleDisconnectGithub}
-                    disabled={isDisconnectingGithub}
-                    className="px-3 py-1 bg-red-500/10 hover:bg-red-500/20 text-red-400 border border-red-500/30 text-xs font-medium rounded-xl transition-colors cursor-pointer"
-                  >
-                    {isDisconnectingGithub ? "Disconnecting..." : "Disconnect"}
-                  </button>
-                </div>
-              ) : githubStatus === 'needs_reauthorization' ? (
-                <div className="flex items-center gap-2">
-                  <span className="px-3 py-1 rounded-full bg-amber-500/10 border border-amber-500/30 text-amber-400 text-xs font-medium">
-                    Needs Reauthorization
-                  </span>
+              <div className="flex items-center gap-2 self-start sm:self-center shrink-0">
+                {githubStatus === 'active' ? (
+                  <>
+                    <ConnectionStatusBadge status="CONNECTED" />
+                    <button
+                      onClick={handleDisconnectGithub}
+                      disabled={isDisconnectingGithub}
+                      className="px-3 py-1.5 bg-red-500/10 hover:bg-red-500/20 text-red-400 border border-red-500/30 text-xs font-medium rounded-xl transition-colors cursor-pointer"
+                    >
+                      {isDisconnectingGithub ? "Disconnecting..." : "Disconnect"}
+                    </button>
+                  </>
+                ) : githubStatus === 'needs_reauthorization' ? (
+                  <>
+                    <ConnectionStatusBadge status="NEEDS_REAUTH" />
+                    <button
+                      onClick={handleConnectGithub}
+                      disabled={isConnectingGithub}
+                      className="px-3.5 py-1.5 bg-amber-500 hover:bg-amber-600 text-black font-semibold text-xs rounded-xl transition-colors cursor-pointer"
+                    >
+                      {isConnectingGithub ? "Redirecting..." : "Reconnect GitHub"}
+                    </button>
+                  </>
+                ) : (
                   <button
                     onClick={handleConnectGithub}
                     disabled={isConnectingGithub}
-                    className="px-3 py-1 bg-amber-500 hover:bg-amber-600 text-black font-semibold text-xs rounded-xl transition-colors cursor-pointer"
+                    className="px-4 py-2 bg-purple-600 hover:bg-purple-500 text-white font-semibold text-xs rounded-xl transition-colors cursor-pointer disabled:opacity-50"
                   >
-                    {isConnectingGithub ? "Redirecting..." : "Reconnect GitHub"}
+                    {isConnectingGithub ? "Connecting..." : "Connect GitHub"}
                   </button>
-                </div>
-              ) : (
-                <button
-                  onClick={handleConnectGithub}
-                  disabled={isConnectingGithub}
-                  className="px-4 py-2 bg-purple-600 hover:bg-purple-500 text-white font-semibold text-xs rounded-xl transition-colors cursor-pointer disabled:opacity-50"
-                >
-                  {isConnectingGithub ? "Connecting..." : "Connect GitHub"}
-                </button>
-              )}
+                )}
+              </div>
             </div>
 
             {/* GitHub Account Metadata & Capabilities */}
             {githubConnected && (
-              <div className="mt-3 pt-3 border-t border-white/5 space-y-2 text-xs">
+              <div className="mt-3 pt-3 border-t border-white/5 space-y-2.5 text-xs">
                 <div className="flex items-center justify-between text-gray-400">
                   <span>Account: <strong className="text-gray-200">{githubUsername}</strong></span>
-                  <span className="text-emerald-400 font-medium">AES-256 Encrypted</span>
+                  <span className="inline-flex items-center gap-1 text-emerald-400 font-medium">
+                    <ShieldCheck size={12} /> AES-256 Encrypted
+                  </span>
                 </div>
-                <div className="flex flex-wrap gap-2 pt-1">
-                  <span className="px-2 py-0.5 rounded bg-white/5 border border-white/10 text-gray-300 text-[10px]">
-                    📦 Repositories API
+                <div className="flex flex-wrap gap-2 pt-0.5">
+                  <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-white/5 border border-white/10 text-gray-300 text-[11px]">
+                    <Package size={12} className="text-purple-400" /> Repositories API
                   </span>
-                  <span className="px-2 py-0.5 rounded bg-white/5 border border-white/10 text-gray-300 text-[10px]">
-                    🐛 Issues API
+                  <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-white/5 border border-white/10 text-gray-300 text-[11px]">
+                    <Bug size={12} className="text-amber-400" /> Issues API
                   </span>
-                  <span className="px-2 py-0.5 rounded bg-white/5 border border-white/10 text-gray-300 text-[10px]">
-                    🔀 Pull Requests API
+                  <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-white/5 border border-white/10 text-gray-300 text-[11px]">
+                    <GitPullRequest size={12} className="text-emerald-400" /> Pull Requests API
                   </span>
                 </div>
               </div>
             )}
           </div>
 
-          {/* 3. APPLE SIGN-IN / IDENTITY CARD */}
-          <div className="p-5 rounded-2xl bg-[#1A1A1A] border border-white/10">
-            <div className="flex items-center justify-between mb-3">
-              <div className="flex items-center gap-3">
-                <div className="w-10 h-10 rounded-xl bg-white/5 border border-white/10 flex items-center justify-center">
-                  <svg className="w-5 h-5 fill-current text-white" viewBox="0 0 24 24">
-                    <path d="M18.71 19.5c-.83 1.24-1.71 2.45-3.05 2.47-1.34.03-1.77-.79-3.29-.79-1.53 0-2 .77-3.27.82-1.31.05-2.3-1.32-3.14-2.53C4.25 17 2.94 12.45 4.7 9.39c.87-1.52 2.43-2.48 4.12-2.51 1.28-.02 2.5.87 3.29.87.78 0 2.26-1.07 3.81-.91.65.03 2.47.26 3.64 1.98-.09.06-2.17 1.28-2.15 3.81.03 3.02 2.65 4.03 2.68 4.04-.03.07-.42 1.44-1.38 2.83M15.97 6.85c.66-.8 1.11-1.92.99-3.04-.96.04-2.12.64-2.8 1.44-.61.71-1.14 1.86-1 2.97 1.07.08 2.15-.57 2.81-1.37z" />
-                  </svg>
-                </div>
-                <div>
-                  <h3 className="font-semibold text-gray-200">Apple Account</h3>
+          {/* 4. APPLE SIGN-IN / IDENTITY CARD */}
+          <div className="p-5 rounded-2xl bg-[#1A1A1A] border border-white/10 hover:border-white/15 transition-all">
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 mb-3">
+              <div className="flex items-center gap-3.5 min-w-0 flex-1">
+                <ServiceLogo service="apple" size="md" />
+                <div className="min-w-0">
+                  <h3 className="font-semibold text-gray-200 text-sm sm:text-base">Apple Account</h3>
                   <p className="text-xs text-gray-400">Sign in with Apple & Private Relay Email identity</p>
                 </div>
               </div>
 
-              {appleStatus === 'active' ? (
-                <div className="flex items-center gap-2">
-                  <span className="px-3 py-1 rounded-full bg-emerald-500/10 border border-emerald-500/30 text-emerald-400 text-xs font-medium">
-                    Connected
-                  </span>
-                  <button
-                    onClick={handleDisconnectApple}
-                    disabled={isDisconnectingApple}
-                    className="px-3 py-1 bg-red-500/10 hover:bg-red-500/20 text-red-400 border border-red-500/30 text-xs font-medium rounded-xl transition-colors cursor-pointer"
-                  >
-                    {isDisconnectingApple ? "Disconnecting..." : "Disconnect"}
-                  </button>
-                </div>
-              ) : appleStatus === 'needs_reauthorization' ? (
-                <div className="flex items-center gap-2">
-                  <span className="px-3 py-1 rounded-full bg-amber-500/10 border border-amber-500/30 text-amber-400 text-xs font-medium">
-                    Needs Reauthorization
-                  </span>
+              <div className="flex items-center gap-2 self-start sm:self-center shrink-0">
+                {appleStatus === 'active' ? (
+                  <>
+                    <ConnectionStatusBadge status="CONNECTED" />
+                    <button
+                      onClick={handleDisconnectApple}
+                      disabled={isDisconnectingApple}
+                      className="px-3 py-1.5 bg-red-500/10 hover:bg-red-500/20 text-red-400 border border-red-500/30 text-xs font-medium rounded-xl transition-colors cursor-pointer"
+                    >
+                      {isDisconnectingApple ? "Disconnecting..." : "Disconnect"}
+                    </button>
+                  </>
+                ) : appleStatus === 'needs_reauthorization' ? (
+                  <>
+                    <ConnectionStatusBadge status="NEEDS_REAUTH" />
+                    <button
+                      onClick={handleConnectApple}
+                      disabled={isConnectingApple}
+                      className="px-3.5 py-1.5 bg-amber-500 hover:bg-amber-600 text-black font-semibold text-xs rounded-xl transition-colors cursor-pointer"
+                    >
+                      {isConnectingApple ? "Redirecting..." : "Reconnect Apple"}
+                    </button>
+                  </>
+                ) : (
                   <button
                     onClick={handleConnectApple}
                     disabled={isConnectingApple}
-                    className="px-3 py-1 bg-amber-500 hover:bg-amber-600 text-black font-semibold text-xs rounded-xl transition-colors cursor-pointer"
+                    className="px-4 py-2 bg-white text-black hover:bg-gray-200 font-semibold text-xs rounded-xl transition-colors cursor-pointer disabled:opacity-50"
                   >
-                    {isConnectingApple ? "Redirecting..." : "Reconnect Apple"}
+                    {isConnectingApple ? "Connecting..." : "Connect Apple"}
                   </button>
-                </div>
-              ) : (
-                <button
-                  onClick={handleConnectApple}
-                  disabled={isConnectingApple}
-                  className="px-4 py-2 bg-white text-black hover:bg-gray-200 font-semibold text-xs rounded-xl transition-colors cursor-pointer disabled:opacity-50"
-                >
-                  {isConnectingApple ? "Connecting..." : "Connect Apple"}
-                </button>
-              )}
+                )}
+              </div>
             </div>
 
             {/* Apple Account Metadata & Capabilities */}
             {appleConnected && (
-              <div className="mt-3 pt-3 border-t border-white/5 space-y-2 text-xs">
+              <div className="mt-3 pt-3 border-t border-white/5 space-y-2.5 text-xs">
                 <div className="flex items-center justify-between text-gray-400">
                   <span>Identity: <strong className="text-gray-200">{appleEmail}</strong></span>
-                  <span className="text-emerald-400 font-medium">ES256 Verified</span>
-                </div>
-                <div className="flex flex-wrap gap-2 pt-1">
-                  <span className="px-2 py-0.5 rounded bg-white/5 border border-white/10 text-gray-300 text-[10px]">
-                    🍎 Sign in with Apple
+                  <span className="inline-flex items-center gap-1 text-emerald-400 font-medium">
+                    <ShieldCheck size={12} /> ES256 Verified
                   </span>
-                  <span className="px-2 py-0.5 rounded bg-white/5 border border-white/10 text-gray-300 text-[10px]">
-                    🛡️ Private Relay Support
+                </div>
+                <div className="flex flex-wrap gap-2 pt-0.5">
+                  <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-white/5 border border-white/10 text-gray-300 text-[11px]">
+                    <Lock size={12} className="text-gray-300" /> Sign in with Apple
+                  </span>
+                  <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-white/5 border border-white/10 text-gray-300 text-[11px]">
+                    <ShieldCheck size={12} className="text-brand-light" /> Private Relay Support
                   </span>
                 </div>
               </div>
             )}
           </div>
 
-          {/* 4. APPLE CALENDAR & NATIVE CALENDAR (VISUALLY SEPARATE FROM APPLE SIGN-IN) */}
-          <div className="p-5 rounded-2xl bg-[#1A1A1A] border border-white/10">
-            <div className="flex items-center justify-between mb-3">
-              <div className="flex items-center gap-3">
-                <div className="w-10 h-10 rounded-xl bg-white/5 border border-white/10 flex items-center justify-center text-lg">
-                  📅
-                </div>
-                <div>
-                  <h3 className="font-semibold text-gray-200">Apple Calendar & Native iOS Calendar</h3>
+          {/* 5. APPLE CALENDAR & NATIVE CALENDAR (SEPARATE FROM APPLE SIGN-IN, WITH VECTOR LOGO) */}
+          <div className="p-5 rounded-2xl bg-[#1A1A1A] border border-white/10 hover:border-white/15 transition-all">
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 mb-3">
+              <div className="flex items-center gap-3.5 min-w-0 flex-1">
+                <ServiceLogo service="apple_calendar" size="md" />
+                <div className="min-w-0">
+                  <h3 className="font-semibold text-gray-200 text-sm sm:text-base">Apple Calendar & Native iOS Calendar</h3>
                   <p className="text-xs text-gray-400">Direct device calendar access & local sandbox bridge</p>
                 </div>
               </div>
-              <span className="px-3 py-1 rounded-full bg-white/5 border border-white/10 text-gray-400 text-xs font-medium">
-                Unavailable via Web
-              </span>
+              <div className="self-start sm:self-center shrink-0">
+                <ConnectionStatusBadge status="UNAVAILABLE" label="Unavailable via Web" />
+              </div>
             </div>
-            <div className="mt-3 pt-3 border-t border-white/5 text-xs text-gray-400 leading-relaxed space-y-1.5">
+            <div className="mt-3 pt-3 border-t border-white/5 text-xs text-gray-400 leading-relaxed space-y-2">
               <p>
                 Due to Apple iOS and macOS browser sandbox security restrictions, web applications cannot write directly to native Apple Calendars or Reminders without an intermediary cloud connection.
               </p>
-              <div className="flex items-center gap-2 pt-1">
-                <span className="px-2 py-0.5 rounded bg-blue-500/10 border border-blue-500/20 text-blue-300 text-[10px]">
+              <div className="flex items-center gap-2 pt-0.5">
+                <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-blue-500/10 border border-blue-500/20 text-blue-300 text-[11px]">
                   💡 Tip: Connect Google Calendar or Microsoft Outlook to sync with iOS Calendar
                 </span>
               </div>
             </div>
           </div>
 
-          {/* 5. WHATSAPP INTEGRATION CARD */}
-          <div className="p-5 rounded-2xl bg-[#1A1A1A] border border-white/10">
-            <div className="flex items-center gap-3 mb-4">
-              <div className="w-10 h-10 rounded-xl bg-emerald-500/10 border border-emerald-500/20 flex items-center justify-center text-emerald-400">
-                <svg className="w-6 h-6 fill-current" viewBox="0 0 24 24">
-                  <path d="M.057 24l1.687-6.163c-1.041-1.804-1.588-3.849-1.587-5.946.003-6.556 5.338-11.891 11.893-11.891 3.181.001 6.167 1.24 8.413 3.488 2.245 2.248 3.481 5.236 3.48 8.414-.003 6.557-5.338 11.892-11.893 11.892-1.99-.001-3.951-.5-5.688-1.448l-6.305 1.654zm6.597-3.807c1.676.995 3.276 1.591 5.392 1.592 5.448 0 9.886-4.434 9.889-9.885.002-5.462-4.415-9.89-9.881-9.892-5.452 0-9.887 4.434-9.889 9.884-.001 2.225.651 3.891 1.746 5.634l-1.099 4.019 4.012-1.052z" />
-                </svg>
+          {/* 6. WHATSAPP INTEGRATION CARD */}
+          <div className="p-5 rounded-2xl bg-[#1A1A1A] border border-white/10 hover:border-white/15 transition-all">
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 mb-3">
+              <div className="flex items-center gap-3.5 min-w-0 flex-1">
+                <ServiceLogo service="whatsapp" size="md" />
+                <div className="min-w-0">
+                  <h3 className="font-semibold text-gray-200 text-sm sm:text-base">WhatsApp Messaging</h3>
+                  <p className="text-xs text-gray-400">Receive 8:45 AM morning briefings & price alerts</p>
+                </div>
               </div>
-              <div>
-                <h3 className="font-semibold text-gray-200">WhatsApp Messaging</h3>
-                <p className="text-xs text-gray-400">Receive 8:45 AM morning briefings & price alerts</p>
+              <div className="self-start sm:self-center shrink-0">
+                <ConnectionStatusBadge status={whatsappConnected ? 'CONNECTED' : 'NOT_CONNECTED'} />
               </div>
             </div>
 
             {whatsappConnected ? (
-              <div className="flex items-center justify-between text-xs text-gray-400 pt-2 border-t border-white/5">
+              <div className="flex items-center justify-between text-xs text-gray-400 pt-3 border-t border-white/5">
                 <span>Phone: <strong className="text-gray-200">{whatsappNumber}</strong></span>
-                <span className="px-3 py-1 rounded-full bg-emerald-500/10 border border-emerald-500/30 text-emerald-400 font-medium">
-                  Verified & Active
+                <span className="inline-flex items-center gap-1 text-emerald-400 font-medium">
+                  <ShieldCheck size={12} /> Verified & Active
                 </span>
               </div>
             ) : (
-              <form onSubmit={handleSendWhatsappOtp} className="flex gap-2">
+              <form onSubmit={handleSendWhatsappOtp} className="flex flex-col sm:flex-row gap-2 mt-3 pt-3 border-t border-white/5">
                 <input
                   type="tel"
                   value={whatsappNumber}
                   onChange={(e) => setWhatsappNumber(e.target.value)}
                   placeholder="+91 98765 43210"
-                  className="flex-1 px-4 py-2.5 rounded-xl bg-[#242424] text-white placeholder-gray-500 text-xs border border-white/10 focus:outline-none focus:border-white/30"
+                  className="flex-1 px-4 py-2.5 rounded-xl bg-[#242424] text-white placeholder-gray-500 text-xs border border-white/10 focus:outline-none focus:border-emerald-500"
                 />
                 <button
                   type="submit"
                   disabled={isVerifying || !whatsappNumber}
-                  className="px-4 py-2.5 bg-emerald-500 hover:bg-emerald-600 active:bg-emerald-700 text-black font-semibold text-xs rounded-xl transition-colors disabled:opacity-50 cursor-pointer"
+                  className="px-4 py-2.5 bg-emerald-500 hover:bg-emerald-600 active:bg-emerald-700 text-black font-semibold text-xs rounded-xl transition-colors disabled:opacity-50 cursor-pointer shrink-0"
                 >
                   {isVerifying ? "Sending OTP..." : "Send OTP"}
                 </button>
@@ -927,7 +918,7 @@ export const IntegrationsModal: React.FC<IntegrationsModalProps> = ({ isOpen, on
         {/* OTP Modal Overlay */}
         {showOtpModal && (
           <div className="absolute inset-0 bg-black/90 backdrop-blur-xl rounded-3xl p-6 flex flex-col justify-center items-center text-center z-10">
-            <h3 className="text-lg font-bold mb-1">Verify WhatsApp Number</h3>
+            <h3 className="text-lg font-bold mb-1 text-gray-100">Verify WhatsApp Number</h3>
             <p className="text-xs text-gray-400 mb-4">Enter the 6-digit code sent to {whatsappNumber}</p>
             <form onSubmit={handleVerifyOtp} className="w-full max-w-xs space-y-4">
               <input
@@ -936,7 +927,7 @@ export const IntegrationsModal: React.FC<IntegrationsModalProps> = ({ isOpen, on
                 value={otpCode}
                 onChange={(e) => setOtpCode(e.target.value)}
                 placeholder="123456"
-                className="w-full px-4 py-3 text-center text-xl tracking-widest font-mono rounded-xl bg-[#1E1E1E] text-white border border-white/20 focus:outline-none"
+                className="w-full px-4 py-3 text-center text-xl tracking-widest font-mono rounded-xl bg-[#1E1E1E] text-white border border-white/20 focus:outline-none focus:border-emerald-500"
               />
               <div className="flex gap-2">
                 <button

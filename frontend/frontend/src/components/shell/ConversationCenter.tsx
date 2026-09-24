@@ -2,8 +2,10 @@ import React, { useEffect, useRef, useCallback, useState } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import {
   Zap, Calendar, ArrowRight, UserPlus,
-  ShieldCheck, ChevronRight
+  ChevronRight, Compass, CheckSquare, Bell,
+  CheckCircle2, AlertTriangle, Circle, Ban
 } from 'lucide-react';
+import { cn } from '../../lib/utils';
 import { useCompanionStore } from '../../store/companion.store';
 import { CompanionService } from '../../services/companion.service';
 import { authApi } from '../../services/authApi';
@@ -62,11 +64,15 @@ const CompanionHomeView: React.FC<{
 
         if (briefingData) setBriefing(briefingData);
 
-        const g = connData?.connections?.find((c: any) => c.provider.toLowerCase() === 'google' && c.status === 'active');
-        const m = connData?.connections?.find((c: any) => c.provider.toLowerCase() === 'microsoft' && c.status === 'active');
+        const g = connData?.connections?.find((c: any) => c.provider.toLowerCase() === 'google' && (c.status === 'active' || c.status === 'connected'));
+        const m = connData?.connections?.find((c: any) => c.provider.toLowerCase() === 'microsoft' && (c.status === 'active' || c.status === 'connected'));
 
-        if (g) {
+        const hasGCalScope = Boolean(g?.scopes?.some((s: string) => s.toLowerCase().includes('calendar')));
+
+        if (g && hasGCalScope) {
           setCalendarConnected('Google Calendar connected');
+        } else if (g && !hasGCalScope) {
+          setCalendarConnected('Needs authorization');
         } else if (m) {
           setCalendarConnected('Outlook Calendar connected');
         } else {
@@ -101,28 +107,99 @@ const CompanionHomeView: React.FC<{
     sessionStorage.setItem('mitra_guest_conversion_dismissed', 'true');
   };
 
-  // Quick Action items as specified in user requirements
+  const getCalendarStatusInfo = () => {
+    if (!calendarConnected || calendarConnected === 'No calendar connected') {
+      return {
+        label: 'Not connected',
+        icon: Circle,
+        classes: 'text-text-muted bg-surface-overlay/80 border-border-subtle hover:border-brand/40',
+      };
+    }
+    if (calendarConnected.includes('connected')) {
+      return {
+        label: calendarConnected.includes('Google') ? 'Google Calendar' : 'Outlook Calendar',
+        icon: CheckCircle2,
+        classes: 'text-emerald-400 bg-emerald-500/10 border-emerald-500/25 hover:bg-emerald-500/15',
+      };
+    }
+    if (calendarConnected.includes('Needs') || calendarConnected.includes('authorization')) {
+      return {
+        label: 'Needs authorization',
+        icon: AlertTriangle,
+        classes: 'text-amber-400 bg-amber-500/10 border-amber-500/25 hover:bg-amber-500/15',
+      };
+    }
+    return {
+      label: 'Sync unavailable',
+      icon: Ban,
+      classes: 'text-text-muted bg-surface-overlay/80 border-border-subtle',
+    };
+  };
+
+  const calInfo = getCalendarStatusInfo();
+  const CalIcon = calInfo.icon;
+
+  // Rich Quick Action items as specified in user requirements
   const quickActionsList = [
-    { id: 'cal_q',     label: "What's on my calendar today?", type: 'prompt', value: "What's on my calendar today?" },
-    { id: 'tasks_q',   label: 'Summarize my tasks',           type: 'prompt', value: 'Summarize my tasks' },
-    { id: 'remind_q',  label: 'Create a reminder',            type: 'prompt', value: 'Create a reminder' },
-    { id: 'briefing_q',label: 'Run morning briefing',         type: 'prompt', value: 'Run my morning briefing' },
-    { id: 'plan',      label: 'Plan my day',                  type: 'prompt', value: 'Plan my day' },
-    { id: 'open_cal',  label: 'Open calendar',                type: 'nav',    value: 'calendar' },
+    {
+      id: 'briefing_q',
+      label: 'Morning Briefing',
+      desc: 'Summary of schedule & tasks',
+      icon: Zap,
+      color: 'text-amber-400 bg-amber-500/10 border-amber-500/20',
+      type: 'prompt',
+      value: 'Run my morning briefing',
+    },
+    {
+      id: 'plan',
+      label: 'Plan My Day',
+      desc: 'Prioritize tasks & routines',
+      icon: Compass,
+      color: 'text-brand-light bg-brand/10 border-brand/20',
+      type: 'prompt',
+      value: 'Plan my day',
+    },
+    {
+      id: 'open_cal',
+      label: 'Calendar Schedule',
+      desc: 'Upcoming events & meetings',
+      icon: Calendar,
+      color: 'text-blue-400 bg-blue-500/10 border-blue-500/20',
+      type: 'nav',
+      value: 'calendar',
+    },
+    {
+      id: 'tasks_q',
+      label: 'Tasks & To-Dos',
+      desc: 'Open pending priority board',
+      icon: CheckSquare,
+      color: 'text-emerald-400 bg-emerald-500/10 border-emerald-500/20',
+      type: 'nav',
+      value: 'tasks',
+    },
+    {
+      id: 'remind_q',
+      label: 'Create Reminder',
+      desc: 'Set timed companion alert',
+      icon: Bell,
+      color: 'text-purple-400 bg-purple-500/10 border-purple-500/20',
+      type: 'prompt',
+      value: 'Create a reminder',
+    },
   ];
 
   return (
-    <div className="w-full max-w-2xl mx-auto flex flex-col gap-5 py-4 sm:py-6 px-3 sm:px-4">
-      {/* ── 1. MITRA Companion Greeting ── */}
+    <div className="w-full max-w-4xl flex flex-col gap-4 sm:gap-5 py-3 sm:py-5">
+      {/* ── 1. Compact MITRA Companion Hero Header ── */}
       <motion.div
-        initial={{ opacity: 0, y: -6 }}
+        initial={{ opacity: 0, y: -4 }}
         animate={{ opacity: 1, y: 0 }}
-        transition={{ duration: 0.2 }}
-        className="flex items-center justify-between gap-4 p-4 sm:p-5 rounded-2xl bg-surface-elevated/80 border border-border-subtle/80 backdrop-blur-md shadow-sm"
+        transition={{ duration: 0.18 }}
+        className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 p-4 sm:p-5 rounded-2xl bg-surface-elevated/90 border border-border-subtle shadow-sm"
       >
-        <div className="flex items-center gap-3.5 min-w-0">
-          <div className="w-11 h-11 rounded-2xl bg-brand/15 border border-brand/30 flex items-center justify-center text-brand-light flex-shrink-0 shadow-sm">
-            <Zap size={22} className="text-brand-light" />
+        <div className="flex items-center gap-3 min-w-0">
+          <div className="w-10 h-10 rounded-xl bg-brand/15 border border-brand/30 flex items-center justify-center text-brand-light flex-shrink-0 shadow-xs">
+            <Zap size={18} className="text-brand-light" />
           </div>
           <div className="min-w-0">
             <div className="flex items-center gap-2">
@@ -132,22 +209,29 @@ const CompanionHomeView: React.FC<{
             <h1 className="text-base sm:text-lg font-bold text-text-primary tracking-tight truncate mt-0.5">
               {authStatus === 'LOADING' ? (
                 <span className="inline-flex items-center gap-2">
-                  {getGreetingTime()}, <span className="inline-block w-20 h-5 bg-surface-raised animate-pulse rounded align-middle" /> 👋
+                  {getGreetingTime()}, <span className="inline-block w-20 h-5 bg-surface-raised animate-pulse rounded align-middle" />
                 </span>
               ) : (
-                `${getGreetingTime()}, ${userFirstName} 👋`
+                `${getGreetingTime()}, ${userFirstName}`
               )}
             </h1>
             <p className="text-2xs text-text-muted mt-0.5">{currentDateDisplay}</p>
           </div>
         </div>
 
-        {/* Subtle Sync Indicator Pill */}
-        <div className="hidden sm:flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-surface-overlay border border-border-subtle text-2xs text-text-muted flex-shrink-0">
-          <ShieldCheck size={13} className="text-brand-light" />
-          <span className="font-medium text-text-secondary">
-            {calendarConnected || 'MITRA Core'}
-          </span>
+        {/* Semantic Calendar Connection State Pill */}
+        <div className="flex items-center gap-2 flex-shrink-0">
+          <div
+            onClick={() => onNavigate('calendar')}
+            className={cn(
+              "inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl border text-2xs font-semibold cursor-pointer transition-all active:scale-95",
+              calInfo.classes
+            )}
+            title="Calendar synchronization status"
+          >
+            <CalIcon size={12} className="flex-shrink-0" />
+            <span>{calInfo.label}</span>
+          </div>
         </div>
       </motion.div>
 
@@ -190,47 +274,52 @@ const CompanionHomeView: React.FC<{
       )}
 
       {/* ── 2. Primary Conversation Prompt Area ── */}
-      <motion.div
-        initial={{ opacity: 0, y: 8 }}
-        animate={{ opacity: 1, y: 0 }}
-        transition={{ delay: 0.08, duration: 0.2 }}
-        className="flex flex-col items-center justify-center py-6 sm:py-8 text-center px-4 select-none"
-      >
-        <div className="w-12 h-12 rounded-2xl bg-brand/10 border border-brand/25 flex items-center justify-center mb-3 shadow-glow">
-          <Zap size={24} className="text-brand-light" />
-        </div>
+      <div className="pt-2 pb-1 select-none">
         <h2 className="text-lg sm:text-xl font-bold text-text-primary tracking-tight">
           How can I help you today?
         </h2>
-        <p className="text-xs sm:text-sm text-text-muted max-w-md leading-relaxed mt-1.5">
-          Ask questions, plan your daily agenda, manage tasks, or trigger workflows.
+        <p className="text-xs sm:text-sm text-text-muted max-w-xl leading-relaxed mt-1">
+          Ask questions, plan your daily agenda, manage tasks, or run automated workflows.
         </p>
-      </motion.div>
+      </div>
 
-      {/* ── 3. Secondary Contextual Actions (Subtle Chips) ── */}
+      {/* ── 3. Suggested Actions (Rich MITRA Action Cards) ── */}
       <div>
-        <div className="text-3xs font-bold uppercase tracking-wider text-text-muted mb-2 px-1">
+        <div className="text-3xs font-bold uppercase tracking-wider text-text-muted mb-2 px-0.5">
           Suggested Actions
         </div>
-        <div className="grid grid-cols-2 sm:grid-cols-3 gap-2 w-full">
-          {quickActionsList.map(action => (
-            <button
-              key={action.id}
-              onClick={() => {
-                if (action.type === 'nav') {
-                  onNavigate(action.value);
-                } else {
-                  onAction(action.value);
-                }
-              }}
-              className="companion-quick-chip group flex items-center justify-between text-left p-2.5 sm:p-3 rounded-xl border border-border-subtle bg-surface-overlay/80 hover:border-brand/40 hover:bg-surface-hover transition-all cursor-pointer active:scale-95 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand"
-            >
-              <span className="text-xs font-medium text-text-secondary group-hover:text-text-primary truncate">
-                {action.label}
-              </span>
-              <ChevronRight size={13} className="text-text-muted group-hover:text-brand-light group-hover:translate-x-0.5 transition-all flex-shrink-0 ml-1 opacity-70" />
-            </button>
-          ))}
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-2.5 w-full">
+          {quickActionsList.map(action => {
+            const Icon = action.icon;
+            return (
+              <button
+                key={action.id}
+                onClick={() => {
+                  if (action.type === 'nav') {
+                    onNavigate(action.value);
+                  } else {
+                    onAction(action.value);
+                  }
+                }}
+                className="group flex items-center justify-between text-left p-3 rounded-2xl border border-border-subtle bg-surface-elevated/70 hover:border-brand/40 hover:bg-surface-hover hover:-translate-y-0.5 transition-all duration-150 cursor-pointer active:scale-[0.98] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand shadow-xs"
+              >
+                <div className="flex items-center gap-3 min-w-0">
+                  <div className={cn("w-8 h-8 rounded-xl border flex items-center justify-center flex-shrink-0 transition-transform group-hover:scale-105", action.color)}>
+                    <Icon size={15} />
+                  </div>
+                  <div className="min-w-0">
+                    <div className="text-xs font-semibold text-text-primary group-hover:text-brand-light transition-colors truncate">
+                      {action.label}
+                    </div>
+                    <div className="text-3xs text-text-muted truncate">
+                      {action.desc}
+                    </div>
+                  </div>
+                </div>
+                <ChevronRight size={14} className="text-text-muted group-hover:text-brand-light group-hover:translate-x-0.5 transition-all flex-shrink-0 ml-2 opacity-60 group-hover:opacity-100" />
+              </button>
+            );
+          })}
         </div>
       </div>
 

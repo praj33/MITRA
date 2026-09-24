@@ -53,7 +53,7 @@
   --sidebar-width:       220px;
   --sidebar-collapsed:   64px;
   --context-panel-width: 280px;
-  --topbar-height:       52px;
+  --topbar-height:       64px;
   --inputbar-height:     72px;
   --bottomnav-height:    56px;
   --min-touch-target:    44px;
@@ -184,7 +184,7 @@ body {
     "sidebar  center  context"
     "sidebar  input   context";
   grid-template-rows:    var(--topbar-height) 1fr var(--inputbar-height);
-  grid-template-columns: var(--sidebar-width) 1fr var(--context-panel-width);
+  grid-template-columns: var(--sidebar-width) 1fr auto;
   height: 100vh;
   height: 100dvh;
   width:  100vw;
@@ -192,25 +192,25 @@ body {
 }
 
 .mitra-shell.sidebar-collapsed {
-  grid-template-columns: var(--sidebar-collapsed) 1fr var(--context-panel-width);
+  grid-template-columns: var(--sidebar-collapsed) 1fr auto;
 }
 
 .mitra-shell.context-hidden {
   grid-template-areas:
-    "topbar  topbar"
-    "sidebar center"
-    "sidebar input";
-  grid-template-columns: var(--sidebar-width) 1fr;
+    "topbar   topbar  topbar"
+    "sidebar  center  context"
+    "sidebar  input   context";
+  grid-template-columns: var(--sidebar-width) 1fr auto;
 }
 
 .mitra-shell.sidebar-collapsed.context-hidden {
-  grid-template-columns: var(--sidebar-collapsed) 1fr;
+  grid-template-columns: var(--sidebar-collapsed) 1fr auto;
 }
 
 /* ── Mobile & Tablet Screens (<1024px) ─────────────────────────── */
 @media (max-width: 1023px) {
   :root {
-    --topbar-height:  48px;
+    --topbar-height:  52px;
     --inputbar-height: auto;
   }
 
@@ -392,9 +392,24 @@ body {
 
 .companion-container {
   width: 100%;
-  max-width: 860px;
-  margin-left: auto;
+  max-width: 880px;
+  margin-left: 0;
   margin-right: auto;
+  padding-left: 0.5rem;
+  padding-right: 0.5rem;
+}
+
+@media (min-width: 640px) {
+  .companion-container {
+    padding-left: 1rem;
+    padding-right: 1.5rem;
+  }
+}
+
+@media (min-width: 1440px) {
+  .companion-container {
+    max-width: 960px;
+  }
 }
 
 .companion-quick-chip {

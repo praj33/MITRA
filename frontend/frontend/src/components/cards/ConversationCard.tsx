@@ -179,4 +179,4 @@ const ConversationCard: React.FC<Props> = ({ message, onActionConfirm }) => {
   );
 };
 
-export default ConversationCard;
+export default React.memo(ConversationCard);

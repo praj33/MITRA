@@ -40,9 +40,9 @@ const TopBar: React.FC<Props> = ({ onSearch }) => {
 
   return (
     <header className="zone-topbar glass w-full select-none z-30 border-b border-border-subtle/80">
-      <div className="w-full max-w-7xl mx-auto h-full flex items-center px-3 sm:px-5 md:px-6 justify-between gap-3">
+      <div className="w-full h-full flex items-center justify-between px-3.5 sm:px-6 lg:px-7 gap-3 sm:gap-4">
         {/* ── ZONE 1 (LEFT): MITRA Logo + Brand + Status ── */}
-        <div className="flex items-center gap-2 sm:gap-3 flex-shrink-0 min-w-0">
+        <div className="flex items-center gap-2.5 sm:gap-3 flex-shrink-0 min-w-0">
           {/* Mobile hamburger */}
           {isMobile && (
             <button
@@ -58,17 +58,17 @@ const TopBar: React.FC<Props> = ({ onSearch }) => {
           {/* Brand Logo & Name */}
           <div
             onClick={() => handleNav('chat')}
-            className="flex items-center gap-2 cursor-pointer group py-1"
+            className="flex items-center gap-2.5 cursor-pointer group py-1"
             title="MITRA Home"
           >
-            <div className="w-8 h-8 rounded-xl bg-brand/15 border border-brand/30 flex items-center justify-center group-hover:scale-105 group-hover:border-brand/50 transition-all flex-shrink-0 shadow-sm">
+            <div className="w-8 h-8 rounded-xl bg-brand/15 border border-brand/30 flex items-center justify-center group-hover:scale-105 group-hover:border-brand/50 transition-all flex-shrink-0 shadow-xs">
               <Zap size={15} className="text-brand-light" />
             </div>
-            <span className="text-sm sm:text-base font-extrabold text-text-primary tracking-tight">MITRA</span>
+            <span className="text-sm sm:text-base font-bold text-text-primary tracking-tight">MITRA</span>
           </div>
 
           {/* Companion status indicator pill */}
-          <div className="flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-surface-overlay border border-border-subtle/80 flex-shrink-0">
+          <div className="flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-surface-overlay/80 border border-border-subtle/80 flex-shrink-0">
             <CompanionDot status={status} size="sm" />
             <span className={cn(
               'text-2xs font-semibold hidden min-[480px]:inline',
@@ -82,14 +82,8 @@ const TopBar: React.FC<Props> = ({ onSearch }) => {
           </div>
         </div>
 
-        {/* ── ZONE 2 (CENTER): Context & Greeting ── */}
-        <div className="hidden md:flex items-center justify-center flex-1 min-w-0 px-4">
-          <div className="inline-flex items-center gap-2 px-3.5 py-1 rounded-full bg-surface-overlay/60 border border-border-subtle/60 text-xs text-text-muted max-w-sm truncate shadow-xs">
-            <span className="text-brand-light font-medium">Hey,</span>
-            <strong className="font-semibold text-text-primary truncate">{displayName}</strong>
-            <span className="text-text-muted">👋</span>
-          </div>
-        </div>
+        {/* ── ZONE 2 (CENTER): Intentionally Empty Flexible Spacer ── */}
+        <div className="flex-1 min-w-0" aria-hidden="true" />
 
         {/* ── ZONE 3 (RIGHT): Search, Tools, Notifications, Profile, Context ── */}
         <div className="flex items-center gap-1.5 sm:gap-2 flex-shrink-0">
@@ -101,7 +95,7 @@ const TopBar: React.FC<Props> = ({ onSearch }) => {
               const searchFn = (window as any).__MITRA_SEARCH__;
               if (searchFn) searchFn();
             }}
-            className="hidden sm:flex min-w-[36px] min-h-[36px] w-9 h-9 items-center justify-center rounded-xl bg-surface-overlay border border-border-subtle text-text-muted hover:border-border-default hover:text-text-primary transition-all text-xs focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand"
+            className="hidden sm:flex min-w-[36px] min-h-[36px] w-9 h-9 items-center justify-center rounded-xl bg-surface-overlay border border-border-subtle text-text-muted hover:border-border-default hover:text-text-primary active:scale-95 transition-all text-xs focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand cursor-pointer"
             aria-label="Search or press Ctrl+K"
             title="Search & Commands (⌘K / Ctrl+K)"
           >
@@ -312,18 +306,18 @@ const TopBar: React.FC<Props> = ({ onSearch }) => {
           <button
             id="topbar-auth-button"
             onClick={() => useCompanionStore.getState().setAuthModalOpen(true)}
-            className="flex items-center gap-1.5 h-9 min-h-[36px] px-2 sm:px-2.5 rounded-xl bg-surface-overlay border border-border-subtle hover:border-brand/40 text-text-primary text-xs transition-all cursor-pointer active:scale-95"
+            className="flex items-center gap-2 h-9 min-h-[36px] px-2.5 sm:px-3 rounded-xl bg-surface-overlay border border-border-subtle hover:border-brand/40 text-text-primary text-xs transition-all cursor-pointer active:scale-95 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand"
             title={isAuthenticated && !isGuest ? `Account: ${displayName}` : (isGuest ? 'Guest Session — Create account' : 'Log In / Sign Up')}
             aria-label="User Account"
           >
             {authStatus === 'LOADING' ? (
-              <div className="w-5 h-5 rounded-full bg-surface-raised animate-pulse" />
+              <div className="w-6 h-6 rounded-full bg-surface-raised animate-pulse" />
             ) : (
               <div className="w-6 h-6 rounded-full bg-brand/20 border border-brand/40 flex items-center justify-center text-brand-light font-bold text-2xs flex-shrink-0">
                 {displayName.charAt(0).toUpperCase()}
               </div>
             )}
-            <span className="hidden sm:inline text-2xs font-medium max-w-[120px] truncate">
+            <span className="hidden sm:inline text-xs font-medium max-w-[120px] truncate text-text-secondary">
               {authStatus === 'LOADING' ? (
                 <span className="inline-block w-14 h-3.5 bg-surface-raised animate-pulse rounded" />
               ) : (
@@ -338,15 +332,15 @@ const TopBar: React.FC<Props> = ({ onSearch }) => {
               id="topbar-context-toggle"
               onClick={toggleContextPanel}
               className={cn(
-                'w-9 h-9 min-w-[36px] min-h-[36px] flex items-center justify-center rounded-xl transition-all',
+                'w-9 h-9 min-w-[36px] min-h-[36px] flex items-center justify-center rounded-xl transition-all active:scale-95 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand cursor-pointer',
                 contextPanel === 'open'
-                  ? 'bg-brand-muted text-brand-light border border-brand/30'
-                  : 'hover:bg-surface-overlay text-text-muted hover:text-text-primary',
+                  ? 'bg-brand text-white shadow-glow border border-brand'
+                  : 'bg-surface-overlay hover:bg-surface-hover text-text-muted hover:text-text-primary border border-border-subtle',
               )}
               aria-label="Toggle context panel"
               title="Toggle Assistant Context"
             >
-              <PanelRight size={16} />
+              <PanelRight size={15} />
             </button>
           )}
         </div>

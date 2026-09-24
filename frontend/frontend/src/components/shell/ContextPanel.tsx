@@ -1,7 +1,7 @@
-// components/shell/ContextPanel.tsx — Right panel: context items + status (responsive)
 import React from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { X } from 'lucide-react';
+import { cn } from '../../lib/utils';
 import { useCompanionStore } from '../../store/companion.store';
 import ContextCard from '../cards/ContextCard';
 import RecommendationCard from '../cards/RecommendationCard';
@@ -17,7 +17,7 @@ const PanelContent: React.FC<{ onClose: () => void }> = ({ onClose }) => {
         <span className="text-2xs font-semibold text-text-muted uppercase tracking-wider">Conversation Context</span>
         <button
           onClick={onClose}
-          className="w-8 h-8 flex items-center justify-center rounded-lg text-text-muted hover:text-text-secondary hover:bg-surface-overlay transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand"
+          className="w-8 h-8 flex items-center justify-center rounded-lg text-text-muted hover:text-text-secondary hover:bg-surface-overlay transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand cursor-pointer"
           aria-label="Close context panel"
         >
           <X size={14} />
@@ -66,7 +66,7 @@ const PanelContent: React.FC<{ onClose: () => void }> = ({ onClose }) => {
   );
 };
 
-/* ── Desktop Context Panel (grid-embedded) ─────────────── */
+/* ── Desktop Context Panel (smooth GPU transform + width transition) ─────────────── */
 const DesktopContextPanel: React.FC = () => {
   const { contextPanel, toggleContextPanel, isMobile } = useCompanionStore();
   const open = contextPanel === 'open';
@@ -75,19 +75,19 @@ const DesktopContextPanel: React.FC = () => {
   if (isMobile) return null;
 
   return (
-    <AnimatePresence>
-      {open && (
-        <motion.aside
-          initial={{ opacity: 0, x: 24 }}
-          animate={{ opacity: 1, x: 0 }}
-          exit={{ opacity: 0, x: 24 }}
-          transition={{ duration: 0.2, ease: 'easeOut' }}
-          className="zone-context bg-surface-raised border-l border-border-subtle flex flex-col overflow-hidden"
-        >
-          <PanelContent onClose={toggleContextPanel} />
-        </motion.aside>
+    <aside
+      className={cn(
+        "zone-context bg-surface-raised flex flex-col overflow-hidden transition-all duration-200 ease-in-out select-none",
+        open
+          ? "w-[280px] opacity-100 translate-x-0 border-l border-border-subtle pointer-events-auto"
+          : "w-0 opacity-0 translate-x-4 border-l-0 pointer-events-none"
       )}
-    </AnimatePresence>
+      aria-hidden={!open}
+    >
+      <div className="w-[280px] h-full flex flex-col overflow-hidden">
+        <PanelContent onClose={toggleContextPanel} />
+      </div>
+    </aside>
   );
 };
 
