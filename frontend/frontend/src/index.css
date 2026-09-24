@@ -17,19 +17,28 @@
   --surface-overlay:  #1F1F28;
   --surface-hover:    #25252F;
 
-  --border-subtle:  rgba(255,255,255,0.06);
-  --border-default: rgba(255,255,255,0.10);
-  --border-strong:  rgba(255,255,255,0.18);
+  --border-subtle:  rgba(255,255,255,0.08);
+  --border-default: rgba(255,255,255,0.14);
+  --border-strong:  rgba(255,255,255,0.24);
 
-  --text-primary:   #F0EFFF;
-  --text-secondary: #A09DB5;
-  --text-muted:     #5C5A72;
+  --text-primary:   #F5F4FF;
+  --text-secondary: #B0ADC8;
+  --text-muted:     #787594;
   --text-brand:     #9D94FF;
 
   --success: #34D399;
   --warning: #FBBF24;
   --error:   #F87171;
   --info:    #60A5FA;
+
+  /* Action States */
+  --btn-primary-bg:      #7C6FF7;
+  --btn-primary-hover:   #9D94FF;
+  --btn-primary-text:    #FFFFFF;
+  --btn-secondary-bg:    #1F1F28;
+  --btn-secondary-hover: #25252F;
+  --btn-secondary-text:  #F5F4FF;
+  --btn-disabled-opacity: 0.45;
 
   --radius-sm:  4px;
   --radius-md:  8px;
@@ -44,9 +53,10 @@
   --sidebar-width:       220px;
   --sidebar-collapsed:   64px;
   --context-panel-width: 280px;
-  --topbar-height:       52px;
+  --topbar-height:       64px;
   --inputbar-height:     72px;
   --bottomnav-height:    56px;
+  --min-touch-target:    44px;
 
   /* Safe area insets for notched phones */
   --safe-top:    env(safe-area-inset-top, 0px);
@@ -174,7 +184,7 @@ body {
     "sidebar  center  context"
     "sidebar  input   context";
   grid-template-rows:    var(--topbar-height) 1fr var(--inputbar-height);
-  grid-template-columns: var(--sidebar-width) 1fr var(--context-panel-width);
+  grid-template-columns: var(--sidebar-width) 1fr auto;
   height: 100vh;
   height: 100dvh;
   width:  100vw;
@@ -182,25 +192,25 @@ body {
 }
 
 .mitra-shell.sidebar-collapsed {
-  grid-template-columns: var(--sidebar-collapsed) 1fr var(--context-panel-width);
+  grid-template-columns: var(--sidebar-collapsed) 1fr auto;
 }
 
 .mitra-shell.context-hidden {
   grid-template-areas:
-    "topbar  topbar"
-    "sidebar center"
-    "sidebar input";
-  grid-template-columns: var(--sidebar-width) 1fr;
+    "topbar   topbar  topbar"
+    "sidebar  center  context"
+    "sidebar  input   context";
+  grid-template-columns: var(--sidebar-width) 1fr auto;
 }
 
 .mitra-shell.sidebar-collapsed.context-hidden {
-  grid-template-columns: var(--sidebar-collapsed) 1fr;
+  grid-template-columns: var(--sidebar-collapsed) 1fr auto;
 }
 
 /* ── Mobile & Tablet Screens (<1024px) ─────────────────────────── */
 @media (max-width: 1023px) {
   :root {
-    --topbar-height:  48px;
+    --topbar-height:  52px;
     --inputbar-height: auto;
   }
 
@@ -311,11 +321,7 @@ body {
   box-shadow: -4px 0 24px rgba(0, 0, 0, 0.5);
 }
 
-/* ── Bottom Navigation (Mobile Only) ─────────────────── */
-.bottom-nav {
-  display: none;
-}
-
+/* ── Bottom Navigation (Mobile/Tablet Only) ─────────────────── */
 .bottom-nav,
 .mobile-bottom-nav {
   display: flex !important;
@@ -330,38 +336,148 @@ body {
   width: 100%;
   user-select: none;
   -webkit-user-select: none;
+  z-index: 40;
 }
 
-  .bottom-nav-item {
-    display: flex;
-    flex-direction: column;
-    align-items: center;
-    justify-content: center;
-    gap: 2px;
-    padding: 4px 12px;
-    border-radius: var(--radius-md);
-    color: var(--text-muted);
-    font-size: 10px;
-    font-weight: 500;
-    transition: color 150ms ease, background 150ms ease;
-    -webkit-tap-highlight-color: transparent;
-    cursor: pointer;
-    border: none;
-    background: none;
-    outline: none;
+@media (min-width: 1024px) {
+  .bottom-nav,
+  .mobile-bottom-nav,
+  .zone-bottomnav {
+    display: none !important;
   }
+}
 
-  .bottom-nav-item:active {
-    background: var(--surface-overlay);
-  }
+.bottom-nav-item {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 2px;
+  padding: 4px 8px;
+  min-height: var(--min-touch-target);
+  min-width: var(--min-touch-target);
+  border-radius: var(--radius-md);
+  color: var(--text-muted);
+  font-size: 11px;
+  font-weight: 500;
+  transition: color 150ms ease, background 150ms ease;
+  -webkit-tap-highlight-color: transparent;
+  cursor: pointer;
+  border: none;
+  background: none;
+  outline: none;
+}
 
-  .bottom-nav-item.active {
-    color: var(--brand-light);
-  }
+.bottom-nav-item:active {
+  background: var(--surface-overlay);
+}
 
-  .bottom-nav-item.active .bottom-nav-icon {
-    color: var(--brand-light);
+.bottom-nav-item.active {
+  color: var(--brand-light);
+  font-weight: 600;
+}
+
+.bottom-nav-item.active .bottom-nav-icon {
+  color: var(--brand-light);
+}
+
+/* ── Touch Target & Action State Utilities ───────────── */
+.touch-target {
+  min-height: var(--min-touch-target);
+  min-width: var(--min-touch-target);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.companion-container {
+  width: 100%;
+  max-width: 880px;
+  margin-left: 0;
+  margin-right: auto;
+  padding-left: 0.5rem;
+  padding-right: 0.5rem;
+}
+
+@media (min-width: 640px) {
+  .companion-container {
+    padding-left: 1rem;
+    padding-right: 1.5rem;
   }
+}
+
+@media (min-width: 1440px) {
+  .companion-container {
+    max-width: 960px;
+  }
+}
+
+.companion-quick-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 8px 14px;
+  min-height: 40px;
+  border-radius: var(--radius-xl);
+  background: var(--surface-overlay);
+  border: 1px solid var(--border-subtle);
+  color: var(--text-secondary);
+  font-size: 12px;
+  font-weight: 500;
+  transition: all 180ms cubic-bezier(0.16, 1, 0.3, 1);
+  cursor: pointer;
+  user-select: none;
+}
+
+.companion-quick-chip:hover {
+  background: var(--surface-hover);
+  border-color: rgba(124, 111, 247, 0.4);
+  color: var(--text-primary);
+  transform: translateY(-1px);
+}
+
+.companion-quick-chip:active {
+  transform: scale(0.97);
+}
+
+/* Action Button Distinct States */
+.action-primary {
+  background-color: var(--brand);
+  color: #FFFFFF;
+  font-weight: 600;
+  transition: background-color 150ms ease, transform 100ms ease, box-shadow 150ms ease;
+}
+.action-primary:hover:not(:disabled) {
+  background-color: var(--brand-light);
+  box-shadow: 0 0 16px rgba(124, 111, 247, 0.35);
+}
+.action-primary:active:not(:disabled) {
+  transform: scale(0.97);
+}
+.action-primary:disabled {
+  opacity: var(--btn-disabled-opacity);
+  cursor: not-allowed;
+  box-shadow: none;
+}
+
+.action-secondary {
+  background-color: var(--surface-overlay);
+  color: var(--text-primary);
+  border: 1px solid var(--border-default);
+  font-weight: 500;
+  transition: all 150ms ease;
+}
+.action-secondary:hover:not(:disabled) {
+  background-color: var(--surface-hover);
+  border-color: var(--border-strong);
+}
+.action-secondary:active:not(:disabled) {
+  transform: scale(0.97);
+}
+.action-secondary:disabled {
+  opacity: var(--btn-disabled-opacity);
+  cursor: not-allowed;
+}
 
 /* ── Card Base ───────────────────────────────────────── */
 .card {
@@ -1951,4 +2067,31 @@ input[type="datetime-local"]::-webkit-calendar-picker-indicator {
   color: var(--text-primary);
   line-height: 1.6;
   word-break: break-word;
+}
+
+/* ── MITRA Motion System (150–250ms subtle transitions) ─────────── */
+:root {
+  --transition-fast: 150ms cubic-bezier(0.4, 0, 0.2, 1);
+  --transition-normal: 200ms cubic-bezier(0.4, 0, 0.2, 1);
+  --transition-smooth: 250ms cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+.transition-interactive {
+  transition: background-color var(--transition-fast),
+              border-color var(--transition-fast),
+              color var(--transition-fast),
+              transform var(--transition-fast),
+              box-shadow var(--transition-fast);
+}
+
+/* Accessible prefers-reduced-motion media query */
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
 }

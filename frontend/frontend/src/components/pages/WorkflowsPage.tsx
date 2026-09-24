@@ -69,36 +69,57 @@ const WorkflowsPage: React.FC<{ onChatNavigate: (msg: string) => void }> = ({ on
       </div>
 
       {loading ? (
-        <div className="page-loading">Loading workflows...</div>
+        <div className="page-loading py-8 text-center text-xs text-text-muted">Loading workflows...</div>
       ) : (
-        <div className="workflows-grid">
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3 sm:gap-4 w-full">
           {workflows.map(wf => (
-            <motion.div key={wf.id} className="workflow-card" whileHover={{ scale: 1.02 }}>
-              <div className="workflow-icon">{wf.icon}</div>
-              <h4 className="workflow-name">{wf.name}</h4>
-              <p className="workflow-desc">{wf.description}</p>
-              {wf.last_run && (
-                <p className="workflow-meta"><Clock size={10} /> Last: {new Date(wf.last_run).toLocaleDateString()}</p>
-              )}
-              <button
-                onClick={() => runWorkflow(wf)}
-                disabled={running === wf.id}
-                className={`workflow-run-btn ${results[wf.id] ? 'completed' : ''}`}
-              >
-                {running === wf.id ? (
-                  <><Loader2 size={14} className="animate-spin" /> Running...</>
-                ) : results[wf.id] ? (
-                  <><CheckCircle2 size={14} /> Done</>
-                ) : (
-                  <><Play size={14} /> Run</>
+            <motion.div
+              key={wf.id}
+              className="p-4 rounded-2xl bg-surface-elevated border border-border-subtle hover:border-brand/40 transition-all flex flex-col justify-between shadow-sm"
+              whileHover={{ y: -2 }}
+            >
+              <div>
+                <div className="w-10 h-10 rounded-xl bg-brand/10 border border-brand/20 flex items-center justify-center text-xl mb-3">
+                  {wf.icon}
+                </div>
+                <h4 className="text-sm font-bold text-text-primary mb-1">{wf.name}</h4>
+                <p className="text-xs text-text-muted leading-relaxed mb-3">{wf.description}</p>
+              </div>
+
+              <div>
+                {wf.last_run && (
+                  <p className="text-3xs text-text-muted flex items-center gap-1 mb-3">
+                    <Clock size={11} className="text-brand-light" /> Last run: {new Date(wf.last_run).toLocaleDateString()}
+                  </p>
                 )}
-              </button>
-              {results[wf.id] && (
-                <motion.div initial={{ opacity: 0, height: 0 }} animate={{ opacity: 1, height: 'auto' }}
-                  className="workflow-result">
-                  {results[wf.id]}
-                </motion.div>
-              )}
+                <button
+                  onClick={() => runWorkflow(wf)}
+                  disabled={running === wf.id}
+                  className={`w-full py-2 px-3 rounded-xl text-xs font-semibold flex items-center justify-center gap-1.5 transition-all cursor-pointer active:scale-95 disabled:opacity-50 ${
+                    results[wf.id]
+                      ? 'bg-emerald-500/20 text-emerald-400 border border-emerald-500/30'
+                      : 'bg-brand text-white hover:bg-brand-light shadow-glow-sm'
+                  }`}
+                  aria-label={`Run ${wf.name} workflow`}
+                >
+                  {running === wf.id ? (
+                    <><Loader2 size={13} className="animate-spin" /> Running...</>
+                  ) : results[wf.id] ? (
+                    <><CheckCircle2 size={13} /> Completed</>
+                  ) : (
+                    <><Play size={13} /> Run Routine</>
+                  )}
+                </button>
+                {results[wf.id] && (
+                  <motion.div
+                    initial={{ opacity: 0, height: 0 }}
+                    animate={{ opacity: 1, height: 'auto' }}
+                    className="mt-2.5 p-2.5 rounded-xl bg-surface-overlay border border-border-subtle text-2xs text-text-secondary leading-relaxed"
+                  >
+                    {results[wf.id]}
+                  </motion.div>
+                )}
+              </div>
             </motion.div>
           ))}
         </div>

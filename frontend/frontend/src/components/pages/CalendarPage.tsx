@@ -1,6 +1,6 @@
 import React, { useEffect, useState, useCallback } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { Calendar, Clock, MapPin, Plus, ChevronLeft, ChevronRight, Trash2, X, Check } from 'lucide-react';
+import { Calendar, Clock, MapPin, Plus, ChevronLeft, ChevronRight, Trash2, X, Check, Download } from 'lucide-react';
 import { CompanionService } from '../../services/companion.service';
 import { useCompanionStore } from '../../store/companion.store';
 import { authApi } from '../../services/authApi';
@@ -25,14 +25,18 @@ const CalendarPage: React.FC<{ onChatNavigate: (msg: string) => void }> = ({ onC
   const [eventFilter, setEventFilter] = useState<'upcoming' | 'past' | 'all'>('upcoming');
 
   // Provider Connection State for Calendar Sync
-  const [googleActive, setGoogleActive] = useState(false);
+  const [googleCalendarActive, setGoogleCalendarActive] = useState(false);
+  const [googleIdentityOnly, setGoogleIdentityOnly] = useState(false);
   const [msActive, setMsActive] = useState(false);
 
   useEffect(() => {
     authApi.getConnections().then(data => {
-      const g = data.connections?.some(c => c.provider.toLowerCase() === 'google' && c.status === 'active');
-      const m = data.connections?.some(c => c.provider.toLowerCase() === 'microsoft' && c.status === 'active');
-      setGoogleActive(Boolean(g));
+      const g = data.connections?.find(c => c.provider.toLowerCase() === 'google' && (c.status === 'active' || c.status === 'connected'));
+      const m = data.connections?.find(c => c.provider.toLowerCase() === 'microsoft' && (c.status === 'active' || c.status === 'connected'));
+
+      const hasGoogleCalScope = Boolean(g?.scopes?.some((s: string) => s.toLowerCase().includes('calendar')));
+      setGoogleCalendarActive(Boolean(g && hasGoogleCalScope));
+      setGoogleIdentityOnly(Boolean(g && !hasGoogleCalScope));
       setMsActive(Boolean(m));
     }).catch(() => {});
   }, []);
@@ -66,6 +70,7 @@ const CalendarPage: React.FC<{ onChatNavigate: (msg: string) => void }> = ({ onC
     try {
       const startIso = newStartTime ? `${newDate}T${newStartTime}:00` : newDate;
       const endIso = newEndTime ? `${newDate}T${newEndTime}:00` : newDate;
+      const userTimezone = Intl.DateTimeFormat().resolvedOptions().timeZone || 'UTC';
 
       const res = await CompanionService.createCalendarEvent(
         newTitle.trim(),
@@ -74,7 +79,8 @@ const CalendarPage: React.FC<{ onChatNavigate: (msg: string) => void }> = ({ onC
         newLocation.trim(),
         newDescription.trim(),
         '#7c5cfc',
-        userId
+        userId,
+        userTimezone
       );
 
       if (res && res.event) {
@@ -84,14 +90,24 @@ const CalendarPage: React.FC<{ onChatNavigate: (msg: string) => void }> = ({ onC
       }
 
       const syncStatusMsg = res?.sync_status || 'Saved only in Mitra';
-      showToast('success', 'Event Created', `"${newTitle.trim()}" — ${syncStatusMsg}`);
+      if (res?.synchronized) {
+        showToast('success', 'Event Created', `"${newTitle.trim()}" — Event created and synced to Google Calendar.`);
+      } else if (syncStatusMsg.toLowerCase().includes('permission required') || syncStatusMsg.toLowerCase().includes('permission')) {
+        showToast('warning', 'Saved in Mitra', `"${newTitle.trim()}" — Google Calendar permission is required. Connect Google Calendar in Integrations.`);
+      } else if (syncStatusMsg.toLowerCase().includes('sync failed') || syncStatusMsg.toLowerCase().includes('failed') || syncStatusMsg.toLowerCase().includes('disabled')) {
+        showToast('warning', 'Saved in Mitra', `"${newTitle.trim()}" — Event saved in Mitra, but Google Calendar sync failed. Please try Sync again.`);
+      } else {
+        showToast('success', 'Event Created', `"${newTitle.trim()}" — Saved only in Mitra. Connect Google Calendar or Microsoft Calendar to sync externally.`);
+      }
+
       setNewTitle('');
       setNewLocation('');
       setNewDescription('');
       setShowAddForm(false);
-    } catch (err) {
+    } catch (err: any) {
       console.error('Failed to create event:', err);
-      showToast('error', 'Error', 'Failed to create calendar event.');
+      const msg = err?.message || 'Failed to create calendar event.';
+      showToast('error', 'Error', msg);
     } finally {
       setSubmitting(false);
     }
@@ -106,6 +122,47 @@ const CalendarPage: React.FC<{ onChatNavigate: (msg: string) => void }> = ({ onC
       console.error('Delete failed:', err);
       showToast('error', 'Error', 'Failed to delete event.');
     }
+  };
+
+  const downloadIcs = (event: CalendarEvent) => {
+    const formatIcsDate = (dateStr: string) => {
+      const d = new Date(dateStr);
+      return d.toISOString().replace(/[-:]/g, '').split('.')[0] + 'Z';
+    };
+
+    const start = formatIcsDate(event.start);
+    const end = formatIcsDate(event.end || event.start);
+    const uid = `${event.id || Math.random().toString(36).slice(2)}@mitra.ai`;
+
+    const icsContent = [
+      'BEGIN:VCALENDAR',
+      'VERSION:2.0',
+      'PRODID:-//Mitra AI//Companion Calendar//EN',
+      'CALSCALE:GREGORIAN',
+      'METHOD:PUBLISH',
+      'BEGIN:VEVENT',
+      `UID:${uid}`,
+      `DTSTAMP:${formatIcsDate(new Date().toISOString())}`,
+      `DTSTART:${start}`,
+      `DTEND:${end}`,
+      `SUMMARY:${(event.title || 'Event').replace(/\n/g, ' ')}`,
+      `DESCRIPTION:${(event.description || 'Created via Mitra AI Companion').replace(/\n/g, ' ')}`,
+      `LOCATION:${(event.location || '').replace(/\n/g, ' ')}`,
+      'STATUS:CONFIRMED',
+      'END:VEVENT',
+      'END:VCALENDAR'
+    ].join('\r\n');
+
+    const blob = new Blob([icsContent], { type: 'text/calendar;charset=utf-8' });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement('a');
+    link.href = url;
+    link.setAttribute('download', `${(event.title || 'event').replace(/[^a-zA-Z0-9_-]/g, '_')}.ics`);
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+    URL.revokeObjectURL(url);
+    showToast('info', 'Calendar File (.ics)', 'Downloaded .ics event. Open to add to Apple Calendar or native device calendar.');
   };
 
   const handleClearPast = async () => {
@@ -310,9 +367,13 @@ const CalendarPage: React.FC<{ onChatNavigate: (msg: string) => void }> = ({ onC
               <div>
                 <div className="flex items-center gap-2 flex-wrap font-semibold text-text-primary text-xs">
                   <span>Calendar Cloud Sync</span>
-                  {googleActive ? (
+                  {googleCalendarActive ? (
                     <span className="px-2 py-0.5 rounded-full bg-emerald-500/10 border border-emerald-500/30 text-emerald-400 text-[10px] font-medium">
-                      ● Google Calendar Active
+                      ● Google Calendar Connected
+                    </span>
+                  ) : googleIdentityOnly ? (
+                    <span className="px-2 py-0.5 rounded-full bg-amber-500/10 border border-amber-500/30 text-amber-400 text-[10px] font-medium">
+                      ⚠ Google Account Connected (Calendar access required)
                     </span>
                   ) : msActive ? (
                     <span className="px-2 py-0.5 rounded-full bg-emerald-500/10 border border-emerald-500/30 text-emerald-400 text-[10px] font-medium">
@@ -323,20 +384,23 @@ const CalendarPage: React.FC<{ onChatNavigate: (msg: string) => void }> = ({ onC
                       ○ Saved Only in Mitra (Local)
                     </span>
                   )}
+                  <span className="px-2 py-0.5 rounded-full bg-blue-500/10 border border-blue-500/30 text-blue-400 text-[10px] font-medium">
+                    🍏 Native Device: .ics Export
+                  </span>
                 </div>
                 <p className="text-2xs text-text-muted mt-0.5 leading-relaxed">
-                  Notice: Web applications cannot write directly to native mobile calendars (iOS/Android) without an active Google Calendar or Microsoft Outlook connection.
+                  Notice: Web applications cannot write directly to native mobile device calendars without an active Google Calendar or Microsoft Outlook connection. Use the .ics button to import events directly into Apple Calendar.
                 </p>
               </div>
             </div>
 
-            {(!googleActive && !msActive) && (
+            {(!googleCalendarActive && !msActive) && (
               <button
                 type="button"
                 onClick={() => (window as any).__MITRA_INTEGRATIONS__?.()}
                 className="px-3 py-1.5 rounded-xl bg-surface-raised hover:bg-surface-elevated border border-border-subtle hover:border-brand/40 text-text-primary text-xs font-semibold whitespace-nowrap cursor-pointer transition-all active:scale-95 shrink-0"
               >
-                Connect Calendar
+                {googleIdentityOnly ? 'Connect Google Calendar' : 'Connect Calendar'}
               </button>
             )}
           </div>
@@ -439,25 +503,43 @@ const CalendarPage: React.FC<{ onChatNavigate: (msg: string) => void }> = ({ onC
                             </span>
                           )}
                           <span className={`px-2 py-0.5 rounded-full text-[10px] font-medium border ${
-                            ev.sync_status === 'Created in Google Calendar' || ev.provider === 'google'
+                            ev.sync_status?.toLowerCase().includes('fail') || ev.sync_status?.toLowerCase().includes('error')
+                              ? 'bg-red-500/10 border-red-500/30 text-red-400'
+                              : ev.sync_status === 'Created in Google Calendar' || ev.sync_status === 'Synchronized with Google Calendar' || ev.provider === 'google'
                               ? 'bg-emerald-500/10 border-emerald-500/30 text-emerald-400'
-                              : ev.sync_status === 'Created in Microsoft Calendar' || ev.provider === 'microsoft'
+                              : ev.sync_status === 'Created in Microsoft Calendar' || ev.sync_status === 'Synchronized with Microsoft Calendar' || ev.provider === 'microsoft'
                               ? 'bg-blue-500/10 border-blue-500/30 text-blue-400'
-                              : 'bg-white/5 border-white/10 text-text-muted'
+                              : 'bg-amber-500/10 border-amber-500/20 text-amber-400'
                           }`}>
-                            {ev.sync_status || (ev.provider === 'google' ? 'Created in Google Calendar' : ev.provider === 'microsoft' ? 'Created in Microsoft Calendar' : 'Saved only in Mitra')}
+                            {ev.sync_status?.toLowerCase().includes('fail') || ev.sync_status?.toLowerCase().includes('error')
+                              ? (ev.sync_status || 'Sync failed')
+                              : (ev.sync_status === 'Created in Google Calendar' || ev.provider === 'google')
+                              ? 'Synced to Google Calendar'
+                              : (ev.sync_status === 'Created in Microsoft Calendar' || ev.provider === 'microsoft')
+                              ? 'Synced to Microsoft Calendar'
+                              : 'Saved only in Mitra'}
                           </span>
                         </div>
                       </div>
                     </div>
 
-                    <button
-                      onClick={() => deleteEvent(ev.id)}
-                      className="text-text-muted hover:text-red-400 p-1.5 rounded-lg hover:bg-red-500/10 transition-colors flex-shrink-0"
-                      title="Delete event"
-                    >
-                      <Trash2 size={14} />
-                    </button>
+                    <div className="flex items-center gap-1 flex-shrink-0">
+                      <button
+                        onClick={() => downloadIcs(ev)}
+                        className="text-text-muted hover:text-brand-light p-1.5 rounded-lg hover:bg-brand/10 transition-colors cursor-pointer"
+                        title="Add to Apple Calendar / Device (.ics)"
+                        aria-label="Download .ics event"
+                      >
+                        <Download size={14} />
+                      </button>
+                      <button
+                        onClick={() => deleteEvent(ev.id)}
+                        className="text-text-muted hover:text-red-400 p-1.5 rounded-lg hover:bg-red-500/10 transition-colors flex-shrink-0 cursor-pointer"
+                        title="Delete event"
+                      >
+                        <Trash2 size={14} />
+                      </button>
+                    </div>
                   </div>
                 </motion.div>
               ))}

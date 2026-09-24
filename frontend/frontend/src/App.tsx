@@ -25,9 +25,9 @@ import AnalyticsPage from './components/pages/AnalyticsPage';
 import Login from './components/auth/Login';
 import { useCompanionStore } from './store/companion.store';
 import { CompanionService } from './services/companion.service';
-import { getAuthToken, getApiBase, getAuthHeaders } from './services/apiConfig';
+import { getAuthToken, setAuthToken, getApiBase, getAuthHeaders } from './services/apiConfig';
 import { cn } from './lib/utils';
-import { LayoutDashboard, Calendar, CheckSquare, PlayCircle, TrendingUp } from 'lucide-react';
+import { MessageSquare, Calendar, CheckSquare, PlayCircle, BarChart2 } from 'lucide-react';
 
 /* Helper hook to keep isMobile store value in sync */
 const useIsMobile = () => {
@@ -73,10 +73,10 @@ const speakAudioResponse = async (text: string) => {
   }
 };
 
-/* Mobile bottom nav items — 5 primary tabs for clean mobile fit */
+/* Mobile bottom nav items — 5 primary destinations: Chat, Analytics, Calendar, Tasks, Workflows */
 const mobileNavItems = [
-  { id: 'chat',      label: 'Chat',      icon: LayoutDashboard },
-  { id: 'analytics', label: 'Analytics', icon: TrendingUp },
+  { id: 'chat',      label: 'Chat',      icon: MessageSquare },
+  { id: 'analytics', label: 'Analytics', icon: BarChart2 },
   { id: 'calendar',  label: 'Calendar',  icon: Calendar },
   { id: 'tasks',     label: 'Tasks',     icon: CheckSquare },
   { id: 'workflows', label: 'Workflows', icon: PlayCircle },
@@ -88,26 +88,27 @@ const MobileBottomNav: React.FC<{
   onSelect: (id: string) => void;
 }> = ({ active, onSelect }) => {
   return (
-    <nav className="zone-bottomnav mobile-bottom-nav bottom-nav grid grid-cols-5 items-center w-full bg-surface-raised border-t border-border-subtle py-1.5 px-0.5 select-none">
+    <nav className="zone-bottomnav mobile-bottom-nav bottom-nav grid grid-cols-5 items-center w-full bg-surface-raised border-t border-border-subtle py-1 px-0.5 select-none z-40">
       {mobileNavItems.map(item => {
         const Icon = item.icon;
         const isActive = active === item.id;
+
         return (
           <button
             key={item.id}
             onClick={() => onSelect(item.id)}
             className={cn(
-              "flex flex-col items-center justify-center py-1 px-1 transition-all relative cursor-pointer min-h-[44px]",
+              "flex flex-col items-center justify-center py-1 px-1 transition-all relative cursor-pointer min-h-[44px] min-w-[44px]",
               isActive ? "text-brand-light font-semibold" : "text-text-muted hover:text-text-secondary"
             )}
             aria-label={item.label}
           >
-            <Icon size={18} className={cn("transition-transform mb-0.5", isActive && "scale-110 text-brand-light")} />
-            <span className="text-[10px] tracking-tight truncate w-full text-center">{item.label}</span>
+            <Icon size={19} className={cn("transition-transform mb-0.5", isActive && "scale-110 text-brand-light")} />
+            <span className="text-[11px] tracking-tight truncate w-full text-center">{item.label}</span>
             {isActive && (
               <motion.div
                 layoutId="activeTabIndicator"
-                className="absolute bottom-0 w-5 h-0.5 bg-brand-light rounded-full shadow-glow"
+                className="absolute bottom-0 w-6 h-0.5 bg-brand-light rounded-full shadow-glow"
               />
             )}
           </button>
@@ -121,7 +122,7 @@ const MobileBottomNav: React.FC<{
 const App: React.FC = () => {
   const {
     userId, sidebar, contextPanel, isMobile, authModalOpen, setAuthModalOpen,
-    setStatus, setSessionId, setUserName, setMemory, setAuth,
+    setStatus, setSessionId, setUserName, setMemory, setAuth, setAuthStatus,
     addMessage, addNotification, addContextItem,
   } = useCompanionStore();
 
@@ -162,17 +163,54 @@ const App: React.FC = () => {
   // ── Startup: load session + greeting + memory ───────────
   useEffect(() => {
     const init = async () => {
-      // 1. Session recovery for logged-in user
-      const existingToken = getAuthToken();
+      // 1. Check for OAuth callback tokens or error query params in URL
+      const urlParams = new URLSearchParams(window.location.search);
+      const urlToken = urlParams.get('token');
+      const urlError = urlParams.get('error');
+      const urlProvider = urlParams.get('provider');
+      const urlStatus = urlParams.get('status');
+
+      if (urlError) {
+        let friendlyMsg = 'Sign-in could not be completed. Please try again.';
+        if (urlError === 'authorization_denied') {
+          friendlyMsg = 'Access was denied by the provider.';
+        } else if (urlError === 'missing_code_or_state') {
+          friendlyMsg = 'Sign-in was interrupted. Please try again.';
+        } else if (urlError === 'invalid_state') {
+          friendlyMsg = 'Session expired during sign-in. Please try again.';
+        }
+        showToast('error', 'Authentication Failed', friendlyMsg);
+        setAuthStatus('AUTH_ERROR');
+        window.history.replaceState({}, document.title, window.location.pathname);
+      }
+
+      if (urlToken) {
+        setAuthToken(urlToken);
+        showToast('success', 'Sign In Successful', 'Welcome to Mitra!');
+        window.history.replaceState({}, document.title, window.location.pathname);
+      }
+
+      if (urlStatus === 'success' && urlProvider) {
+        showToast('success', 'Connected', `Successfully connected ${urlProvider} account.`);
+        window.history.replaceState({}, document.title, window.location.pathname);
+      }
+
+      // 2. Session recovery for logged-in user
+      const existingToken = urlToken || getAuthToken();
       if (existingToken) {
+        setAuthStatus('LOADING');
         try {
           const res = await CompanionService.getMe(existingToken);
           if (res?.user) {
-            setAuth(res.user, existingToken);
+            setAuth(res.user, existingToken, (res.user as any).is_guest);
+          } else {
+            setAuthStatus('GUEST');
           }
         } catch {
-          // Token expired or server restarted
+          setAuthStatus('GUEST');
         }
+      } else {
+        setAuthStatus('GUEST');
       }
 
       const activeUserId = useCompanionStore.getState().userId;

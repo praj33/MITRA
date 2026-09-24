@@ -6,7 +6,7 @@ import {
   Settings, ChevronLeft, ChevronRight, Play, X, User, TrendingUp,
 } from 'lucide-react';
 import { cn } from '../../lib/utils';
-import { useCompanionStore } from '../../store/companion.store';
+import { useCompanionStore, resolveDisplayName } from '../../store/companion.store';
 
 interface NavItem {
   id:    string;
@@ -137,7 +137,8 @@ const DesktopSidebar: React.FC<Props> = ({
 const MobileSidebarDrawer: React.FC<Props> = ({
   activeSection = 'chat', onSectionChange,
 }) => {
-  const { mobileMenuOpen, setMobileMenuOpen, userName } = useCompanionStore();
+  const { mobileMenuOpen, setMobileMenuOpen, userName, userEmail, isGuest } = useCompanionStore();
+  const displayName = resolveDisplayName({ name: userName, email: userEmail }, isGuest);
 
   const handleNav = (id: string) => {
     onSectionChange?.(id);
@@ -172,25 +173,25 @@ const MobileSidebarDrawer: React.FC<Props> = ({
             {/* Header */}
             <div className="flex items-center justify-between px-4 py-4 border-b border-border-subtle">
               <div className="flex items-center gap-2.5">
-                <div className="w-8 h-8 rounded-lg bg-brand-muted border border-brand/30 flex items-center justify-center">
+                <div className="w-9 h-9 rounded-xl bg-brand-muted border border-brand/30 flex items-center justify-center">
                   <span className="text-brand-light text-sm font-bold">M</span>
                 </div>
-                <div>
-                  <p className="text-sm font-semibold text-text-primary">Mitra</p>
-                  <p className="text-2xs text-text-muted">Hey, {userName} 👋</p>
+                <div className="min-w-0">
+                  <p className="text-sm font-bold text-text-primary">Mitra</p>
+                  <p className="text-2xs text-text-muted truncate">Hey, {displayName} 👋</p>
                 </div>
               </div>
               <button
                 onClick={() => setMobileMenuOpen(false)}
-                className="w-8 h-8 flex items-center justify-center rounded-lg hover:bg-surface-overlay transition-colors"
+                className="w-10 h-10 min-w-[40px] flex items-center justify-center rounded-xl hover:bg-surface-overlay active:scale-95 transition-all"
                 aria-label="Close menu"
               >
-                <X size={16} className="text-text-muted" />
+                <X size={18} className="text-text-muted" />
               </button>
             </div>
 
             {/* Nav items */}
-            <nav className="flex-1 py-4 px-3 space-y-1" role="navigation" aria-label="Main navigation">
+            <nav className="flex-1 py-3 px-3 space-y-1" role="navigation" aria-label="Main navigation">
               {navItems.map(item => {
                 const active = activeSection === item.id;
                 return (
@@ -200,16 +201,16 @@ const MobileSidebarDrawer: React.FC<Props> = ({
                     onClick={() => handleNav(item.id)}
                     aria-current={active ? 'page' : undefined}
                     className={cn(
-                      'w-full flex items-center gap-3 px-3 py-3 rounded-xl transition-all duration-150 text-left',
+                      'w-full flex items-center gap-3 px-3.5 py-3 min-h-[44px] rounded-xl transition-all duration-150 text-left cursor-pointer',
                       active
-                        ? 'bg-brand-muted text-brand-light'
+                        ? 'bg-brand-muted text-brand-light font-semibold'
                         : 'text-text-secondary hover:bg-surface-overlay active:bg-surface-overlay',
                     )}
                   >
                     <span className={cn('flex-shrink-0', active ? 'text-brand-light' : '')}>
                       {item.icon}
                     </span>
-                    <span className="text-sm font-medium">{item.label}</span>
+                    <span className="text-sm">{item.label}</span>
                     {item.badge && item.badge > 0 && (
                       <span className="ml-auto w-5 h-5 bg-brand rounded-full text-xs text-white flex items-center justify-center flex-shrink-0">
                         {item.badge}
@@ -218,6 +219,19 @@ const MobileSidebarDrawer: React.FC<Props> = ({
                   </button>
                 );
               })}
+
+              {/* Integrations shortcut in mobile navigation */}
+              <button
+                onClick={() => {
+                  setMobileMenuOpen(false);
+                  const fn = (window as any).__MITRA_INTEGRATIONS__;
+                  if (fn) fn();
+                }}
+                className="w-full flex items-center gap-3 px-3.5 py-3 min-h-[44px] rounded-xl text-text-secondary hover:bg-surface-overlay active:bg-surface-overlay transition-all text-left cursor-pointer"
+              >
+                <span className="flex-shrink-0 text-sky-400">🔌</span>
+                <span className="text-sm">Integrations & Cloud Sync</span>
+              </button>
             </nav>
 
             {/* Footer */}
@@ -227,10 +241,12 @@ const MobileSidebarDrawer: React.FC<Props> = ({
                   setMobileMenuOpen(false);
                   useCompanionStore.getState().setAuthModalOpen(true);
                 }}
-                className="w-full flex items-center gap-3 px-3 py-3 rounded-xl text-text-primary bg-surface-overlay hover:bg-surface-overlay/80 transition-all font-medium"
+                className="w-full flex items-center gap-3 px-3.5 py-3 min-h-[44px] rounded-xl text-text-primary bg-surface-overlay hover:bg-surface-hover transition-all font-medium cursor-pointer"
               >
-                <User size={15} className="text-brand-light" />
-                <span className="text-sm font-medium">Account / Login</span>
+                <User size={16} className="text-brand-light" />
+                <span className="text-sm font-medium">
+                  {isGuest ? 'Create Account / Log In' : 'Account Profile'}
+                </span>
               </button>
               <button
                 onClick={() => {
@@ -238,9 +254,9 @@ const MobileSidebarDrawer: React.FC<Props> = ({
                   const fn = (window as any).__MITRA_SETTINGS__;
                   if (fn) fn();
                 }}
-                className="w-full flex items-center gap-3 px-3 py-3 rounded-xl text-text-muted hover:text-text-secondary hover:bg-surface-overlay transition-all"
+                className="w-full flex items-center gap-3 px-3.5 py-3 min-h-[44px] rounded-xl text-text-muted hover:text-text-secondary hover:bg-surface-overlay transition-all cursor-pointer"
               >
-                <Settings size={15} />
+                <Settings size={16} />
                 <span className="text-sm font-medium">Settings</span>
               </button>
             </div>
