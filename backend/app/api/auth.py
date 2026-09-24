@@ -167,16 +167,29 @@ async def guest_auth(request: Request):
     guest_name = "Guest User"
     guest_email = f"{guest_id}@guest.local"
 
-    email: Optional[str] = None
-    tenant_id: Optional[str] = "default_tenant"
-    org_id: Optional[str] = "bhiv_default"
-    is_guest: Optional[bool] = False
+    payload = {
+        "sub": guest_id,
+        "user_id": guest_id,
+        "email": guest_email,
+        "name": guest_name,
+        "is_guest": True,
+        "tenant_id": "default_tenant",
+        "org_id": "bhiv_default"
     }
 
     # Guest token lifetime: 1 hour (60 minutes)
     token = create_access_token(data=payload, expires_delta=timedelta(hours=1))
 
-    email: Optional[str] = None
-    tenant_id: Optional[str] = "default_tenant"
-    org_id: Optional[str] = "bhiv_default"
-    is_guest: Optional[bool] = False
+    return {
+        "access_token": token,
+        "token_type": "bearer",
+        "token": token,
+        "user": {
+            "id": guest_id,
+            "name": guest_name,
+            "email": guest_email,
+            "is_guest": True,
+            "tenant_id": "default_tenant",
+            "org_id": "bhiv_default"
+        },
+    }

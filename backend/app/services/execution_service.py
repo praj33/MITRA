@@ -36,17 +36,14 @@ def _get_db():
 
 
 class ExecutionService:
-"""Real execution service for WhatsApp, Email, Instagram, Telegram, Tasks, Reminders, and Calendar actions"""
-
-"""Real execution service for WhatsApp, Email, Instagram, Tasks, Reminders, Calendar, and GitHub actions"""
+    """Real execution service for WhatsApp, Email, Instagram, Telegram, Tasks, Reminders, Calendar, and GitHub actions"""
 
     def __init__(self):
         self.whatsapp = WhatsAppExecutor()
         self.email = EmailExecutor()
         self.instagram = InstagramExecutor()
-self.telegram = TelegramExecutor()
-
-self.github = GitHubExecutor()
+        self.telegram = TelegramExecutor()
+        self.github = GitHubExecutor()
 
     def execute_action(self, action_type: str, action_data: Dict[str, Any], trace_id: str = "auto", enforcement_decision: str = "ALLOW") -> Dict[str, Any]:
         """

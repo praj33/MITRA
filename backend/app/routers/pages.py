@@ -87,17 +87,10 @@ async def get_calendar_events(user_id: str = "user_default"):
 
 @router.post("/calendar/events")
 async def create_calendar_event(event: CalendarEventCreate, user_id: str = "user_default"):
-"""Create a calendar event and persist to database with smart datetime & sync URLs."""
+    """Create a calendar event and persist to database with smart datetime & sync URLs."""
     from app.capabilities.calendar_capability import _parse_event_datetime_and_title
     clean_title, start_dt, end_dt = _parse_event_datetime_and_title(event.title)
 
-    event_id = f"ev_{uuid4().hex[:8]}"
-    now = datetime.now(timezone.utc)
-
-    start_iso_str = start_dt.isoformat()
-    end_iso_str = end_dt.isoformat()
-
-"""Create a calendar event and synchronize with Google/Microsoft if connected."""
     event_id = f"ev_{uuid4().hex[:8]}"
     now = datetime.now(timezone.utc)
 
@@ -180,9 +173,7 @@ async def create_calendar_event(event: CalendarEventCreate, user_id: str = "user
     if db is not None:
         try:
             db["calendar_events"].insert_one(doc)
-logger.info(f"Calendar event created: {event_id} — {clean_title}")
 
-logger.info(f"Calendar event created: {event_id} — {event.title} [{sync_status}]")
         except Exception as e:
             logger.warning(f"Calendar DB insert failed: {e}")
 
