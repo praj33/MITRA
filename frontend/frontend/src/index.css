@@ -2110,3 +2110,29 @@ input[type="datetime-local"]::-webkit-calendar-picker-indicator {
     scroll-behavior: auto !important;
   }
 }
+
+/* ── MITRA Formatted Markdown & KaTeX Math Styling ─────────────── */
+.formatted-markdown .katex {
+  color: var(--text-primary);
+  font-size: 1.05em;
+}
+
+.formatted-markdown .katex-display {
+  margin: 0.75rem 0 !important;
+  padding: 0.5rem 0;
+  overflow-x: auto;
+  overflow-y: hidden;
+  max-width: 100%;
+}
+
+.formatted-markdown .katex-display > .katex {
+  white-space: normal;
+}
+
+.formatted-markdown .katex .fbox,
+.formatted-markdown .katex .fcolorbox {
+  border-color: var(--brand-light) !important;
+  padding: 0.35em 0.5em !important;
+  border-radius: var(--radius-sm);
+  background: rgba(124, 111, 247, 0.08);
+}

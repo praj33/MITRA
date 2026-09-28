@@ -8,6 +8,7 @@ Flow: message → intent classify → capability route OR conversation
 from __future__ import annotations
 
 import os
+import re
 import logging
 from dataclasses import dataclass, field
 from datetime import datetime, timezone
@@ -45,6 +46,29 @@ _CAPABILITY_INTENT_MAP: Dict[str, str] = {
     "headlines":     "samachar",
 }
 
+# Patterns for direct self-referential / identity questions
+_SELF_IDENTITY_PATTERNS = [
+    r"what(?:'s|\s+is)\s+your\s+name",
+    r"what\s+are\s+you\s+called",
+    r"what\s+should\s+i\s+call\s+you",
+    r"tell\s+me\s+your\s+name",
+    r"who\s+are\s+you",
+    r"what\s+are\s+you",
+    r"who\s+(?:created|made|built|programmed|developed|designed)\s+you",
+    r"who\s+is\s+your\s+creator",
+    r"what\s+can\s+you\s+do",
+    r"what\s+do\s+you\s+do",
+    r"what\s+are\s+your\s+capabilities",
+    r"what\s+can\s+you\s+help\s+(?:me\s+)?with",
+    r"how\s+can\s+you\s+help\s+me",
+    r"are\s+you\s+(?:an?\s+)?ai\b",
+    r"are\s+you\s+(?:an?\s+)?(?:chat)?bot\b",
+    r"are\s+you\s+human\b",
+    r"what\s+(?:ai\s+)?model\s+are\s+you",
+    r"what\s+ai\s+are\s+you",
+    r"which\s+(?:ai\s+)?model\s+are\s+you",
+    r"are\s+you\s+(?:chatgpt|gpt|openai|claude|llama|gemini)",
+]
 
 _KNOWLEDGE_KEYWORDS = {
     "explain", "what is", "how does", "define", "teach",
@@ -189,8 +213,13 @@ class CompanionOrchestrator:
         capability_result: Optional[CapabilityResult] = None
         response_text: str
 
-        capability_name = _CAPABILITY_INTENT_MAP.get(intent)
-        is_knowledge = self._is_knowledge_query(message, intent)
+        is_self_identity = self._is_self_identity_query(message) or self._is_self_identity_query(resolved_message)
+        if is_self_identity:
+            capability_name = None
+            is_knowledge = False
+        else:
+            capability_name = _CAPABILITY_INTENT_MAP.get(intent)
+            is_knowledge = self._is_knowledge_query(resolved_message, intent)
 
         if capability_name and capability_name in self._config.enabled_capabilities:
             # ── Capability path ───────────────────────────────────────
@@ -484,26 +513,47 @@ class CompanionOrchestrator:
             yield token
 
 
+    def _is_self_identity_query(self, message: str) -> bool:
+        """Check if message is asking about Mitra's self-identity or capabilities."""
+        if not message:
+            return False
+        cleaned = re.sub(r"[^\w\s']", " ", message.lower()).strip()
+        cleaned = re.sub(r"\s+", " ", cleaned)
+        return any(bool(re.search(pat, cleaned)) for pat in _SELF_IDENTITY_PATTERNS)
+
+    def _is_knowledge_query(self, message: str, intent: str) -> bool:
+        if self._is_self_identity_query(message):
+            return False
+        msg_lower = message.lower()
+        return any(kw in msg_lower for kw in _KNOWLEDGE_KEYWORDS)
+
     async def _call_knowledge(self, message: str, user_id: str) -> str:
-        """Route to primary LLM / UniGuru for knowledge queries."""
+        """Route to primary LLM for knowledge queries, preserving Mitra identity with educational depth."""
+        facts = await companion_memory.get_user_facts(user_id)
+        user_name = facts.get("name") or "there"
+        knowledge_instruction = (
+            "Knowledge & Explanation Guidelines:\n"
+            "- Explain concepts clearly, accurately, and with structured depth for the user.\n"
+            "- Use clean Markdown headings, bullet points, and tables where helpful.\n"
+            "- For mathematical or scientific formulas, use standard LaTeX formatting (e.g., \\[ ... \\] for display equations, \\( ... \\) or $...$ for inline expressions).\n"
+            "- Keep explanations engaging, maintain your identity as Mitra, and offer to go deeper or give examples."
+        )
+        system_prompt = personality_engine.build_system_prompt(
+            user_name=user_name,
+            user_facts=facts,
+            enabled_capabilities=self._config.enabled_capabilities,
+            extra_context=knowledge_instruction,
+        )
         history = await session_manager.get_history(user_id, limit=6)
         messages = [
-            {"role": "system", "content": (
-                "You are an educational assistant. Explain concepts clearly, "
-                "accurately, and at the appropriate depth for the user. "
-                "Offer to go deeper or give examples if the user wants."
-            )}
+            {"role": "system", "content": system_prompt}
         ] + history + [{"role": "user", "content": message}]
-        primary = os.getenv("COMPANION_LLM_PROVIDER", "groq")
+        primary = os.getenv("COMPANION_LLM_PROVIDER", self._config.llm_provider)
         return await llm_bridge.call_llm_with_messages(
             model=primary,
             messages=messages,
             temperature=0.5,
         )
-
-    def _is_knowledge_query(self, message: str, intent: str) -> bool:
-        msg_lower = message.lower()
-        return any(kw in msg_lower for kw in _KNOWLEDGE_KEYWORDS)
 
     async def _extract_facts(
         self, user_id: str, message: str, intent_data: Dict
