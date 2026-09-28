@@ -3,14 +3,13 @@ import { motion, AnimatePresence } from 'framer-motion';
 import {
   Zap, Calendar, ArrowRight, UserPlus,
   ChevronRight, Compass, CheckSquare, Bell,
-  CheckCircle2, AlertTriangle, Circle, Ban
+  CheckCircle2, AlertTriangle, Circle, Ban, RotateCcw
 } from 'lucide-react';
 import { cn } from '../../lib/utils';
 import { useCompanionStore } from '../../store/companion.store';
 import { CompanionService } from '../../services/companion.service';
 import { authApi } from '../../services/authApi';
 import ConversationCard from '../cards/ConversationCard';
-import { DailyBriefingCard } from '../cards/DailyBriefingCard';
 
 const ThinkingIndicator = () => (
   <motion.div
@@ -189,7 +188,7 @@ const CompanionHomeView: React.FC<{
   ];
 
   return (
-    <div className="w-full max-w-4xl flex flex-col gap-4 sm:gap-5 py-3 sm:py-5">
+    <div className="w-full flex flex-col gap-4 sm:gap-5 py-3 sm:py-5">
       {/* ── 1. Compact MITRA Companion Hero Header ── */}
       <motion.div
         initial={{ opacity: 0, y: -4 }}
@@ -359,8 +358,79 @@ const CompanionHomeView: React.FC<{
   );
 };
 
+const CompactConversationHeader: React.FC<{
+  onNavigate: (section: string) => void;
+  onClearChat: () => void;
+}> = ({ onNavigate, onClearChat }) => {
+  const { userName, userEmail, isGuest } = useCompanionStore();
+  const userFirstName = isGuest
+    ? 'Guest User'
+    : (userName ? userName.trim().split(' ')[0] : (userEmail ? userEmail.split('@')[0] : 'Mitra User'));
+
+  const getGreetingTime = () => {
+    const hour = new Date().getHours();
+    if (hour >= 5 && hour < 12) return 'Good morning';
+    if (hour >= 12 && hour < 17) return 'Good afternoon';
+    if (hour >= 17 && hour < 22) return 'Good evening';
+    return 'Good night';
+  };
+
+  const currentDateDisplay = new Date().toLocaleDateString('en-US', {
+    weekday: 'short',
+    month: 'short',
+    day: 'numeric',
+  });
+
+  return (
+    <motion.div
+      initial={{ opacity: 0, y: -6 }}
+      animate={{ opacity: 1, y: 0 }}
+      transition={{ duration: 0.18 }}
+      className="flex items-center justify-between gap-3 px-3.5 py-2 sm:px-4 sm:py-2.5 rounded-xl bg-surface-elevated/70 border border-border-subtle/80 backdrop-blur-sm shadow-2xs"
+    >
+      <div className="flex items-center gap-2.5 min-w-0">
+        <div className="w-7 h-7 rounded-lg bg-brand/15 border border-brand/30 flex items-center justify-center text-brand-light flex-shrink-0">
+          <Zap size={14} className="text-brand-light" />
+        </div>
+        <div className="min-w-0">
+          <div className="flex items-center gap-2">
+            <span className="text-xs font-semibold text-text-primary tracking-tight truncate">
+              {getGreetingTime()}, {userFirstName}
+            </span>
+            <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded-full bg-emerald-500/10 border border-emerald-500/20 text-emerald-400 text-3xs font-medium">
+              <span className="w-1 h-1 rounded-full bg-emerald-400 animate-pulse" />
+              <span>Active</span>
+            </span>
+          </div>
+          <p className="text-3xs text-text-muted mt-0.5">{currentDateDisplay}</p>
+        </div>
+      </div>
+
+      <div className="flex items-center gap-2 flex-shrink-0">
+        <button
+          onClick={() => onNavigate('calendar')}
+          className="hidden sm:inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg border border-border-subtle hover:border-brand/40 bg-surface-overlay/80 hover:bg-surface-hover text-2xs font-medium text-text-muted hover:text-text-primary transition-colors cursor-pointer"
+          title="Open Calendar"
+        >
+          <Calendar size={12} className="text-brand-light flex-shrink-0" />
+          <span>Calendar</span>
+        </button>
+
+        <button
+          onClick={onClearChat}
+          className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg border border-border-subtle hover:border-red-500/30 bg-surface-overlay/80 hover:bg-red-500/10 text-2xs font-medium text-text-muted hover:text-red-400 transition-colors cursor-pointer"
+          title="Start fresh conversation"
+        >
+          <RotateCcw size={11} className="flex-shrink-0" />
+          <span>New Chat</span>
+        </button>
+      </div>
+    </motion.div>
+  );
+};
+
 const ConversationCenter: React.FC = () => {
-  const { messages, status } = useCompanionStore();
+  const { messages, status, clearMessages } = useCompanionStore();
   const bottomRef = useRef<HTMLDivElement>(null);
   const isThinking = status === 'thinking';
 
@@ -398,7 +468,7 @@ const ConversationCenter: React.FC = () => {
   }, []);
 
   return (
-    <main className="zone-center flex flex-col overflow-hidden bg-surface-base w-full">
+    <main className="flex flex-col flex-1 min-w-0 overflow-hidden bg-surface-base w-full h-full">
       <div className="flex-1 overflow-y-auto px-2.5 sm:px-6 py-4 overscroll-contain">
         <div className="companion-container">
           {messages.length === 0 ? (
@@ -408,8 +478,11 @@ const ConversationCenter: React.FC = () => {
             />
           ) : (
             <div className="space-y-3 sm:space-y-4">
+              <CompactConversationHeader
+                onNavigate={handleNavigate}
+                onClearChat={clearMessages}
+              />
               <AnimatePresence initial={false}>
-                <DailyBriefingCard onActionClick={handleActionSend} />
                 {messages.map(msg => (
                   <ConversationCard
                     key={msg.id}

@@ -316,7 +316,8 @@ const InputBar: React.FC<Props> = ({ onSend, disabled }) => {
   };
 
   return (
-    <div className="zone-input bg-surface-raised border-t border-border-subtle px-3 sm:px-4 py-2 sm:py-2.5 flex flex-col gap-1.5 sm:gap-2">
+    <div className="zone-input bg-surface-raised border-t border-border-subtle py-2 sm:py-2.5">
+      <div className="companion-container flex flex-col gap-1.5 sm:gap-2">
       {/* Quick actions */}
       {showQuick && !value && !isListening && (
         <motion.div
@@ -460,6 +461,7 @@ const InputBar: React.FC<Props> = ({ onSend, disabled }) => {
           <kbd className="px-1 py-0.5 bg-surface-overlay border border-border-subtle rounded text-2xs">Ctrl + K</kbd>
           <span>for Command Palette</span>
         </span>
+      </div>
       </div>
     </div>
   );

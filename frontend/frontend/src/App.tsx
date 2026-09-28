@@ -161,6 +161,7 @@ const App: React.FC = () => {
 
   // ── Startup: load session + greeting + memory ───────────
   useEffect(() => {
+    document.title = 'MITRA — AI Companion';
     const init = async () => {
       // 1. Check for OAuth callback tokens or error query params in URL
       const urlParams = new URLSearchParams(window.location.search);
