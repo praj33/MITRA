@@ -117,6 +117,7 @@ interface CompanionStore {
   toggleMobileContext:  () => void;
 
   addMessage:    (msg: Omit<Message, 'id' | 'timestamp'>) => void;
+  updateMessage: (id: string, updates: Partial<Message>) => void;
   clearMessages: () => void;
 
   setContextItems:  (items: ContextItem[]) => void;
@@ -230,6 +231,9 @@ export const useCompanionStore = create<CompanionStore>()(
             },
           ],
         })),
+        updateMessage: (id, updates) => set(s => ({
+          messages: s.messages.map(m => m.id === id ? { ...m, ...updates } : m),
+        })),
         clearMessages: () => set({ messages: [] }),
 
         // ── Context Panel ───────────────────────────────
@@ -306,7 +310,7 @@ export const useCompanionStore = create<CompanionStore>()(
   )
 );
 
-// ── Custom hook: sync isMobile/tablet with window resize ──
+// ── Custom hook: sync isMobile with window resize (< 1024px) ──
 export function useIsMobile() {
   const setIsMobile = useCompanionStore(s => s.setIsMobile);
   const setSidebar = useCompanionStore(s => s.setSidebar);
@@ -314,18 +318,13 @@ export function useIsMobile() {
   const isMobile = useCompanionStore(s => s.isMobile);
 
   useEffect(() => {
-    const mobileMql = window.matchMedia('(max-width: 767px)');
-    const tabletMql = window.matchMedia('(min-width: 768px) and (max-width: 1023px)');
+    const mobileMql = typeof window !== 'undefined' && window.matchMedia ? window.matchMedia('(max-width: 1023px)') : null;
 
     const handleResize = () => {
-      const mobile = mobileMql.matches;
-      const tablet = tabletMql.matches;
+      const mobile = mobileMql ? mobileMql.matches : false;
       setIsMobile(mobile);
 
       if (mobile) {
-        setSidebar('collapsed');
-        setContextPanel('closed');
-      } else if (tablet) {
         setSidebar('collapsed');
         setContextPanel('closed');
       }
@@ -333,11 +332,13 @@ export function useIsMobile() {
 
     handleResize();
 
-    mobileMql.addEventListener('change', handleResize);
-    tabletMql.addEventListener('change', handleResize);
+    if (mobileMql?.addEventListener) {
+      mobileMql.addEventListener('change', handleResize);
+    }
     return () => {
-      mobileMql.removeEventListener('change', handleResize);
-      tabletMql.removeEventListener('change', handleResize);
+      if (mobileMql?.removeEventListener) {
+        mobileMql.removeEventListener('change', handleResize);
+      }
     };
   }, [setIsMobile, setSidebar, setContextPanel]);
 

@@ -140,7 +140,7 @@ const TopBar: React.FC<Props> = ({ onSearch }) => {
                     animate={{ opacity: 1, y: 0, scale: 1 }}
                     exit={{ opacity: 0, y: 8, scale: 0.96 }}
                     transition={{ duration: 0.18 }}
-                    className="absolute right-0 top-11 w-64 sm:w-72 p-2 rounded-2xl bg-surface-elevated border border-border-default shadow-2xl z-50 flex flex-col gap-1 select-none"
+                    className="absolute right-0 top-11 w-64 sm:w-72 p-2 rounded-2xl bg-surface-elevated border border-border-default shadow-2xl z-50 flex flex-col gap-1 select-none max-h-[calc(100dvh-5.5rem)] overflow-y-auto overscroll-contain"
                     role="menu"
                     aria-label="Tools Navigation"
                   >

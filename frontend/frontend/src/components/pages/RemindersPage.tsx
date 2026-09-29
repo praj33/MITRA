@@ -90,7 +90,7 @@ const RemindersPage: React.FC<{ onChatNavigate: (msg: string) => void }> = ({ on
   };
 
   return (
-    <motion.div initial={{ opacity: 0, y: 12 }} animate={{ opacity: 1, y: 0 }} className="page-container pb-24 px-3 sm:px-6">
+    <motion.div initial={{ opacity: 0, y: 12 }} animate={{ opacity: 1, y: 0 }} className="page-container pb-6 px-3 sm:px-6">
       {/* Responsive Header */}
       <div className="flex flex-col sm:flex-row gap-3 sm:items-center justify-between mb-4 border-b border-border-subtle pb-4">
         <div className="flex items-center gap-3">

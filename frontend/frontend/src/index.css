@@ -622,7 +622,7 @@ body {
 
 @media (max-width: 1023px) {
   .page-container {
-    padding: 12px 14px 96px 14px;
+    padding: 12px 14px 20px 14px;
   }
   .page-header {
     margin-bottom: 16px;

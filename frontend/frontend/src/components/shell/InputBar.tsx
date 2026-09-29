@@ -1,7 +1,7 @@
 // components/shell/InputBar.tsx — Message input with send + voice + attach (responsive)
 import React, { useState, useRef, KeyboardEvent } from 'react';
 import { motion } from 'framer-motion';
-import { Send, Mic, Paperclip, Zap, X, Check } from 'lucide-react';
+import { Send, Mic, Paperclip, Zap, X, Check, Square } from 'lucide-react';
 import { cn } from '../../lib/utils';
 import { useCompanionStore } from '../../store/companion.store';
 import { showToast } from './Toast';
@@ -9,6 +9,7 @@ import { getApiBase, getAuthHeaders } from '../../services/apiConfig';
 
 interface Props {
   onSend:     (message: string, isVoice?: boolean) => void;
+  onStop?:    () => void;
   disabled?:  boolean;
 }
 
@@ -19,10 +20,48 @@ const quickActions = [
   { label: '✅ Tasks',        value: 'Show my pending tasks' },
 ];
 
-const InputBar: React.FC<Props> = ({ onSend, disabled }) => {
+export const SUPPORTED_EXTENSIONS = ['pdf', 'docx', 'txt', 'md', 'json', 'csv', 'jpg', 'jpeg', 'png', 'webp'] as const;
+export const SUPPORTED_IMAGE_MIMES = ['image/jpeg', 'image/png', 'image/webp'] as const;
+export const FORBIDDEN_EXTENSIONS = ['svg', 'gif', 'bmp', 'tiff', 'tif', 'heic', 'ico'] as const;
+
+export function validateAttachment(file: { name: string; type?: string }): { valid: boolean; error?: string } {
+  const ext = file.name.split('.').pop()?.toLowerCase() || '';
+
+  // Explicitly reject forbidden image/vector types (SVG, GIF, BMP, TIFF, HEIC, ICO)
+  if (FORBIDDEN_EXTENSIONS.includes(ext as any)) {
+    return {
+      valid: false,
+      error: 'Mitra supports PDF, DOCX, TXT, MD, JSON, CSV, and images (JPEG, PNG, WEBP). SVG, GIF, and other image types are not supported.',
+    };
+  }
+
+  // Reject unsupported file extensions
+  if (!SUPPORTED_EXTENSIONS.includes(ext as any)) {
+    return {
+      valid: false,
+      error: 'Mitra supports PDF, DOCX, TXT, MD, JSON, CSV, and images (JPEG, PNG, WEBP).',
+    };
+  }
+
+  // If MIME type is present and claims to be an image, strictly enforce JPEG, PNG, or WEBP
+  if (file.type && file.type.startsWith('image/')) {
+    if (!SUPPORTED_IMAGE_MIMES.includes(file.type as any)) {
+      return {
+        valid: false,
+        error: 'Mitra supports PDF, DOCX, TXT, MD, JSON, CSV, and images (JPEG, PNG, WEBP).',
+      };
+    }
+  }
+
+  return { valid: true };
+}
+
+const InputBar: React.FC<Props> = ({ onSend, onStop, disabled }) => {
   const [value, setValue] = useState('');
   const [showQuick, setShowQuick] = useState(false);
   const [isListening, setIsListening] = useState(false);
+  const [selectedFile, setSelectedFile] = useState<File | null>(null);
+  const fileInputRef = useRef<HTMLInputElement>(null);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const { status, isMobile } = useCompanionStore();
   const transcriptRef = useRef('');
@@ -37,12 +76,36 @@ const InputBar: React.FC<Props> = ({ onSend, disabled }) => {
     }
   };
 
+  const handleFileSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    const validation = validateAttachment(file);
+    if (!validation.valid) {
+      showToast('error', 'Unsupported file type', validation.error);
+      if (fileInputRef.current) fileInputRef.current.value = '';
+      return;
+    }
+
+    setSelectedFile(file);
+    showToast('info', 'File selected', file.name);
+  };
+
+  const clearSelectedFile = () => {
+    setSelectedFile(null);
+    if (fileInputRef.current) fileInputRef.current.value = '';
+  };
+
   const handleSend = () => {
     clearAutoSendTimer();
     const trimmed = value.trim();
-    if (!trimmed || disabled || isThinking) return;
-    onSend(trimmed, false);
+    if ((!trimmed && !selectedFile) || disabled || isThinking) return;
+    const msgToSend = selectedFile
+      ? (trimmed ? `${trimmed} [Attached file: ${selectedFile.name}]` : `[Attached file: ${selectedFile.name}]`)
+      : trimmed;
+    onSend(msgToSend, false);
     setValue('');
+    clearSelectedFile();
     if (textareaRef.current) textareaRef.current.style.height = 'auto';
   };
 
@@ -338,6 +401,33 @@ const InputBar: React.FC<Props> = ({ onSend, disabled }) => {
         </motion.div>
       )}
 
+      {/* Hidden file input for attachment foundation */}
+      <input
+        ref={fileInputRef}
+        type="file"
+        className="hidden"
+        accept=".pdf,.docx,.txt,.md,.json,.csv,.jpg,.jpeg,.png,.webp,image/jpeg,image/png,image/webp"
+        onChange={handleFileSelect}
+      />
+
+      {/* Selected Attachment Preview */}
+      {selectedFile && (
+        <div className="flex items-center gap-2 px-2.5 py-1 mb-1.5 rounded-lg bg-surface-overlay border border-border-default text-xs text-text-primary w-fit max-w-full select-none shadow-sm animate-in fade-in duration-150">
+          <Paperclip size={12} className="text-brand-light flex-shrink-0" />
+          <span className="truncate max-w-[200px] sm:max-w-[280px] font-medium text-text-primary">{selectedFile.name}</span>
+          <span className="text-text-muted text-3xs">({(selectedFile.size / 1024).toFixed(0)} KB)</span>
+          <button
+            type="button"
+            onClick={clearSelectedFile}
+            className="text-text-muted hover:text-red-400 p-0.5 rounded transition-colors ml-1 cursor-pointer"
+            aria-label="Remove attached file"
+            title="Remove attached file"
+          >
+            <X size={12} />
+          </button>
+        </div>
+      )}
+
       {/* Input container */}
       <div className="flex items-center gap-1.5 sm:gap-2">
         {/* Quick action toggle */}
@@ -363,8 +453,16 @@ const InputBar: React.FC<Props> = ({ onSend, disabled }) => {
             value={value}
             onChange={handleChange}
             onKeyDown={handleKey}
-            placeholder={isListening ? 'Listening... Speak into your mic' : disabled ? 'Processing...' : 'Ask Mitra anything...'}
-            disabled={disabled || isThinking}
+            placeholder={
+              isListening
+                ? 'Listening... Speak into your mic'
+                : isThinking
+                ? 'Mitra is thinking... Click Stop to cancel'
+                : disabled
+                ? 'Processing...'
+                : 'Ask Mitra anything...'
+            }
+            disabled={disabled}
             className={cn(
               'w-full bg-surface-overlay text-text-primary text-xs sm:text-sm rounded-lg px-3 py-2 border transition-colors resize-none overflow-y-auto leading-relaxed placeholder:text-text-muted/60',
               isListening ? 'border-red-500/60 bg-red-500/5 text-red-300 animate-pulse' : 'border-border-subtle focus:outline-none focus:border-brand/50',
@@ -373,12 +471,20 @@ const InputBar: React.FC<Props> = ({ onSend, disabled }) => {
           />
         </div>
 
-        {/* Attach file (desktop) */}
+        {/* Attach file (accessible on mobile + desktop) */}
         {!isListening && (
           <button
             id="inputbar-attach"
-            className="flex-shrink-0 w-8 h-8 items-center justify-center rounded-lg text-text-muted hover:text-text-secondary hover:bg-surface-overlay transition-colors hidden sm:flex"
+            type="button"
+            onClick={() => fileInputRef.current?.click()}
+            className={cn(
+              "flex-shrink-0 w-8 h-8 min-w-[32px] min-h-[32px] items-center justify-center rounded-lg transition-colors flex cursor-pointer",
+              selectedFile
+                ? "bg-brand-muted text-brand-light border border-brand/40"
+                : "text-text-muted hover:text-text-secondary hover:bg-surface-overlay"
+            )}
             aria-label="Attach file"
+            title="Attach file (PDF, DOCX, TXT, MD, JSON, CSV, JPEG, PNG, WEBP)"
           >
             <Paperclip size={14} />
           </button>
@@ -432,22 +538,36 @@ const InputBar: React.FC<Props> = ({ onSend, disabled }) => {
           </button>
         )}
 
-        {/* Send Button */}
+        {/* Send or Stop Button */}
         {!isListening && (
-          <button
-            id="inputbar-send"
-            onClick={handleSend}
-            disabled={!value.trim() || disabled || isThinking}
-            className={cn(
-              'flex-shrink-0 w-8 h-8 flex items-center justify-center rounded-lg transition-all duration-150 active:scale-95',
-              value.trim() && !disabled && !isThinking
-                ? 'bg-brand text-white hover:bg-brand-light shadow-glow-sm cursor-pointer'
-                : 'bg-surface-overlay text-text-muted cursor-not-allowed',
-            )}
-            aria-label="Send message"
-          >
-            <Send size={13} />
-          </button>
+          isThinking ? (
+            <button
+              id="inputbar-stop"
+              type="button"
+              onClick={onStop}
+              className="flex-shrink-0 w-8 h-8 min-w-[32px] min-h-[32px] flex items-center justify-center rounded-lg bg-red-500/20 text-red-400 border border-red-500/40 hover:bg-red-500/30 transition-all duration-150 active:scale-95 cursor-pointer shadow-glow-sm"
+              aria-label="Stop generation"
+              title="Stop generation"
+            >
+              <Square size={12} className="fill-current text-red-400" />
+            </button>
+          ) : (
+            <button
+              id="inputbar-send"
+              type="button"
+              onClick={handleSend}
+              disabled={(!value.trim() && !selectedFile) || disabled}
+              className={cn(
+                'flex-shrink-0 w-8 h-8 min-w-[32px] min-h-[32px] flex items-center justify-center rounded-lg transition-all duration-150 active:scale-95',
+                (value.trim() || selectedFile) && !disabled
+                  ? 'bg-brand text-white hover:bg-brand-light shadow-glow-sm cursor-pointer'
+                  : 'bg-surface-overlay text-text-muted cursor-not-allowed',
+              )}
+              aria-label="Send message"
+            >
+              <Send size={13} />
+            </button>
+          )
         )}
       </div>
 

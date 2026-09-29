@@ -429,10 +429,22 @@ const CompactConversationHeader: React.FC<{
   );
 };
 
-const ConversationCenter: React.FC = () => {
+interface ConversationCenterProps {
+  onNewChat?: () => void;
+}
+
+const ConversationCenter: React.FC<ConversationCenterProps> = ({ onNewChat }) => {
   const { messages, status, clearMessages } = useCompanionStore();
   const bottomRef = useRef<HTMLDivElement>(null);
   const isThinking = status === 'thinking';
+
+  const handleClearChat = useCallback(() => {
+    if (onNewChat) {
+      onNewChat();
+    } else {
+      clearMessages();
+    }
+  }, [onNewChat, clearMessages]);
 
   useEffect(() => {
     bottomRef.current?.scrollIntoView({ behavior: 'smooth' });
@@ -480,7 +492,7 @@ const ConversationCenter: React.FC = () => {
             <div className="space-y-3 sm:space-y-4">
               <CompactConversationHeader
                 onNavigate={handleNavigate}
-                onClearChat={clearMessages}
+                onClearChat={handleClearChat}
               />
               <AnimatePresence initial={false}>
                 {messages.map(msg => (

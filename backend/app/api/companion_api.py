@@ -10,7 +10,7 @@ from __future__ import annotations
 import asyncio
 from typing import Optional, Dict, Any
 
-from fastapi import APIRouter, HTTPException, Header, Depends
+from fastapi import APIRouter, HTTPException, Header, Depends, Request
 from fastapi.responses import JSONResponse, StreamingResponse
 from pydantic import BaseModel
 
@@ -78,6 +78,7 @@ async def companion_chat(
 
 @router.post("/api/companion/chat/stream")
 async def companion_chat_stream(
+    raw_request: Request,
     request: CompanionChatRequest,
     current_user: Dict[str, Any] = Depends(get_current_user),
 ):
@@ -95,9 +96,19 @@ async def companion_chat_stream(
                 message=request.message.strip(),
                 user_id=auth_user_id,
             ):
+                if await raw_request.is_disconnected():
+                    logger.info("Client disconnected during SSE stream for user_id=%s", auth_user_id)
+                    break
                 yield f"data: {token}\n\n"
-            yield "data: [DONE]\n\n"
+            if not await raw_request.is_disconnected():
+                yield "data: [DONE]\n\n"
+        except asyncio.CancelledError:
+            logger.info("SSE stream cancelled for user_id=%s", auth_user_id)
+            raise
         except Exception as exc:
+            if await raw_request.is_disconnected():
+                logger.info("SSE client disconnected with exception for user_id=%s: %s", auth_user_id, exc)
+                return
             logger.exception("Streaming failed for user_id=%s: %s", auth_user_id, exc)
             yield f"data: Error: {str(exc)}\n\n"
 

@@ -1,4 +1,4 @@
-import React, { useEffect, useState, useCallback } from 'react';
+import React, { useEffect, useState, useCallback, useRef } from 'react';
 import { motion } from 'framer-motion';
 import Sidebar from './components/shell/Sidebar';
 import TopBar from './components/shell/TopBar';
@@ -22,22 +22,11 @@ import WorkflowsPage from './components/pages/WorkflowsPage';
 import KnowledgePage from './components/pages/KnowledgePage';
 import AnalyticsPage from './components/pages/AnalyticsPage';
 import Login from './components/auth/Login';
-import { useCompanionStore } from './store/companion.store';
+import { useCompanionStore, useIsMobile } from './store/companion.store';
 import { CompanionService } from './services/companion.service';
 import { getAuthToken, setAuthToken, getApiBase, getAuthHeaders } from './services/apiConfig';
 import { cn } from './lib/utils';
 import { MessageSquare, Calendar, CheckSquare, PlayCircle, BarChart2 } from 'lucide-react';
-
-/* Helper hook to keep isMobile store value in sync */
-const useIsMobile = () => {
-  const setIsMobile = useCompanionStore(s => s.setIsMobile);
-  useEffect(() => {
-    const check = () => setIsMobile(window.innerWidth < 1024);
-    check();
-    window.addEventListener('resize', check);
-    return () => window.removeEventListener('resize', check);
-  }, [setIsMobile]);
-};
 
 // eslint-disable-next-line @typescript-eslint/no-unused-vars
 const speakAudioResponse = async (text: string) => {
@@ -122,7 +111,7 @@ const App: React.FC = () => {
   const {
     userId, sidebar, contextPanel, isMobile, authModalOpen, setAuthModalOpen,
     setStatus, setSessionId, setUserName, setMemory, setAuth, setAuthStatus,
-    addMessage, addNotification, addContextItem,
+    addMessage, updateMessage, clearMessages, addNotification, addContextItem,
   } = useCompanionStore();
 
   const [activeSection, setActiveSection] = useState(() => {
@@ -246,58 +235,154 @@ const App: React.FC = () => {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
+  // Active request controller ref to support generation cancellation
+  const activeAbortControllerRef = useRef<AbortController | null>(null);
+  const activeMessageIdRef = useRef<string | null>(null);
+
+  const handleStop = useCallback(() => {
+    if (activeAbortControllerRef.current) {
+      activeAbortControllerRef.current.abort();
+      activeAbortControllerRef.current = null;
+    }
+    setStatus('active');
+
+    const targetMsgId = activeMessageIdRef.current;
+    if (targetMsgId) {
+      const currentMessages = useCompanionStore.getState().messages;
+      const targetMsg = currentMessages.find(m => m.id === targetMsgId);
+      if (targetMsg) {
+        if (!targetMsg.content.trim()) {
+          updateMessage(targetMsgId, { content: "Generation stopped." });
+        } else if (!targetMsg.content.includes("(Generation stopped)")) {
+          updateMessage(targetMsgId, { content: `${targetMsg.content}\n\n*(Generation stopped)*` });
+        }
+      }
+      activeMessageIdRef.current = null;
+    }
+    showToast('info', 'Generation stopped');
+  }, [setStatus, updateMessage]);
+
+  const handleNewChat = useCallback(() => {
+    // If an ongoing generation exists, cancel it cleanly before clearing chat
+    if (activeAbortControllerRef.current) {
+      activeAbortControllerRef.current.abort();
+      activeAbortControllerRef.current = null;
+    }
+    activeMessageIdRef.current = null;
+    setStatus('active');
+    clearMessages();
+  }, [clearMessages, setStatus]);
+
   // ── Send message handler ────────────────────────────────
   const handleSend = useCallback(async (message: string, isVoice = false) => {
     // If on another page, switch to chat first
     setActiveSection('chat');
 
+    // If an ongoing generation exists, cancel it cleanly before starting new one
+    if (activeAbortControllerRef.current) {
+      activeAbortControllerRef.current.abort();
+      activeAbortControllerRef.current = null;
+    }
+
     addMessage({ role: 'user', content: message });
     setStatus('thinking');
 
-    try {
-      const resp = await CompanionService.chat(userId, message);
-      setStatus('active');
-      if (resp.session_id) setSessionId(resp.session_id);
+    const controller = new AbortController();
+    activeAbortControllerRef.current = controller;
 
-      addMessage({
-        role:             'assistant',
-        content:          resp.message,
-        intent:           resp.intent,
-        capabilityResult: resp.capability_result || null,
-        suggestedActions: resp.suggested_actions || [],
-      });
+    // Create assistant placeholder message for streaming / real-time updates
+    const assistantMsgId = `msg_${Date.now()}_${Math.random().toString(36).slice(2, 7)}`;
+    activeMessageIdRef.current = assistantMsgId;
 
-      // Auto TTS playback removed — TTS is off by default and only plays when user manually clicks speaker icon on message
-
-      // Push capability result to context panel
-      if (resp.capability_result?.data) {
-        addContextItem({
-          id:       `ctx_cap_${Date.now()}`,
-          type:     (resp.capability_result.capability === 'calendar' ? 'calendar' :
-                     resp.capability_result.capability === 'email'    ? 'email'    :
-                     resp.capability_result.capability === 'task'     ? 'task'     : 'note'),
-          title:    resp.capability_result.summary,
-          subtitle: resp.capability_result.capability,
+    // Add placeholder assistant message
+    useCompanionStore.setState(s => ({
+      messages: [
+        ...s.messages,
+        {
+          id: assistantMsgId,
+          role: 'assistant',
+          content: '',
           timestamp: new Date().toISOString(),
-        });
-        showToast(
-          resp.capability_result.status === 'success' ? 'success' : 'info',
-          resp.capability_result.summary,
-          resp.capability_result.capability
+        }
+      ]
+    }));
+
+    try {
+      let fullContent = '';
+      try {
+        // Attempt SSE streaming first
+        fullContent = await CompanionService.chatStream(
+          userId,
+          message,
+          (token: string) => {
+            // Guard against stale stream updates if controller was aborted
+            if (controller.signal.aborted) return;
+            fullContent += token;
+            updateMessage(assistantMsgId, { content: fullContent });
+          },
+          controller.signal
         );
+      } catch (streamErr: any) {
+        if (streamErr.name === 'AbortError') {
+          throw streamErr;
+        }
+        // Fallback to standard chat endpoint if streaming encountered a non-abort error
+        const resp = await CompanionService.chat(userId, message, 'web', controller.signal);
+        if (controller.signal.aborted) return;
+        fullContent = resp.message;
+        if (resp.session_id) setSessionId(resp.session_id);
+        updateMessage(assistantMsgId, {
+          content: resp.message,
+          intent: resp.intent,
+          capabilityResult: resp.capability_result || null,
+          suggestedActions: resp.suggested_actions || [],
+        });
+
+        // Push capability result to context panel
+        if (resp.capability_result?.data) {
+          addContextItem({
+            id:       `ctx_cap_${Date.now()}`,
+            type:     (resp.capability_result.capability === 'calendar' ? 'calendar' :
+                       resp.capability_result.capability === 'email'    ? 'email'    :
+                       resp.capability_result.capability === 'task'     ? 'task'     : 'note'),
+            title:    resp.capability_result.summary,
+            subtitle: resp.capability_result.capability,
+            timestamp: new Date().toISOString(),
+          });
+          showToast(
+            resp.capability_result.status === 'success' ? 'success' : 'info',
+            resp.capability_result.summary,
+            resp.capability_result.capability
+          );
+        }
       }
-    } catch (err) {
+
+      if (controller.signal.aborted) return;
+
+      setStatus('active');
+      activeAbortControllerRef.current = null;
+      activeMessageIdRef.current = null;
+
+    } catch (err: any) {
+      if (err.name === 'AbortError') {
+        // Handled cleanly by handleStop
+        return;
+      }
       setStatus('error');
-      addMessage({
-        role:    'assistant',
+      updateMessage(assistantMsgId, {
         content: "I ran into a small issue — could you try again? I'm working on it.",
       });
       setTimeout(() => setStatus('active'), 3000);
+      activeAbortControllerRef.current = null;
+      activeMessageIdRef.current = null;
     }
-  }, [userId, addMessage, addContextItem, setStatus, setSessionId, setActiveSection]);
+  }, [userId, addMessage, updateMessage, addContextItem, setStatus, setSessionId, setActiveSection]);
 
-  // Expose handleSend for suggestion chips
-  useEffect(() => { (window as any).__MITRA_SEND__ = handleSend; }, [handleSend]);
+  // Expose handleSend and handleNewChat for suggestion chips and header actions
+  useEffect(() => {
+    (window as any).__MITRA_SEND__ = handleSend;
+    (window as any).__MITRA_NEW_CHAT__ = handleNewChat;
+  }, [handleSend, handleNewChat]);
   // Expose settings toggle for Sidebar
   useEffect(() => { (window as any).__MITRA_SETTINGS__ = () => setSettingsOpen(true); }, []);
   // Expose focus toggle
@@ -332,8 +417,8 @@ const App: React.FC = () => {
       <Sidebar activeSection={activeSection} onSectionChange={setActiveSection} />
 
       {/* Center Zone — Main Workspace (Chat or Full Page) */}
-      <div className={cn("zone-center flex flex-col flex-1 min-w-0 h-full", activeSection === 'chat' ? 'overflow-hidden' : 'overflow-y-auto pb-24 sm:pb-20')}>
-        {activeSection === 'chat' && <ConversationCenter />}
+      <div className={cn("zone-center flex flex-col flex-1 min-w-0 h-full", activeSection === 'chat' ? 'overflow-hidden' : 'overflow-y-auto pb-4')}>
+        {activeSection === 'chat' && <ConversationCenter onNewChat={handleNewChat} />}
         {activeSection === 'analytics' && <AnalyticsPage onChatNavigate={handleChatNavigate} />}
         {activeSection === 'calendar' && <CalendarPage onChatNavigate={handleChatNavigate} />}
         {activeSection === 'tasks' && <TasksPage onChatNavigate={handleChatNavigate} />}
@@ -344,7 +429,7 @@ const App: React.FC = () => {
       </div>
 
       {/* Bottom Chat Bar — grid-area 'input' */}
-      {activeSection === 'chat' && <InputBar onSend={handleSend} />}
+      {activeSection === 'chat' && <InputBar onSend={handleSend} onStop={handleStop} />}
 
       {/* Right Zone — Context Panel (grid-area 'context') */}
       <ContextPanel />
