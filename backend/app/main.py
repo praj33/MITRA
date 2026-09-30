@@ -324,6 +324,7 @@ async def security_middleware(request: Request, call_next):
 
 from app.api.integrations import router as integrations_router
 from app.api.oauth_api import router as oauth_router
+from app.api.communication_api import router as communication_router
 
 # -------------------------------------------------
 # PUBLIC ROUTERS (LOCKED)
@@ -331,6 +332,7 @@ from app.api.oauth_api import router as oauth_router
 app.include_router(auth_router)
 app.include_router(oauth_router)
 app.include_router(integrations_router)
+app.include_router(communication_router)
 app.include_router(assistant_router)
 app.include_router(mitra_router)
 app.include_router(webhook_router)

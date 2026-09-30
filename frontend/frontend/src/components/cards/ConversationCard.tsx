@@ -107,17 +107,15 @@ const ConversationCard: React.FC<Props> = ({ message, onActionConfirm }) => {
           {isAssistant ? <FormattedMarkdown content={message.content} /> : message.content}
         </div>
 
-        {/* Inline communication approval card */}
+        {/* Inline communication approval card (B.COMM-3 Structured Pending Action) */}
         {isAssistant && message.capabilityResult && message.capabilityResult.data?.confirmation && (
           <CommunicationConfirmationCard
             confirmation={message.capabilityResult.data.confirmation}
-            onConfirm={() => {
-              const to = message.capabilityResult?.data?.confirmation?.recipient || '';
-              const channel = message.capabilityResult?.data?.confirmation?.channel === 'EMAIL' ? 'email' : 'WhatsApp';
-              onActionConfirm?.(`Yes, confirm send ${channel} to ${to}`, message.id);
+            onConfirm={(result) => {
+              // Structured confirmation executed via dedicated REST endpoint — zero LLM reinterpretation
             }}
             onCancel={() => {
-              onActionConfirm?.('Cancel message', message.id);
+              // Action cancelled via dedicated REST endpoint
             }}
           />
         )}

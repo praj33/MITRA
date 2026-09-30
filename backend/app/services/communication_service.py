@@ -25,8 +25,10 @@ from app.models.communication import (
     CommunicationStatus,
     DeliveryState,
     FORBIDDEN_CREDENTIAL_KEYS,
+    compute_action_hash,
 )
 from app.services.connected_account_service import connected_account_service
+from app.services.pending_action_service import pending_action_service
 from app.executors.email_executor import EmailExecutor
 from app.executors.whatsapp_executor import WhatsAppExecutor
 
@@ -192,20 +194,28 @@ class CommunicationService:
             idempotency_key = action.idempotency_key or f"idem_{uuid.uuid4().hex[:16]}"
             action.idempotency_key = idempotency_key
 
+            # Server-Side Staging: create and persist exact pending action
+            pending_action = pending_action_service.create_pending_action(
+                action=action,
+                sender_account=sender_account,
+            )
+
             confirmation_payload = CommunicationConfirmationPayload(
                 channel=action.channel,
+                pending_action_id=pending_action.pending_action_id,
                 sender_account=sender_account,
                 recipient=action.recipient,
                 subject=action.subject,
                 content=action.content,
                 action="SEND_MESSAGE",
                 idempotency_key=idempotency_key,
+                expires_at=pending_action.expires_at,
                 requires_confirmation=True,
             )
 
             logger.info(
-                "Approval policy: SEND_MESSAGE requires explicit confirmation for user '%s' on %s",
-                user_id, action.channel.value
+                "Approval policy: SEND_MESSAGE requires explicit confirmation for user '%s' on %s (pending_action_id=%s)",
+                user_id, action.channel.value, pending_action.pending_action_id
             )
 
             # Invariant: Provider executor MUST NOT be reached
@@ -213,6 +223,7 @@ class CommunicationService:
                 status="confirmation_required",
                 delivery_state="pending",
                 channel=action.channel,
+                pending_action_id=pending_action.pending_action_id,
                 sender_account=sender_account,
                 recipient=action.recipient,
                 error_code="CONFIRMATION_REQUIRED",
@@ -220,6 +231,7 @@ class CommunicationService:
                 confirmation=confirmation_payload.to_dict(),
                 action=action.to_dict(),
                 idempotency_key=idempotency_key,
+                expires_at=pending_action.expires_at,
                 trace_id=trace_id,
                 timestamp=now_iso,
             )
@@ -379,6 +391,296 @@ class CommunicationService:
             trace_id=trace_id,
             timestamp=now_iso,
         )
+
+    def confirm_pending_action(
+        self,
+        pending_action_id: str,
+        user_id: str,
+        trace_id: Optional[str] = None,
+    ) -> CommunicationResult:
+        """
+        Secure confirmation of an exact, server-staged pending communication action.
+        1. Authenticate user identity (fail closed)
+        2. Atomically transition status PENDING -> CONFIRMING (replay & concurrency protection)
+        3. Verify action integrity hash (tamper detection across immutable outbound fields)
+        4. Verify account binding and connected status (fail closed on revoked/borrowed accounts)
+        5. Reconstruct canonical action and execute via provider
+        6. Persist execution outcome and return normalized CommunicationResult
+        """
+        now_iso = datetime.utcnow().isoformat()
+        trace_id = trace_id or f"confirm_{uuid.uuid4().hex[:12]}"
+
+        # 1. Authenticated User Validation
+        if (
+            not user_id
+            or not str(user_id).strip()
+            or str(user_id).strip().lower() in ("user_default", "default", "none", "null", "anonymous")
+        ):
+            return CommunicationResult(
+                status="failed",
+                delivery_state="failed",
+                channel=CommunicationChannel.EMAIL,
+                error_code="AUTH_REQUIRED",
+                error="Authorization error: confirming pending communication actions requires an authenticated user_id.",
+                message="Authentication required.",
+                pending_action_id=pending_action_id,
+                trace_id=trace_id,
+                timestamp=now_iso,
+            )
+
+        clean_uid = str(user_id).strip()
+
+        # 2. Atomic State Transition (PENDING -> CONFIRMING)
+        pending_action, trans_err = pending_action_service.transition_to_confirming(
+            pending_action_id=pending_action_id, user_id=clean_uid
+        )
+
+        if trans_err:
+            if trans_err == "ACTION_ALREADY_EXECUTED":
+                if pending_action and pending_action.result:
+                    try:
+                        res_dict = dict(pending_action.result)
+                        res_dict["message"] = "Action was already confirmed and executed."
+                        res_dict["error_code"] = "ACTION_ALREADY_EXECUTED"
+                        return CommunicationResult(**res_dict)
+                    except Exception:
+                        pass
+                return CommunicationResult(
+                    status="sent",
+                    delivery_state="sent",
+                    channel=pending_action.channel if pending_action else CommunicationChannel.EMAIL,
+                    error_code="ACTION_ALREADY_EXECUTED",
+                    error="This communication action has already been executed.",
+                    message="Action was already executed.",
+                    pending_action_id=pending_action_id,
+                    trace_id=trace_id,
+                    timestamp=now_iso,
+                )
+            elif trans_err == "ACTION_NOT_FOUND":
+                return CommunicationResult(
+                    status="failed",
+                    delivery_state="failed",
+                    channel=CommunicationChannel.EMAIL,
+                    error_code="ACTION_NOT_FOUND",
+                    error=f"Pending communication action '{pending_action_id}' not found or does not belong to user.",
+                    message="Pending action not found.",
+                    pending_action_id=pending_action_id,
+                    trace_id=trace_id,
+                    timestamp=now_iso,
+                )
+            elif trans_err == "ACTION_EXPIRED":
+                return CommunicationResult(
+                    status="failed",
+                    delivery_state="failed",
+                    channel=CommunicationChannel.EMAIL,
+                    error_code="ACTION_EXPIRED",
+                    error=f"Pending communication action '{pending_action_id}' has expired.",
+                    message="Confirmation request has expired.",
+                    pending_action_id=pending_action_id,
+                    trace_id=trace_id,
+                    timestamp=now_iso,
+                )
+            elif trans_err == "ACTION_CANCELLED":
+                return CommunicationResult(
+                    status="failed",
+                    delivery_state="failed",
+                    channel=CommunicationChannel.EMAIL,
+                    error_code="ACTION_CANCELLED",
+                    error=f"Pending communication action '{pending_action_id}' was cancelled.",
+                    message="Communication action was cancelled.",
+                    pending_action_id=pending_action_id,
+                    trace_id=trace_id,
+                    timestamp=now_iso,
+                )
+            elif trans_err == "CONCURRENT_EXECUTION_BLOCKED":
+                return CommunicationResult(
+                    status="failed",
+                    delivery_state="pending",
+                    channel=CommunicationChannel.EMAIL,
+                    error_code="CONCURRENT_EXECUTION_BLOCKED",
+                    error=f"Action '{pending_action_id}' is currently being confirmed by another request.",
+                    message="Confirmation is already in progress.",
+                    pending_action_id=pending_action_id,
+                    trace_id=trace_id,
+                    timestamp=now_iso,
+                )
+
+        assert pending_action is not None
+
+        # 3. Action Integrity Hash Verification (Tamper-proofing)
+        recalculated_hash = compute_action_hash(
+            user_id=pending_action.user_id,
+            channel=pending_action.channel,
+            intent=pending_action.intent,
+            account_id=pending_action.account_id,
+            recipient=pending_action.recipient,
+            subject=pending_action.subject,
+            content=pending_action.content,
+            idempotency_key=pending_action.idempotency_key,
+        )
+
+        if recalculated_hash != pending_action.action_hash:
+            logger.error(
+                "CRITICAL: Integrity verification failed for pending action '%s'! Expected %s, computed %s",
+                pending_action_id, pending_action.action_hash, recalculated_hash
+            )
+            pending_action_service.mark_failed(
+                pending_action_id=pending_action_id,
+                user_id=clean_uid,
+                error="Action integrity check failed: outbound fields tampered.",
+                error_code="INTEGRITY_CHECK_FAILED",
+            )
+            return CommunicationResult(
+                status="failed",
+                delivery_state="failed",
+                channel=pending_action.channel,
+                error_code="INTEGRITY_CHECK_FAILED",
+                error="Integrity verification failed: stored action parameters do not match action hash.",
+                message="Action integrity error.",
+                pending_action_id=pending_action_id,
+                trace_id=trace_id,
+                timestamp=now_iso,
+            )
+
+        # 4. Account Integrity & Connection Verification
+        verified_account, acct_err = self.resolve_sender_account(
+            user_id=clean_uid,
+            channel=pending_action.channel,
+            account_id=pending_action.account_id,
+        )
+
+        if acct_err == "ACCOUNT_NOT_AUTHORIZED":
+            pending_action_service.mark_failed(
+                pending_action_id=pending_action_id,
+                user_id=clean_uid,
+                error=f"Account '{pending_action.account_id}' is not authorized for user.",
+                error_code="ACCOUNT_NOT_AUTHORIZED",
+            )
+            return CommunicationResult(
+                status="failed",
+                delivery_state="failed",
+                channel=pending_action.channel,
+                error_code="ACCOUNT_NOT_AUTHORIZED",
+                error=f"Authorization error: account '{pending_action.account_id}' does not belong to authenticated user.",
+                message="Specified account is not authorized.",
+                pending_action_id=pending_action_id,
+                trace_id=trace_id,
+                timestamp=now_iso,
+            )
+
+        # If an account was bound at creation time, verify it is still connected
+        if pending_action.sender_account and not verified_account:
+            pending_action_service.mark_failed(
+                pending_action_id=pending_action_id,
+                user_id=clean_uid,
+                error=f"Sender account '{pending_action.sender_account}' is no longer connected.",
+                error_code="ACCOUNT_DISCONNECTED",
+            )
+            return CommunicationResult(
+                status="failed",
+                delivery_state="failed",
+                channel=pending_action.channel,
+                error_code="ACCOUNT_DISCONNECTED",
+                error=f"Sender account '{pending_action.sender_account}' is disconnected or revoked.",
+                message="Sender account is no longer connected.",
+                pending_action_id=pending_action_id,
+                trace_id=trace_id,
+                timestamp=now_iso,
+            )
+
+        # 5. Reconstruct Canonical Action with confirmation_confirmed=True
+        canonical_action = CommunicationAction(
+            intent=pending_action.intent,
+            channel=pending_action.channel,
+            user_id=clean_uid,
+            account_id=pending_action.account_id,
+            recipient=pending_action.recipient,
+            subject=pending_action.subject,
+            content=pending_action.content,
+            confirmation_confirmed=True,  # Explicitly confirmed
+            idempotency_key=pending_action.idempotency_key,
+        )
+
+        # 6. Execute via Provider
+        result = self.execute_action(canonical_action, trace_id=trace_id)
+        result.pending_action_id = pending_action_id
+
+        # 7. Record Execution Result
+        if result.status in ("sent", "delivered", "accepted"):
+            pending_action_service.mark_executed(
+                pending_action_id=pending_action_id,
+                user_id=clean_uid,
+                result=result.to_dict(),
+            )
+        else:
+            pending_action_service.mark_failed(
+                pending_action_id=pending_action_id,
+                user_id=clean_uid,
+                error=result.error or "Execution failed",
+                error_code=result.error_code,
+                result=result.to_dict(),
+            )
+
+        return result
+
+    def cancel_pending_action(
+        self,
+        pending_action_id: str,
+        user_id: str,
+        trace_id: Optional[str] = None,
+    ) -> Dict[str, Any]:
+        """
+        Cancel a pending communication action.
+        Guarantees that once cancelled, the action cannot be confirmed or executed.
+        """
+        now_iso = datetime.utcnow().isoformat()
+        trace_id = trace_id or f"cancel_{uuid.uuid4().hex[:12]}"
+
+        if (
+            not user_id
+            or not str(user_id).strip()
+            or str(user_id).strip().lower() in ("user_default", "default", "none", "null", "anonymous")
+        ):
+            return {
+                "status": "error",
+                "error_code": "AUTH_REQUIRED",
+                "error": "Authentication required: cancelling pending communication actions requires an authenticated user_id.",
+                "pending_action_id": pending_action_id,
+                "trace_id": trace_id,
+                "timestamp": now_iso,
+            }
+
+        clean_uid = str(user_id).strip()
+        success, err_code, data = pending_action_service.cancel_pending_action(
+            pending_action_id=pending_action_id, user_id=clean_uid
+        )
+
+        if not success:
+            err_msg = {
+                "ACTION_NOT_FOUND": "Pending action not found or unauthorized.",
+                "ACTION_ALREADY_CANCELLED": "Pending action is already cancelled.",
+                "ACTION_CANNOT_BE_CANCELLED": "Action cannot be cancelled because it is already executing or executed.",
+                "ACTION_EXPIRED": "Pending action has already expired.",
+            }.get(err_code or "", "Cancellation failed.")
+
+            return {
+                "status": "error",
+                "error_code": err_code or "CANCELLATION_FAILED",
+                "error": err_msg,
+                "pending_action_id": pending_action_id,
+                "action": data,
+                "trace_id": trace_id,
+                "timestamp": now_iso,
+            }
+
+        return {
+            "status": "cancelled",
+            "pending_action_id": pending_action_id,
+            "message": "Communication action cancelled successfully.",
+            "action": data,
+            "trace_id": trace_id,
+            "timestamp": now_iso,
+        }
 
 
 # Global singleton instance
