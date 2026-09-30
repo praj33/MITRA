@@ -26,6 +26,18 @@ class EmailCapability(BaseCapability):
         try:
             from app.mitra_system_registry import mitra_registry
             execution_svc = mitra_registry.execution_service
+
+            # Security Requirement: User-owned email actions must carry authenticated user context
+            user_id = params.get("user_id")
+            if not user_id or not str(user_id).strip() or str(user_id).strip().lower() in ("user_default", "default", "none", "null"):
+                logger.warning("EmailCapability rejected execution: missing or invalid authenticated user_id '%s'", user_id)
+                return CapabilityResult.error_result(
+                    self.name,
+                    intent,
+                    "Authentication required: user-owned email actions require an authenticated user identity.",
+                    trace_id
+                )
+
             message = params.get("message", "")
             entities = params.get("entities", {})
             to_addr = ""
@@ -51,13 +63,22 @@ class EmailCapability(BaseCapability):
                 "intent": intent,
                 "raw_message": message,
                 "trace_id": trace_id,
+                "user_id": str(user_id).strip(),
+                "is_system_action": False,
             }
             result = execution_svc.execute_action("email", action_params)
             status = "success" if result.get("status") == "success" else "failed"
-            summary = result.get("summary") or result.get("message") or f"Email sent to {to_addr}" if status == "success" else f"Email failed: {result.get('error', 'unknown error')}"
+            summary = (
+                result.get("summary")
+                or (f"Email sent to {to_addr}" if status == "success" else f"Email failed: {result.get('error', 'unknown error')}")
+            )
             return CapabilityResult(
-                capability=self.name, intent=intent, status=status,
-                summary=summary, data=result, trace_id=trace_id,
+                capability=self.name,
+                intent=intent,
+                status=status,
+                summary=summary,
+                data=result,
+                trace_id=trace_id,
                 actions=[{"label": "View Details", "action": "view_email"}],
             )
         except Exception as exc:

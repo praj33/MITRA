@@ -25,6 +25,18 @@ class WhatsAppCapability(BaseCapability):
         try:
             from app.mitra_system_registry import mitra_registry
             execution_svc = mitra_registry.execution_service
+
+            # Security Requirement: User-owned WhatsApp actions must carry authenticated user context
+            user_id = params.get("user_id")
+            if not user_id or not str(user_id).strip() or str(user_id).strip().lower() in ("user_default", "default", "none", "null"):
+                logger.warning("WhatsAppCapability rejected execution: missing or invalid authenticated user_id '%s'", user_id)
+                return CapabilityResult.error_result(
+                    self.name,
+                    intent,
+                    "Authentication required: user-owned WhatsApp actions require an authenticated user identity.",
+                    trace_id
+                )
+
             message = params.get("message", "")
             entities = params.get("entities", {})
             contact = entities.get("contact", "") or params.get("contact", "")
@@ -43,13 +55,23 @@ class WhatsAppCapability(BaseCapability):
                 "recipient": contact,
                 "contact": contact,
                 "trace_id": trace_id,
+                "user_id": str(user_id).strip(),
+                "is_system_action": False,
+                "is_system_otp": False,
             }
             result = execution_svc.execute_action("whatsapp", action_params)
             status = "success" if result.get("status") == "success" else "failed"
-            summary = result.get("summary") or result.get("message") or f"WhatsApp message sent to {contact}" if status == "success" else f"WhatsApp failed: {result.get('error', 'unknown error')}"
+            summary = (
+                result.get("summary")
+                or (f"WhatsApp message sent to {contact}" if status == "success" else f"WhatsApp failed: {result.get('error', 'unknown error')}")
+            )
             return CapabilityResult(
-                capability=self.name, intent=intent, status=status,
-                summary=summary, data=result, trace_id=trace_id,
+                capability=self.name,
+                intent=intent,
+                status=status,
+                summary=summary,
+                data=result,
+                trace_id=trace_id,
             )
         except Exception as exc:
             logger.warning("WhatsAppCapability failed: %s", exc)

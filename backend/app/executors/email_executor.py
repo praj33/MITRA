@@ -23,22 +23,89 @@ def _get_db():
     except Exception:
         return None
 
-def _get_ipv4_host(hostname: str) -> str:
-    """Resolve hostname to IPv4 address to prevent [Errno 101] Network is unreachable on Render (IPv6 disabled)."""
+import ipaddress
+
+BLOCKED_IP_NETWORKS = [
+    ipaddress.ip_network("127.0.0.0/8"),      # IPv4 loopback
+    ipaddress.ip_network("10.0.0.0/8"),       # RFC 1918 private
+    ipaddress.ip_network("172.16.0.0/12"),    # RFC 1918 private
+    ipaddress.ip_network("192.168.0.0/16"),   # RFC 1918 private
+    ipaddress.ip_network("169.254.0.0/16"),   # Link-local / Cloud metadata (includes 169.254.169.254)
+    ipaddress.ip_network("100.64.0.0/10"),    # Carrier-grade NAT
+    ipaddress.ip_network("0.0.0.0/8"),        # Current network
+    ipaddress.ip_network("224.0.0.0/4"),      # Multicast
+    ipaddress.ip_network("240.0.0.0/4"),      # Reserved
+    ipaddress.ip_network("::1/128"),          # IPv6 loopback
+    ipaddress.ip_network("fe80::/10"),        # IPv6 link-local
+    ipaddress.ip_network("fc00::/7"),         # IPv6 unique local (private)
+    ipaddress.ip_network("::/128"),           # IPv6 unspecified
+]
+
+def validate_safe_mail_host(hostname: str) -> str:
+    """
+    Validate that hostname does not resolve to loopback, private RFC 1918, link-local,
+    or cloud metadata IP addresses (SSRF protection).
+    Returns the resolved safe IPv4 address for socket connections.
+    """
+    if not hostname or not isinstance(hostname, str):
+        raise ValueError("Invalid mail hostname: hostname is required.")
+
+    clean_host = hostname.strip().lower()
+
+    # Block localhost explicitly
+    if clean_host in ("localhost", "127.0.0.1", "::1", "0.0.0.0"):
+        raise ValueError(f"Connection to '{clean_host}' is blocked (SSRF protection).")
+
+    # Resolve all addresses (both IPv4 and IPv6)
     try:
-        addrs = socket.getaddrinfo(hostname, None, socket.AF_INET)
-        if addrs:
-            return addrs[0][4][0]
+        addr_info = socket.getaddrinfo(clean_host, None)
+    except socket.gaierror as e:
+        raise ValueError(f"Failed to resolve mail host '{clean_host}': {e}")
     except Exception as e:
-        logger.warning(f"IPv4 resolution failed for {hostname}: {e}")
-    return hostname
+        raise ValueError(f"DNS resolution error for mail host '{clean_host}': {e}")
+
+    if not addr_info:
+        raise ValueError(f"No IP addresses resolved for mail host '{clean_host}'.")
+
+    resolved_ipv4 = None
+
+    for item in addr_info:
+        ip_str = item[4][0]
+        try:
+            ip_obj = ipaddress.ip_address(ip_str)
+        except ValueError:
+            raise ValueError(f"Invalid resolved IP '{ip_str}' for mail host '{clean_host}'.")
+
+        # Check against all blocked networks and properties
+        if (
+            ip_obj.is_loopback
+            or ip_obj.is_private
+            or ip_obj.is_link_local
+            or ip_obj.is_multicast
+            or ip_obj.is_reserved
+            or ip_obj.is_unspecified
+        ):
+            raise ValueError(f"Connection to restricted network address '{ip_str}' is blocked (SSRF protection).")
+
+        for net in BLOCKED_IP_NETWORKS:
+            if ip_obj in net:
+                raise ValueError(f"Connection to restricted network address '{ip_str}' in '{net}' is blocked (SSRF protection).")
+
+        if isinstance(ip_obj, ipaddress.IPv4Address) and resolved_ipv4 is None:
+            resolved_ipv4 = ip_str
+
+    return resolved_ipv4 or addr_info[0][4][0]
+
+def _get_ipv4_host(hostname: str) -> str:
+    """Resolve and validate hostname with SSRF protection."""
+    return validate_safe_mail_host(hostname)
 
 class EmailExecutor:
     def __init__(self):
-        self.smtp_server = os.getenv("SMTP_SERVER", "smtp.gmail.com")
+        self.smtp_server = os.getenv("SMTP_SERVER", "smtp.gmail.com").strip()
         self.smtp_port = int(os.getenv("SMTP_PORT", "587"))
-        self.email_user = os.getenv("EMAIL_USER", "blackholeinfiverse20@gmail.com")
-        self.email_password = os.getenv("EMAIL_PASSWORD", "ejcotfrrxmesnebv")
+        self.email_user = os.getenv("EMAIL_USER", "").strip()
+        self.email_password = os.getenv("EMAIL_PASSWORD", "").strip()
         self.gmail_token = os.getenv("GMAIL_ACCESS_TOKEN")
         self.sendgrid_key = os.getenv("SENDGRID_API_KEY")
         self.sendgrid_from = os.getenv("SENDGRID_FROM_EMAIL", self.email_user)
@@ -52,7 +119,7 @@ class EmailExecutor:
             try:
                 db["email_logs"].insert_one({
                     "to": to_email,
-                    "from": self.email_user,
+                    "from": self.email_user or "user_connected_account",
                     "subject": subject,
                     "message": message,
                     "method": method,
@@ -63,93 +130,90 @@ class EmailExecutor:
             except Exception as e:
                 logger.warning(f"Email DB log failed: {e}")
 
-    def send_email_vercel_relay(self, to_email: str, subject: str, message: str, trace_id: str) -> Optional[Dict[str, Any]]:
-        """Send real email via HTTPS Vercel serverless relay (Port 443 HTTPS - bypasses Render port block)."""
-        relay_urls = [
-            "https://mitra-frontend.vercel.app/api/send-email",
-            "https://mitra.blackholeinfiverse.com/api/send-email"
-        ]
-        payload = {
-            "to": to_email,
-            "subject": subject,
-            "message": message,
-            "user": self.email_user,
-            "password": self.email_password
-        }
-        headers = {"Content-Type": "application/json"}
+    def send_email_smtp(
+        self,
+        to_email: str,
+        subject: str,
+        message: str,
+        trace_id: str,
+        sender_email: Optional[str] = None,
+        sender_pass: Optional[str] = None,
+        smtp_server: Optional[str] = None,
+        smtp_port: Optional[int] = None
+    ) -> Dict[str, Any]:
+        """Send email via SMTP with SSRF-safe hostname validation and TLS verification."""
+        user = (sender_email or self.email_user or "").strip()
+        password = (sender_pass or self.email_password or "").strip()
+        host = (smtp_server or self.smtp_server or "").strip()
+        port = smtp_port or self.smtp_port or 587
 
-        for url in relay_urls:
-            try:
-                res = requests.post(url, json=payload, headers=headers, timeout=6)
-                if res.status_code == 200:
-                    logger.info(f"Email delivered via Vercel HTTPS relay to {to_email}")
-                    self._log_email_to_db(to_email, subject, message, "vercel_https_relay", "success", trace_id)
-                    return {
-                        "status": "success",
-                        "to": to_email,
-                        "subject": subject,
-                        "message": message,
-                        "method": "vercel_https_relay",
-                        "trace_id": trace_id,
-                        "timestamp": datetime.utcnow().isoformat(),
-                        "platform": "email"
-                    }
-                else:
-                    logger.warning(f"Vercel relay {url} returned {res.status_code}: {res.text}")
-            except Exception as e:
-                logger.warning(f"Vercel relay request failed for {url}: {e}")
-        return None
-
-    def send_email_smtp(self, to_email: str, subject: str, message: str, trace_id: str) -> Dict[str, Any]:
-        """Send email via SMTP with IPv4 forcing."""
-        if not self.email_user or not self.email_password:
+        if not user or not password:
             return {
                 "status": "error",
                 "error": "SMTP credentials not configured",
                 "trace_id": trace_id,
                 "timestamp": datetime.utcnow().isoformat()
             }
-        
+
+        try:
+            target_host = _get_ipv4_host(host)
+        except ValueError as ssrf_err:
+            logger.warning("SMTP host SSRF rejection for '%s': %s", host, ssrf_err)
+            return {
+                "status": "error",
+                "error": str(ssrf_err),
+                "trace_id": trace_id,
+                "timestamp": datetime.utcnow().isoformat()
+            }
+
         msg = MIMEMultipart()
-        msg['From'] = self.email_user
+        msg['From'] = user
         msg['To'] = to_email
         msg['Subject'] = subject
         msg.attach(MIMEText(message, 'plain'))
         text = msg.as_string()
-        
-        target_host = _get_ipv4_host(self.smtp_server)
-        
-        # 1. Try SSL port 465
-        try:
-            server = smtplib.SMTP_SSL(target_host, 465, timeout=5)
-            server.login(self.email_user, self.email_password)
-            server.sendmail(self.email_user, to_email, text)
-            server.quit()
-            logger.info(f"Email sent via SMTP SSL (465) to {to_email}")
-            self._log_email_to_db(to_email, subject, message, "smtp_ssl", "success", trace_id)
-            return {
-                "status": "success",
-                "to": to_email,
-                "subject": subject,
-                "message": message,
-                "method": "smtp_ssl",
-                "trace_id": trace_id,
-                "timestamp": datetime.utcnow().isoformat(),
-                "platform": "email"
-            }
-        except Exception as ssl_err:
-            logger.warning(f"SMTP SSL 465 failed: {ssl_err}")
 
-        # 2. Try TLS port 587
+        import ssl
+        ssl_ctx = ssl.create_default_context()
+
+        # 1. Try SSL port 465 if configured or default
+        if port == 465:
+            try:
+                server = smtplib.SMTP_SSL(target_host, 465, context=ssl_ctx, timeout=8)
+                server.login(user, password)
+                server.sendmail(user, to_email, text)
+                server.quit()
+                logger.info(f"Email sent via SMTP SSL (465) to {to_email}")
+                self._log_email_to_db(to_email, subject, message, "smtp_ssl", "success", trace_id)
+                return {
+                    "status": "success",
+                    "to": to_email,
+                    "subject": subject,
+                    "message": message,
+                    "method": "smtp_ssl",
+                    "trace_id": trace_id,
+                    "timestamp": datetime.utcnow().isoformat(),
+                    "platform": "email"
+                }
+            except Exception as ssl_err:
+                logger.warning(f"SMTP SSL 465 failed: {ssl_err}")
+                return {
+                    "status": "error",
+                    "error": f"SMTP SSL delivery failed: {str(ssl_err)}",
+                    "trace_id": trace_id,
+                    "timestamp": datetime.utcnow().isoformat()
+                }
+
+        # 2. Try STARTTLS port 587
         try:
-            server = smtplib.SMTP(target_host, 587, timeout=5)
-            server.ehlo(self.smtp_server)
-            server.starttls()
-            server.ehlo(self.smtp_server)
-            server.login(self.email_user, self.email_password)
-            server.sendmail(self.email_user, to_email, text)
+            server = smtplib.SMTP(target_host, port, timeout=8)
+            server.ehlo(host)
+            server.starttls(context=ssl_ctx)
+            server.ehlo(host)
+            server.login(user, password)
+            server.sendmail(user, to_email, text)
             server.quit()
-            logger.info(f"Email sent via SMTP TLS (587) to {to_email}")
+            logger.info(f"Email sent via SMTP TLS ({port}) to {to_email}")
             self._log_email_to_db(to_email, subject, message, "smtp_tls", "success", trace_id)
             return {
                 "status": "success",
@@ -162,22 +226,13 @@ class EmailExecutor:
                 "platform": "email"
             }
         except Exception as tls_err:
-            logger.warning(f"SMTP TLS 587 failed: {tls_err}")
-
-        # 3. Fallback log dispatch record if direct socket blocked
-        logger.info(f"Direct socket blocked — logging email dispatch record in MongoDB for {to_email}")
-        self._log_email_to_db(to_email, subject, message, "cloud_dispatch_log", "dispatched", trace_id)
-        return {
-            "status": "success",
-            "to": to_email,
-            "subject": subject,
-            "message": message,
-            "method": "cloud_dispatch_log",
-            "note": "Email recorded in database dispatch log",
-            "trace_id": trace_id,
-            "timestamp": datetime.utcnow().isoformat(),
-            "platform": "email"
-        }
+            logger.warning(f"SMTP TLS {port} failed: {tls_err}")
+            return {
+                "status": "error",
+                "error": f"SMTP TLS delivery failed: {str(tls_err)}",
+                "trace_id": trace_id,
+                "timestamp": datetime.utcnow().isoformat()
+            }
 
     def send_email_gmail_api(self, access_token: str, to_email: str, subject: str, message: str, trace_id: str) -> Optional[Dict[str, Any]]:
         """Send email via official Google Gmail OAuth 2.0 API."""
@@ -258,89 +313,183 @@ class EmailExecutor:
             logger.warning(f"Outlook API dispatch exception: {e}")
         return None
 
-    def send_message(self, to_email: str, subject: str, message: str, trace_id: str, user_id: Optional[str] = None) -> Dict[str, Any]:
-        """Main send method — uses user's connected personal Gmail/Microsoft/SMTP credentials if available, else system default."""
+    def send_message(
+        self,
+        to_email: str,
+        subject: str,
+        message: str,
+        trace_id: str,
+        user_id: Optional[str] = None,
+        is_system_action: bool = False
+    ) -> Dict[str, Any]:
+        """
+        Send email message.
+        - For user-owned actions (is_system_action=False): requires valid user_id and an authorized
+          connected account (Google OAuth, Microsoft OAuth, or verified user SMTP).
+          NEVER falls back to system credentials or another user's credentials.
+        - For system actions (is_system_action=True): uses system SMTP credentials if configured.
+        """
         from app.services.connected_account_service import connected_account_service
         from app.services.token_refresh_service import token_refresh_service
         from app.core.encryption import decrypt_secret, is_encrypted
 
-        sender_email = self.email_user
-        sender_pass = self.email_password
-        used_user_integration = False
+        clean_user_id = str(user_id).strip() if user_id else ""
 
-        if user_id:
-            # 1. Check for OAuth connected Google account
+        # 1. Enforce user ownership for user-directed communication
+        if not is_system_action:
+            if not clean_user_id or clean_user_id.lower() in ("user_default", "default", "none", "null"):
+                logger.warning(
+                    "EmailExecutor rejected user action: missing or invalid authenticated user_id '%s'",
+                    clean_user_id
+                )
+                return {
+                    "status": "error",
+                    "error": "Authentication required: user-owned email actions require a valid authenticated user identity.",
+                    "trace_id": trace_id,
+                    "timestamp": datetime.utcnow().isoformat()
+                }
+
+            # 1a. Try Google OAuth
             try:
-                oauth_token = token_refresh_service.get_valid_access_token(user_id, "google")
+                oauth_token = token_refresh_service.get_valid_access_token(clean_user_id, "google")
                 if oauth_token:
                     res_gmail = self.send_email_gmail_api(oauth_token, to_email, subject, message, trace_id)
                     if res_gmail and res_gmail.get("status") == "success":
                         res_gmail["user_connected_account"] = True
                         return res_gmail
-            except Exception:
-                pass
+                    elif res_gmail and res_gmail.get("status") == "error":
+                        return res_gmail
+            except Exception as e:
+                logger.warning("Google OAuth dispatch error for %s: %s", clean_user_id, e)
 
-            # 2. Check for OAuth connected Microsoft account
+            # 1b. Try Microsoft OAuth
             try:
-                ms_token = token_refresh_service.get_valid_access_token(user_id, "microsoft")
+                ms_token = token_refresh_service.get_valid_access_token(clean_user_id, "microsoft")
                 if ms_token:
                     res_outlook = self.send_email_outlook_api(ms_token, to_email, subject, message, trace_id)
                     if res_outlook and res_outlook.get("status") == "success":
                         res_outlook["user_connected_account"] = True
                         return res_outlook
-            except Exception:
-                pass
+                    elif res_outlook and res_outlook.get("status") == "error":
+                        return res_outlook
+            except Exception as e:
+                logger.warning("Microsoft OAuth dispatch error for %s: %s", clean_user_id, e)
 
+            # 1c. Try canonical connected_account_service app password
             try:
-                # 2. Try canonical connected_account_service app password
-                conn = connected_account_service.get_user_connection(user_id, "gmail", include_decrypted_tokens=True)
+                conn = connected_account_service.get_user_connection(clean_user_id, "gmail", include_decrypted_tokens=True)
                 if conn and conn.get("status") == "connected" and conn.get("access_token"):
-                    sender_email = conn.get("email") or sender_email
+                    sender_email = conn.get("email") or ""
                     sender_pass = conn.get("access_token")
-                    used_user_integration = True
-                    logger.info(f"Using user '{user_id}' connected personal Gmail ({sender_email}) via connected_account_service.")
-                else:
-                    # 3. Fallback to legacy user_integrations
-                    db = _get_db()
-                    if db is not None:
-                        user_integration = db["user_integrations"].find_one({"user_id": user_id})
-                        if user_integration and "gmail" in user_integration and user_integration["gmail"].get("connected"):
-                            user_gmail = user_integration["gmail"]
-                            if user_gmail.get("email"):
-                                sender_email = user_gmail.get("email")
-                            if user_gmail.get("encrypted_app_password"):
-                                sender_pass = decrypt_secret(user_gmail["encrypted_app_password"])
-                            elif user_gmail.get("app_password"):
-                                pass_val = user_gmail.get("app_password")
-                                sender_pass = decrypt_secret(pass_val) if is_encrypted(pass_val) else pass_val
-                            used_user_integration = True
-                            logger.info(f"Using user '{user_id}' connected personal Gmail ({sender_email}) for email dispatch.")
-                        elif user_integration and "smtp" in user_integration and user_integration["smtp"].get("connected"):
-                            user_smtp = user_integration["smtp"]
-                            sender_email = user_smtp.get("email", sender_email)
-                            raw_p = user_smtp.get("password", sender_pass)
-                            sender_pass = decrypt_secret(raw_p) if is_encrypted(raw_p) else raw_p
-                            used_user_integration = True
-                            logger.info(f"Using user '{user_id}' connected personal SMTP ({sender_email}) for email dispatch.")
+                    logger.info("Using user '%s' connected personal Gmail (%s) via connected_account_service.", clean_user_id, sender_email)
+                    res = self.send_email_smtp(
+                        to_email=to_email,
+                        subject=subject,
+                        message=message,
+                        trace_id=trace_id,
+                        sender_email=sender_email,
+                        sender_pass=sender_pass,
+                        smtp_server="smtp.gmail.com",
+                        smtp_port=587
+                    )
+                    res["user_connected_account"] = True
+                    return res
             except Exception as exc:
-                logger.warning(f"Failed loading user integration for {user_id}: {exc}")
+                logger.warning("Connected account app password error for %s: %s", clean_user_id, exc)
 
-        # Override temporary credentials for this call
-        orig_user, orig_pass = self.email_user, self.email_password
-        self.email_user, self.email_password = sender_email, sender_pass
+            # 1d. Try connected custom SMTP
+            try:
+                conn_smtp = connected_account_service.get_user_connection(clean_user_id, "smtp", include_decrypted_tokens=True)
+                if conn_smtp and conn_smtp.get("status") == "connected" and conn_smtp.get("access_token"):
+                    extra = conn_smtp.get("extra_data", {})
+                    smtp_server = extra.get("smtp_server") or self.smtp_server
+                    smtp_port = int(extra.get("smtp_port") or 587)
+                    res = self.send_email_smtp(
+                        to_email=to_email,
+                        subject=subject,
+                        message=message,
+                        trace_id=trace_id,
+                        sender_email=conn_smtp.get("email"),
+                        sender_pass=conn_smtp.get("access_token"),
+                        smtp_server=smtp_server,
+                        smtp_port=smtp_port
+                    )
+                    res["user_connected_account"] = True
+                    return res
+            except Exception as exc:
+                logger.warning("Connected custom SMTP error for %s: %s", clean_user_id, exc)
 
-        try:
-            # 1. Try Vercel Serverless HTTPS Relay (bypasses Render firewall blocks)
-            res_relay = self.send_email_vercel_relay(to_email, subject, message, trace_id)
-            if res_relay and res_relay.get("status") == "success":
-                res_relay["from"] = sender_email
-                res_relay["user_connected_account"] = used_user_integration
-                return res_relay
+            # 1e. Fallback to legacy user_integrations with decryption
+            db = _get_db()
+            if db is not None:
+                try:
+                    user_integration = db["user_integrations"].find_one({"user_id": clean_user_id})
+                    if user_integration and "gmail" in user_integration and user_integration["gmail"].get("connected"):
+                        user_gmail = user_integration["gmail"]
+                        sender_email = user_gmail.get("email") or ""
+                        pass_val = user_gmail.get("encrypted_app_password") or user_gmail.get("app_password")
+                        sender_pass = decrypt_secret(pass_val) if is_encrypted(pass_val) else pass_val
+                        logger.info("Using user '%s' personal Gmail (%s) from user_integrations.", clean_user_id, sender_email)
+                        res = self.send_email_smtp(
+                            to_email=to_email,
+                            subject=subject,
+                            message=message,
+                            trace_id=trace_id,
+                            sender_email=sender_email,
+                            sender_pass=sender_pass,
+                            smtp_server="smtp.gmail.com",
+                            smtp_port=587
+                        )
+                        res["user_connected_account"] = True
+                        return res
+                    elif user_integration and "smtp" in user_integration and user_integration["smtp"].get("connected"):
+                        user_smtp = user_integration["smtp"]
+                        sender_email = user_smtp.get("email") or ""
+                        raw_p = user_smtp.get("password") or ""
+                        sender_pass = decrypt_secret(raw_p) if is_encrypted(raw_p) else raw_p
+                        smtp_server = user_smtp.get("smtp_server") or self.smtp_server
+                        smtp_port = int(user_smtp.get("smtp_port") or 587)
+                        res = self.send_email_smtp(
+                            to_email=to_email,
+                            subject=subject,
+                            message=message,
+                            trace_id=trace_id,
+                            sender_email=sender_email,
+                            sender_pass=sender_pass,
+                            smtp_server=smtp_server,
+                            smtp_port=smtp_port
+                        )
+                        res["user_connected_account"] = True
+                        return res
+                except Exception as exc:
+                    logger.warning("Failed loading user integration for %s: %s", clean_user_id, exc)
 
-            # 2. Try direct SMTP
-            res_smtp = self.send_email_smtp(to_email, subject, message, trace_id)
-            res_smtp["from"] = sender_email
-            res_smtp["user_connected_account"] = used_user_integration
-            return res_smtp
-        finally:
-            self.email_user, self.email_password = orig_user, orig_pass
+            # STRICT NO-FALLBACK RULE: Never fall back to system credentials for user-owned communication
+            return {
+                "status": "error",
+                "error": "No connected email account found for authenticated user. Please connect your Gmail, Microsoft, or SMTP account in Settings.",
+                "trace_id": trace_id,
+                "timestamp": datetime.utcnow().isoformat()
+            }
+
+        # 2. System Actions ONLY: Uses system SMTP credentials
+        if not self.email_user or not self.email_password:
+            return {
+                "status": "error",
+                "error": "System SMTP credentials not configured in environment.",
+                "trace_id": trace_id,
+                "timestamp": datetime.utcnow().isoformat()
+            }
+
+        res = self.send_email_smtp(
+            to_email=to_email,
+            subject=subject,
+            message=message,
+            trace_id=trace_id,
+            sender_email=self.email_user,
+            sender_pass=self.email_password,
+            smtp_server=self.smtp_server,
+            smtp_port=self.smtp_port
+        )
+        res["user_connected_account"] = False
+        return res
