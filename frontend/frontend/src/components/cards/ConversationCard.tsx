@@ -5,6 +5,7 @@ import { Volume2, VolumeX } from 'lucide-react';
 import { cn, formatTime } from '../../lib/utils';
 import { Message } from '../../store/companion.store';
 import ActionCard from './ActionCard';
+import CommunicationConfirmationCard from './CommunicationConfirmationCard';
 import FormattedMarkdown from '../primitives/FormattedMarkdown';
 import { getApiBase, getAuthHeaders } from '../../services/apiConfig';
 
@@ -106,8 +107,23 @@ const ConversationCard: React.FC<Props> = ({ message, onActionConfirm }) => {
           {isAssistant ? <FormattedMarkdown content={message.content} /> : message.content}
         </div>
 
-        {/* Inline capability result */}
-        {isAssistant && message.capabilityResult && (
+        {/* Inline communication approval card */}
+        {isAssistant && message.capabilityResult && message.capabilityResult.data?.confirmation && (
+          <CommunicationConfirmationCard
+            confirmation={message.capabilityResult.data.confirmation}
+            onConfirm={() => {
+              const to = message.capabilityResult?.data?.confirmation?.recipient || '';
+              const channel = message.capabilityResult?.data?.confirmation?.channel === 'EMAIL' ? 'email' : 'WhatsApp';
+              onActionConfirm?.(`Yes, confirm send ${channel} to ${to}`, message.id);
+            }}
+            onCancel={() => {
+              onActionConfirm?.('Cancel message', message.id);
+            }}
+          />
+        )}
+
+        {/* Inline capability result (for other capabilities or non-confirmation results) */}
+        {isAssistant && message.capabilityResult && !message.capabilityResult.data?.confirmation && (
           <ActionCard
             capability={message.capabilityResult.capability}
             intent={message.capabilityResult.intent}

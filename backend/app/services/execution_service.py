@@ -92,22 +92,60 @@ class ExecutionService:
                 user_id = action_data.get("user_id", "user_default")
 
             if action_type.lower() == "whatsapp":
-                return self.whatsapp.send_message(
-                    to_number=action_data.get("recipient", action_data.get("to", "")),
-                    message=action_data.get("message", ""),
-                    trace_id=trace_id,
-                    user_id=user_id if not is_system_otp else None,
-                    is_system_otp=is_system_otp
-                )
+                if is_system_otp:
+                    return self.whatsapp.send_message(
+                        to_number=action_data.get("recipient", action_data.get("to", "")),
+                        message=action_data.get("message", ""),
+                        trace_id=trace_id,
+                        is_system_otp=True
+                    )
+                else:
+                    # User-owned WhatsApp -> route through unified CommunicationService
+                    from app.models.communication import CommunicationAction, CommunicationChannel, CommunicationIntent
+                    from app.services.communication_service import communication_service
+
+                    comm_action = CommunicationAction(
+                        intent=action_data.get("intent", "SEND_MESSAGE"),
+                        channel=CommunicationChannel.WHATSAPP,
+                        user_id=user_id,
+                        account_id=action_data.get("account_id"),
+                        recipient=action_data.get("recipient", action_data.get("to", "")),
+                        content=action_data.get("message", ""),
+                        confirmation_confirmed=bool(action_data.get("confirmation_confirmed", False)),
+                        idempotency_key=action_data.get("idempotency_key"),
+                        metadata=action_data.get("metadata") or {}
+                    )
+                    res = communication_service.execute_action(comm_action, trace_id=trace_id)
+                    return res.to_dict()
+
             elif action_type.lower() == "email":
-                return self.email.send_message(
-                    to_email=action_data.get("recipient", action_data.get("to", "")),
-                    subject=action_data.get("subject", "Message from AI Assistant"),
-                    message=action_data.get("body", action_data.get("message", "")),
-                    trace_id=trace_id,
-                    user_id=user_id if not is_system_action else None,
-                    is_system_action=is_system_action
-                )
+                if is_system_action:
+                    return self.email.send_message(
+                        to_email=action_data.get("recipient", action_data.get("to", "")),
+                        subject=action_data.get("subject", "Message from AI Assistant"),
+                        message=action_data.get("body", action_data.get("message", "")),
+                        trace_id=trace_id,
+                        is_system_action=True
+                    )
+                else:
+                    # User-owned Email -> route through unified CommunicationService
+                    from app.models.communication import CommunicationAction, CommunicationChannel, CommunicationIntent
+                    from app.services.communication_service import communication_service
+
+                    comm_action = CommunicationAction(
+                        intent=action_data.get("intent", "SEND_MESSAGE"),
+                        channel=CommunicationChannel.EMAIL,
+                        user_id=user_id,
+                        account_id=action_data.get("account_id"),
+                        recipient=action_data.get("recipient", action_data.get("to", "")),
+                        subject=action_data.get("subject", "Message from AI Assistant"),
+                        content=action_data.get("body", action_data.get("message", "")),
+                        confirmation_confirmed=bool(action_data.get("confirmation_confirmed", False)),
+                        idempotency_key=action_data.get("idempotency_key"),
+                        metadata=action_data.get("metadata") or {}
+                    )
+                    res = communication_service.execute_action(comm_action, trace_id=trace_id)
+                    return res.to_dict()
             elif action_type.lower() == "instagram":
                 return self.instagram.send_message(
                     recipient_id=action_data.get("recipient", action_data.get("to", "")),

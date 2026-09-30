@@ -19,7 +19,10 @@ class WhatsAppCapability(BaseCapability):
 
     @property
     def supported_intents(self) -> List[str]:
-        return ["telegram", "whatsapp", "send_whatsapp", "send_message"]
+        return [
+            "telegram", "whatsapp", "send_whatsapp", "send_message",
+            "SEND_MESSAGE", "DRAFT_MESSAGE", "READ_MESSAGES", "SEARCH_MESSAGES",
+        ]
 
     async def execute(self, intent: str, params: Dict[str, Any], trace_id: Optional[str] = None) -> CapabilityResult:
         try:
@@ -47,32 +50,68 @@ class WhatsAppCapability(BaseCapability):
                 if match:
                     contact = match.group(0).replace(" ", "").replace("-", "")
 
+            # Check explicit recipient in params
+            if not contact and params.get("recipient"):
+                contact = params.get("recipient")
+            elif not contact and params.get("to"):
+                contact = params.get("to")
+
             action_params = {
                 "intent": intent,
                 "raw_message": message,
                 "message": message,
+                "content": message,
                 "to": contact,
                 "recipient": contact,
                 "contact": contact,
                 "trace_id": trace_id,
                 "user_id": str(user_id).strip(),
+                "account_id": params.get("account_id"),
+                "idempotency_key": params.get("idempotency_key"),
+                "confirmation_confirmed": bool(params.get("confirmation_confirmed", False)),
                 "is_system_action": False,
                 "is_system_otp": False,
             }
             result = execution_svc.execute_action("whatsapp", action_params)
-            status = "success" if result.get("status") == "success" else "failed"
-            summary = (
-                result.get("summary")
-                or (f"WhatsApp message sent to {contact}" if status == "success" else f"WhatsApp failed: {result.get('error', 'unknown error')}")
-            )
-            return CapabilityResult(
-                capability=self.name,
-                intent=intent,
-                status=status,
-                summary=summary,
-                data=result,
-                trace_id=trace_id,
-            )
+
+            if result.get("status") == "confirmation_required":
+                return CapabilityResult(
+                    capability=self.name,
+                    intent=intent,
+                    status="pending",
+                    summary=result.get("message") or f"Confirmation required before sending WhatsApp message to {contact}.",
+                    data=result,
+                    actions=[
+                        {"label": "Send Now", "action": f"Confirm send WhatsApp to {contact}"},
+                        {"label": "Cancel", "action": "Cancel"}
+                    ],
+                    trace_id=trace_id,
+                )
+            elif result.get("status") in ("success", "sent", "accepted"):
+                summary = (
+                    result.get("summary")
+                    or result.get("message")
+                    or f"WhatsApp message sent to {contact}"
+                )
+                return CapabilityResult(
+                    capability=self.name,
+                    intent=intent,
+                    status="success",
+                    summary=summary,
+                    data=result,
+                    trace_id=trace_id,
+                )
+            else:
+                err_msg = result.get("error") or result.get("message") or "WhatsApp execution failed"
+                return CapabilityResult(
+                    capability=self.name,
+                    intent=intent,
+                    status="error",
+                    summary=f"WhatsApp failed: {err_msg}",
+                    error=err_msg,
+                    data=result,
+                    trace_id=trace_id,
+                )
         except Exception as exc:
             logger.warning("WhatsAppCapability failed: %s", exc)
             return CapabilityResult.error_result(self.name, intent, str(exc), trace_id)
