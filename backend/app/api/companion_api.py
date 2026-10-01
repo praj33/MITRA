@@ -84,22 +84,27 @@ async def companion_chat_stream(
 ):
     """
     High-Speed Server-Sent Events (SSE) streaming endpoint.
-    Emits character-by-character tokens to the client for sub-150ms TTFT latency.
+    Emits structured events (message_start, capability_started, capability_result, approval_required, assistant_delta, message_complete)
+    and terminates with data: [DONE].
     """
     auth_user_id = current_user["user_id"]
     if not request.message or not request.message.strip():
         return JSONResponse(status_code=400, content={"error": "message is required"})
 
     async def event_generator():
+        import json
         try:
-            async for token in companion_orchestrator.stream_conversation_tokens(
-                message=request.message.strip(),
+            async for event in companion_orchestrator.process_stream(
                 user_id=auth_user_id,
+                message=request.message.strip(),
+                platform=request.platform,
+                device=request.device,
+                page_context=request.page_context,
             ):
                 if await raw_request.is_disconnected():
                     logger.info("Client disconnected during SSE stream for user_id=%s", auth_user_id)
                     break
-                yield f"data: {token}\n\n"
+                yield f"data: {json.dumps(event)}\n\n"
             if not await raw_request.is_disconnected():
                 yield "data: [DONE]\n\n"
         except asyncio.CancelledError:
@@ -110,7 +115,13 @@ async def companion_chat_stream(
                 logger.info("SSE client disconnected with exception for user_id=%s: %s", auth_user_id, exc)
                 return
             logger.exception("Streaming failed for user_id=%s: %s", auth_user_id, exc)
-            yield f"data: Error: {str(exc)}\n\n"
+            err_event = {
+                "type": "error",
+                "request_id": "",
+                "error": "Companion pipeline failed.",
+            }
+            yield f"data: {json.dumps(err_event)}\n\n"
+            yield "data: [DONE]\n\n"
 
     return StreamingResponse(event_generator(), media_type="text/event-stream")
 

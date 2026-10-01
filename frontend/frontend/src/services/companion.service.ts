@@ -21,7 +21,11 @@ export interface ChatResponse {
   suggested_actions?: string[];
 }
 
-export function parseSSELine(line: string): { type: 'token' | 'done' | 'error' | 'ignore'; content?: string } {
+export function parseSSELine(line: string): {
+  type: 'token' | 'done' | 'error' | 'ignore' | 'event';
+  content?: string;
+  event?: any;
+} {
   const cleanLine = line.endsWith('\r') ? line.slice(0, -1) : line;
   if (!cleanLine.startsWith('data:')) {
     return { type: 'ignore' };
@@ -38,6 +42,18 @@ export function parseSSELine(line: string): { type: 'token' | 'done' | 'error' |
   }
   if (dataContent.startsWith('Error:')) {
     return { type: 'error', content: dataContent.slice(6).trim() };
+  }
+
+  // Check if payload is a structured JSON event
+  if (dataContent.startsWith('{') && dataContent.endsWith('}')) {
+    try {
+      const parsed = JSON.parse(dataContent);
+      if (parsed && typeof parsed === 'object' && parsed.type) {
+        return { type: 'event', event: parsed };
+      }
+    } catch {
+      // Non-JSON falls through to plain token
+    }
   }
 
   return { type: 'token', content: dataContent };
@@ -90,6 +106,7 @@ export const CompanionService = {
     onToken: (token: string) => void,
     signal?: AbortSignal,
     platform = 'web',
+    onEvent?: (event: any) => void,
   ): Promise<string> {
     const url = `${getApiBase()}/api/companion/chat/stream`;
     const headers = getAuthHeaders();
@@ -133,6 +150,22 @@ export const CompanionService = {
           }
           if (parsed.type === 'error') {
             throw new Error(parsed.content || 'Streaming error');
+          }
+          if (parsed.type === 'event' && parsed.event) {
+            const evt = parsed.event;
+            if (evt.type === 'assistant_delta' && evt.delta !== undefined) {
+              accumulated += evt.delta;
+              onToken(evt.delta);
+            } else if (evt.type === 'message_complete') {
+              if (evt.message && !accumulated) {
+                accumulated = evt.message;
+              }
+              if (onEvent) onEvent(evt);
+            } else if (evt.type === 'error') {
+              throw new Error(evt.error || 'Streaming error');
+            } else {
+              if (onEvent) onEvent(evt);
+            }
           }
           if (parsed.type === 'token' && parsed.content !== undefined) {
             accumulated += parsed.content;

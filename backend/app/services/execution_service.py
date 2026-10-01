@@ -113,6 +113,10 @@ class ExecutionService:
                         content=action_data.get("message", ""),
                         confirmation_confirmed=bool(action_data.get("confirmation_confirmed", False)),
                         idempotency_key=action_data.get("idempotency_key"),
+                        query=action_data.get("query"),
+                        limit=action_data.get("limit") or 20,
+                        page_token=action_data.get("page_token"),
+                        thread_id=action_data.get("thread_id"),
                         metadata=action_data.get("metadata") or {}
                     )
                     res = communication_service.execute_action(comm_action, trace_id=trace_id)
@@ -142,6 +146,10 @@ class ExecutionService:
                         content=action_data.get("body", action_data.get("message", "")),
                         confirmation_confirmed=bool(action_data.get("confirmation_confirmed", False)),
                         idempotency_key=action_data.get("idempotency_key"),
+                        query=action_data.get("query"),
+                        limit=action_data.get("limit") or 20,
+                        page_token=action_data.get("page_token"),
+                        thread_id=action_data.get("thread_id"),
                         metadata=action_data.get("metadata") or {}
                     )
                     res = communication_service.execute_action(comm_action, trace_id=trace_id)

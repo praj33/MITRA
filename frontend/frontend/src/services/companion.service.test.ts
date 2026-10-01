@@ -49,4 +49,18 @@ describe('SSE Token Parsing and Whitespace Preservation', () => {
     const result = parseSSELine('data:  token_with_crlf\r');
     expect(result).toEqual({ type: 'token', content: ' token_with_crlf' });
   });
+
+  test('parses structured JSON events', () => {
+    const deltaResult = parseSSELine('data: {"type": "assistant_delta", "delta": "Hello"}');
+    expect(deltaResult).toEqual({
+      type: 'event',
+      event: { type: 'assistant_delta', delta: 'Hello' },
+    });
+
+    const approvalResult = parseSSELine('data: {"type": "approval_required", "pending_action_id": "pca_123"}');
+    expect(approvalResult).toEqual({
+      type: 'event',
+      event: { type: 'approval_required', pending_action_id: 'pca_123' },
+    });
+  });
 });

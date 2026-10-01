@@ -158,7 +158,11 @@ async def normalize_text_async(text: str) -> str:
         )
         if corrected and isinstance(corrected, str):
             clean_corr = corrected.strip().strip('"\'')
-            if len(clean_corr) > 0 and len(clean_corr) < len(text_clean) * 3:
+            if (
+                len(clean_corr) > 0
+                and len(clean_corr) >= len(text_clean) * 0.7
+                and len(clean_corr.split()) >= len(text_clean.split()) - 1
+            ):
                 return clean_corr
     except Exception as exc:
         logger.debug("LLM dynamic text normalization skipped/failed: %s", exc)
@@ -210,9 +214,12 @@ def normalize_text_algorithmic(text: str) -> str:
 def _has_potential_typo(text: str) -> bool:
     """Checks if text contains unusual token structures or short mangled words."""
     words = [re.sub(r"[^\w]", "", w).lower() for w in text.split() if w]
-    # Check for single-character or mangled 2-letter non-standard tokens
+    # Check for single-character or mangled 2-letter non-standard tokens (digits are valid tokens)
     suspect_tokens = {"wat", "wht", "wats", "yo", "hw", "wether", "wthr", "tmrw"}
-    return any(w in suspect_tokens or (len(w) == 1 and w not in ("a", "i")) for w in words)
+    return any(
+        w in suspect_tokens or (len(w) == 1 and not w.isdigit() and w not in ("a", "i"))
+        for w in words
+    )
 
 
 def _levenshtein_distance(s1: str, s2: str) -> int:

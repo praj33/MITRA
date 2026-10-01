@@ -320,7 +320,63 @@ const App: React.FC = () => {
             fullContent += token;
             updateMessage(assistantMsgId, { content: fullContent });
           },
-          controller.signal
+          controller.signal,
+          'web',
+          (event: any) => {
+            if (controller.signal.aborted) return;
+            if (event.type === 'message_start' && event.session_id) {
+              setSessionId(event.session_id);
+            } else if (event.type === 'approval_required') {
+              updateMessage(assistantMsgId, {
+                capabilityResult: {
+                  capability: event.capability,
+                  intent: event.intent,
+                  status: 'pending',
+                  summary: event.summary || 'Confirmation required',
+                  data: {
+                    status: 'confirmation_required',
+                    pending_action_id: event.pending_action_id,
+                    confirmation: event.confirmation,
+                  },
+                },
+              });
+            } else if (event.type === 'capability_result') {
+              const capStatus: 'error' | 'success' | 'pending' =
+                (event.status === 'error' || event.status === 'pending') ? event.status : 'success';
+              updateMessage(assistantMsgId, {
+                capabilityResult: {
+                  capability: event.capability,
+                  intent: event.intent,
+                  status: capStatus,
+                  summary: event.summary,
+                  data: event.data,
+                },
+              });
+              if (event.data) {
+                addContextItem({
+                  id: `ctx_cap_${Date.now()}`,
+                  type: (event.capability === 'calendar' ? 'calendar' :
+                         event.capability === 'email'    ? 'email'    :
+                         event.capability === 'task'     ? 'task'     : 'note'),
+                  title: event.summary,
+                  subtitle: event.capability,
+                  timestamp: new Date().toISOString(),
+                });
+                showToast(
+                  event.status === 'success' ? 'success' : 'info',
+                  event.summary,
+                  event.capability
+                );
+              }
+            } else if (event.type === 'message_complete') {
+              updateMessage(assistantMsgId, {
+                content: event.message || fullContent,
+                intent: event.intent,
+                capabilityResult: event.capability_result || undefined,
+                suggestedActions: event.suggested_actions || [],
+              });
+            }
+          }
         );
       } catch (streamErr: any) {
         if (streamErr.name === 'AbortError') {

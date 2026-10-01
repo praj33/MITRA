@@ -140,20 +140,22 @@ class LLMBridge:
         messages: list,
         temperature: float = 0.7,
         max_tokens: int = 800,
+        use_cache: bool = False,
     ) -> str:
         if not messages:
             raise ValueError("messages must be a non-empty list")
-        cache_key = hashlib.sha256(
-            f"{model}:{messages}:{temperature}".encode()
-        ).hexdigest()
-        
-        cached = self._cache_get(cache_key)
-        if cached:
-            return cached
+        cache_key = None
+        if use_cache:
+            cache_key = hashlib.sha256(
+                f"{model}:{messages}:{temperature}".encode()
+            ).hexdigest()
+            cached = self._cache_get(cache_key)
+            if cached:
+                return cached
 
         output = await self._dispatch(model, messages, temperature, max_tokens)
         output = self._sanitize_llm_output(output)
-        if output:
+        if output and use_cache and cache_key:
             self._cache_set(cache_key, output)
         return output
 
@@ -167,20 +169,10 @@ class LLMBridge:
         """
         High-Speed Server-Sent Events (SSE) token generator.
         Yields chunk strings character-by-character for sub-150ms TTFT latency.
+        Conversational streams are never globally cached to preserve personal data isolation.
         """
         if not messages:
             raise ValueError("messages must be a non-empty list")
-
-        cache_key = hashlib.sha256(
-            f"{model}:{messages}:{temperature}".encode()
-        ).hexdigest()
-        cached = self._cache_get(cache_key)
-        if cached:
-            chunk_size = 10
-            for i in range(0, len(cached), chunk_size):
-                yield cached[i : i + chunk_size]
-                await asyncio.sleep(0.005)
-            return
 
         full_response_parts = []
         try:
@@ -197,9 +189,6 @@ class LLMBridge:
                     if content:
                         full_response_parts.append(content)
                         yield content
-                full_resp = "".join(full_response_parts)
-                if full_resp:
-                    self._cache_set(cache_key, full_resp)
                 return
             elif model in ("chatgpt", "openai", "gpt") and self.openai_client:
                 stream = await self.openai_client.chat.completions.create(
@@ -214,9 +203,6 @@ class LLMBridge:
                     if content:
                         full_response_parts.append(content)
                         yield content
-                full_resp = "".join(full_response_parts)
-                if full_resp:
-                    self._cache_set(cache_key, full_resp)
                 return
         except Exception as exc:
             logger.warning("Streaming dispatch failed (%s) — falling back to fast batch", exc)
