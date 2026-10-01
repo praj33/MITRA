@@ -48,12 +48,14 @@ class GoogleOAuthProvider(BaseOAuthProvider):
                 # Least privilege identity scopes for login / signup
                 scopes = ["openid", "email", "profile"]
             else:
-                # Service connection scopes
+                # Service connection scopes (Send, Read, Compose, Calendar)
                 scopes = [
                     "openid",
                     "email",
                     "profile",
                     "https://www.googleapis.com/auth/gmail.send",
+                    "https://www.googleapis.com/auth/gmail.readonly",
+                    "https://www.googleapis.com/auth/gmail.compose",
                     "https://www.googleapis.com/auth/calendar"
                 ]
 

@@ -4,7 +4,7 @@ import socket
 import requests
 from email.mime.text import MIMEText
 from email.mime.multipart import MIMEMultipart
-from typing import Dict, Any, Optional
+from typing import Dict, Any, Optional, List
 from datetime import datetime
 import logging
 import base64
@@ -234,14 +234,153 @@ class EmailExecutor:
                 "timestamp": datetime.utcnow().isoformat()
             }
 
-    def send_email_gmail_api(self, access_token: str, to_email: str, subject: str, message: str, trace_id: str) -> Optional[Dict[str, Any]]:
-        """Send email via official Google Gmail OAuth 2.0 API."""
+    def _map_gmail_error(self, res: requests.Response) -> Dict[str, Any]:
+        """Maps Gmail API HTTP status codes and error responses to canonical error codes."""
+        status_code = res.status_code
         try:
-            msg = MIMEMultipart()
-            msg['To'] = to_email
-            msg['Subject'] = subject
-            msg.attach(MIMEText(message, 'plain'))
-            raw_msg = base64.urlsafe_b64encode(msg.as_bytes()).decode()
+            err_body = res.json()
+            err_detail = err_body.get("error", {})
+            err_msg = err_detail.get("message") or res.text
+            err_reason = ""
+            if isinstance(err_detail.get("errors"), list) and err_detail["errors"]:
+                err_reason = err_detail["errors"][0].get("reason", "")
+        except Exception:
+            err_msg = res.text
+            err_reason = ""
+
+        if status_code in (401, 403):
+            if "scope" in err_msg.lower() or "permission" in err_msg.lower() or err_reason in ("insufficientPermissions", "forbidden"):
+                return {"status": "error", "error_code": "GMAIL_REAUTH_REQUIRED", "error": f"Gmail permissions insufficient: {err_msg}"}
+            elif err_reason in ("rateLimitExceeded", "userRateLimitExceeded", "dailyLimitExceeded"):
+                return {"status": "error", "error_code": "GMAIL_RATE_LIMITED", "error": "Gmail rate limit exceeded. Please try again later."}
+            return {"status": "error", "error_code": "GMAIL_PERMISSION_DENIED", "error": f"Gmail authorization error: {err_msg}"}
+        elif status_code == 404:
+            return {"status": "error", "error_code": "GMAIL_NOT_FOUND", "error": f"Requested Gmail resource not found: {err_msg}"}
+        elif status_code == 429:
+            return {"status": "error", "error_code": "GMAIL_RATE_LIMITED", "error": "Gmail rate limit exceeded. Please try again later."}
+        elif status_code == 400:
+            return {"status": "error", "error_code": "GMAIL_INVALID_QUERY", "error": f"Invalid Gmail request or query: {err_msg}"}
+        else:
+            return {"status": "error", "error_code": "GMAIL_PROVIDER_ERROR", "error": f"Gmail API error ({status_code}): {err_msg}"}
+
+    def _normalize_gmail_message(self, raw_msg: Dict[str, Any]) -> Dict[str, Any]:
+        """
+        Normalizes a raw Gmail API message item into MITRA's standard message schema:
+        { id, thread_id, sender, recipient, subject, snippet, content, timestamp, has_attachments, labels }
+        """
+        from app.executors.mime_builder import sanitize_html_content
+
+        msg_id = raw_msg.get("id", "")
+        thread_id = raw_msg.get("threadId", "")
+        snippet = raw_msg.get("snippet", "")
+        labels = raw_msg.get("labelIds", [])
+
+        # Extract headers
+        headers = raw_msg.get("payload", {}).get("headers", [])
+        header_map = {}
+        for h in headers:
+            header_map[h.get("name", "").lower()] = h.get("value", "")
+
+        sender = header_map.get("from", "")
+        recipient = header_map.get("to", "")
+        subject = header_map.get("subject", "")
+        raw_date = header_map.get("date", "")
+
+        timestamp = raw_date
+        if not timestamp:
+            internal_date = raw_msg.get("internalDate")
+            if internal_date:
+                try:
+                    timestamp = datetime.utcfromtimestamp(int(internal_date) / 1000).isoformat()
+                except Exception:
+                    timestamp = datetime.utcnow().isoformat()
+            else:
+                timestamp = datetime.utcnow().isoformat()
+
+        text_body = ""
+        html_body = ""
+        has_attachments = False
+        attachment_list = []
+
+        def _traverse_part(part: Dict[str, Any], depth: int = 0):
+            nonlocal text_body, html_body, has_attachments, attachment_list
+            if depth > 5:
+                return
+
+            mime_type = part.get("mimeType", "").lower()
+            filename = part.get("filename", "")
+            body = part.get("body", {})
+
+            if filename and body.get("attachmentId"):
+                has_attachments = True
+                safe_name = os.path.basename(filename)
+                attachment_list.append({
+                    "filename": safe_name,
+                    "mime_type": mime_type,
+                    "size": body.get("size", 0),
+                    "attachment_id": body.get("attachmentId")
+                })
+            elif mime_type == "text/plain" and not text_body:
+                data = body.get("data")
+                if data:
+                    try:
+                        text_body = base64.urlsafe_b64decode(data.encode("ascii")).decode("utf-8", errors="replace")
+                    except Exception:
+                        pass
+            elif mime_type == "text/html" and not html_body:
+                data = body.get("data")
+                if data:
+                    try:
+                        html_body = base64.urlsafe_b64decode(data.encode("ascii")).decode("utf-8", errors="replace")
+                    except Exception:
+                        pass
+
+            for subpart in part.get("parts", []):
+                _traverse_part(subpart, depth + 1)
+
+        payload = raw_msg.get("payload", {})
+        _traverse_part(payload)
+
+        # Prefer text/plain, then sanitized HTML, then snippet
+        if text_body.strip():
+            content = text_body.strip()
+        elif html_body.strip():
+            content = sanitize_html_content(html_body.strip())
+        else:
+            content = snippet
+
+        norm = {
+            "id": msg_id,
+            "thread_id": thread_id,
+            "sender": sender,
+            "recipient": recipient,
+            "subject": subject,
+            "snippet": snippet,
+            "content": content,
+            "timestamp": timestamp,
+            "has_attachments": has_attachments,
+            "labels": labels,
+        }
+        if attachment_list:
+            norm["attachments"] = attachment_list
+        return norm
+
+    def send_email_gmail_api(self, access_token: str, to_email: str, subject: str, message: str, trace_id: str) -> Optional[Dict[str, Any]]:
+        """Send email via official Google Gmail OAuth 2.0 API with safe MIME encoding."""
+        try:
+            from app.executors.mime_builder import build_safe_rfc2822_message
+            try:
+                raw_bytes = build_safe_rfc2822_message(to_email=to_email, subject=subject, text_body=message)
+                raw_msg = base64.urlsafe_b64encode(raw_bytes).decode("ascii")
+            except ValueError as val_err:
+                logger.warning(f"Safe MIME build error in send_email_gmail_api: {val_err}")
+                return {
+                    "status": "error",
+                    "error_code": "GMAIL_PROVIDER_ERROR",
+                    "error": str(val_err),
+                    "trace_id": trace_id,
+                    "timestamp": datetime.utcnow().isoformat()
+                }
 
             url = "https://gmail.googleapis.com/gmail/v1/users/me/messages/send"
             headers = {
@@ -252,11 +391,14 @@ class EmailExecutor:
             if res.status_code in [200, 201]:
                 logger.info(f"Email sent via Google Gmail API to {to_email}")
                 self._log_email_to_db(to_email, subject, message, "gmail_oauth_api", "success", trace_id)
+                res_data = res.json() if res.content else {}
                 return {
                     "status": "success",
                     "to": to_email,
                     "subject": subject,
                     "message": message,
+                    "provider_message_id": res_data.get("id"),
+                    "thread_id": res_data.get("threadId"),
                     "method": "gmail_oauth_api",
                     "trace_id": trace_id,
                     "timestamp": datetime.utcnow().isoformat(),
@@ -264,9 +406,573 @@ class EmailExecutor:
                 }
             else:
                 logger.warning(f"Gmail API error {res.status_code}: {res.text}")
+                mapped = self._map_gmail_error(res)
+                mapped["trace_id"] = trace_id
+                mapped["timestamp"] = datetime.utcnow().isoformat()
+                return mapped
         except Exception as e:
             logger.warning(f"Gmail API dispatch exception: {e}")
         return None
+
+    def create_draft_gmail(
+        self,
+        user_id: str,
+        to_email: str,
+        subject: str,
+        message: str,
+        html_body: Optional[str] = None,
+        cc: Optional[Any] = None,
+        bcc: Optional[Any] = None,
+        attachments: Optional[List[Dict[str, Any]]] = None,
+        trace_id: Optional[str] = None
+    ) -> Dict[str, Any]:
+        """
+        Creates a Gmail draft via users/me/drafts.
+        INVARIANT: Does NOT transmit or send the email.
+        Requires authenticated user and gmail.compose scope.
+        """
+        from app.services.connected_account_service import connected_account_service
+        from app.services.token_refresh_service import token_refresh_service
+        from app.executors.mime_builder import build_safe_rfc2822_message
+
+        clean_user_id = str(user_id or "").strip()
+        if not clean_user_id or clean_user_id.lower() in ("user_default", "default", "none", "null", "anonymous"):
+            return {
+                "status": "error",
+                "error_code": "AUTH_REQUIRED",
+                "error": "Authentication required: user-owned draft action requires valid user identity.",
+                "trace_id": trace_id
+            }
+
+        if not connected_account_service.has_gmail_compose_access(clean_user_id):
+            return {
+                "status": "error",
+                "error_code": "GMAIL_REAUTH_REQUIRED",
+                "error": "Gmail compose permission required. Please upgrade Gmail access in Settings.",
+                "trace_id": trace_id
+            }
+
+        access_token = token_refresh_service.get_valid_access_token(clean_user_id, "google")
+        if not access_token:
+            return {
+                "status": "error",
+                "error_code": "GMAIL_REAUTH_REQUIRED",
+                "error": "Failed to obtain valid Google access token. Please re-authenticate your Google account.",
+                "trace_id": trace_id
+            }
+
+        try:
+            raw_bytes = build_safe_rfc2822_message(
+                to_email=to_email,
+                subject=subject,
+                text_body=message,
+                html_body=html_body,
+                cc=cc,
+                bcc=bcc,
+                attachments=attachments
+            )
+            raw_b64 = base64.urlsafe_b64encode(raw_bytes).decode("ascii")
+        except ValueError as val_err:
+            return {
+                "status": "error",
+                "error_code": "GMAIL_PROVIDER_ERROR",
+                "error": str(val_err),
+                "trace_id": trace_id
+            }
+
+        url = "https://gmail.googleapis.com/gmail/v1/users/me/drafts"
+        headers = {
+            "Authorization": f"Bearer {access_token}",
+            "Content-Type": "application/json"
+        }
+        payload = {"message": {"raw": raw_b64}}
+
+        try:
+            res = requests.post(url, json=payload, headers=headers, timeout=10)
+            if res.status_code in (200, 201):
+                data = res.json()
+                draft_id = data.get("id")
+                thread_id = data.get("message", {}).get("threadId")
+                return {
+                    "status": "success",
+                    "draft_id": draft_id,
+                    "thread_id": thread_id,
+                    "message": f"Draft created successfully for {to_email}.",
+                    "trace_id": trace_id
+                }
+            else:
+                return self._map_gmail_error(res)
+        except Exception as exc:
+            logger.error(f"Gmail create_draft exception: {exc}")
+            return {
+                "status": "error",
+                "error_code": "GMAIL_PROVIDER_ERROR",
+                "error": f"Failed communicating with Gmail API: {str(exc)}",
+                "trace_id": trace_id
+            }
+
+    def read_inbox_gmail(
+        self,
+        user_id: str,
+        limit: int = 20,
+        page_token: Optional[str] = None,
+        trace_id: Optional[str] = None
+    ) -> Dict[str, Any]:
+        """
+        Reads user inbox messages via users/me/messages. Bounded result size.
+        Requires gmail.readonly scope.
+        """
+        from app.services.connected_account_service import connected_account_service
+        from app.services.token_refresh_service import token_refresh_service
+
+        clean_user_id = str(user_id or "").strip()
+        if not clean_user_id or clean_user_id.lower() in ("user_default", "default", "none", "null", "anonymous"):
+            return {
+                "status": "error",
+                "error_code": "AUTH_REQUIRED",
+                "error": "Authentication required: reading Gmail inbox requires valid user identity.",
+                "trace_id": trace_id
+            }
+
+        if not connected_account_service.has_gmail_read_access(clean_user_id):
+            return {
+                "status": "error",
+                "error_code": "GMAIL_REAUTH_REQUIRED",
+                "error": "Gmail read permission required. Please upgrade Gmail access in Settings.",
+                "trace_id": trace_id
+            }
+
+        access_token = token_refresh_service.get_valid_access_token(clean_user_id, "google")
+        if not access_token:
+            return {
+                "status": "error",
+                "error_code": "GMAIL_REAUTH_REQUIRED",
+                "error": "Failed to obtain valid Google access token. Please re-authenticate your Google account.",
+                "trace_id": trace_id
+            }
+
+        bounded_limit = max(1, min(int(limit or 20), 100))
+        url = "https://gmail.googleapis.com/gmail/v1/users/me/messages"
+        headers = {"Authorization": f"Bearer {access_token}"}
+        params: Dict[str, Any] = {"maxResults": bounded_limit, "q": "label:INBOX"}
+        if page_token:
+            params["pageToken"] = str(page_token).strip()
+
+        try:
+            res = requests.get(url, headers=headers, params=params, timeout=10)
+            if res.status_code != 200:
+                return self._map_gmail_error(res)
+
+            data = res.json()
+            raw_list = data.get("messages", [])
+            next_page = data.get("nextPageToken")
+
+            normalized_list = []
+            for item in raw_list:
+                msg_id = item.get("id")
+                if not msg_id:
+                    continue
+                try:
+                    msg_url = f"https://gmail.googleapis.com/gmail/v1/users/me/messages/{msg_id}?format=full"
+                    msg_res = requests.get(msg_url, headers=headers, timeout=10)
+                    if msg_res.status_code == 200:
+                        normalized_list.append(self._normalize_gmail_message(msg_res.json()))
+                    else:
+                        normalized_list.append({
+                            "id": msg_id,
+                            "thread_id": item.get("threadId", ""),
+                            "sender": "",
+                            "recipient": "",
+                            "subject": "",
+                            "snippet": "",
+                            "content": "",
+                            "timestamp": datetime.utcnow().isoformat(),
+                            "has_attachments": False,
+                            "labels": ["INBOX"]
+                        })
+                except Exception:
+                    normalized_list.append({
+                        "id": msg_id,
+                        "thread_id": item.get("threadId", ""),
+                        "sender": "",
+                        "recipient": "",
+                        "subject": "",
+                        "snippet": "",
+                        "content": "",
+                        "timestamp": datetime.utcnow().isoformat(),
+                        "has_attachments": False,
+                        "labels": ["INBOX"]
+                    })
+
+            return {
+                "status": "success",
+                "messages": normalized_list,
+                "next_page_token": next_page,
+                "trace_id": trace_id
+            }
+        except Exception as exc:
+            logger.error(f"Gmail read_inbox exception: {exc}")
+            return {
+                "status": "error",
+                "error_code": "GMAIL_PROVIDER_ERROR",
+                "error": f"Failed communicating with Gmail API: {str(exc)}",
+                "trace_id": trace_id
+            }
+
+    def search_messages_gmail(
+        self,
+        user_id: str,
+        query: str,
+        limit: int = 20,
+        page_token: Optional[str] = None,
+        trace_id: Optional[str] = None
+    ) -> Dict[str, Any]:
+        """
+        Searches user messages via users/me/messages?q=...
+        Validates query and bounds result size.
+        Requires gmail.readonly scope.
+        """
+        from app.services.connected_account_service import connected_account_service
+        from app.services.token_refresh_service import token_refresh_service
+
+        clean_user_id = str(user_id or "").strip()
+        if not clean_user_id or clean_user_id.lower() in ("user_default", "default", "none", "null", "anonymous"):
+            return {
+                "status": "error",
+                "error_code": "AUTH_REQUIRED",
+                "error": "Authentication required: searching Gmail requires valid user identity.",
+                "trace_id": trace_id
+            }
+
+        if not connected_account_service.has_gmail_read_access(clean_user_id):
+            return {
+                "status": "error",
+                "error_code": "GMAIL_REAUTH_REQUIRED",
+                "error": "Gmail read permission required. Please upgrade Gmail access in Settings.",
+                "trace_id": trace_id
+            }
+
+        # Query validation
+        clean_query = str(query or "").strip()
+        if not clean_query:
+            return {
+                "status": "error",
+                "error_code": "GMAIL_INVALID_QUERY",
+                "error": "Search query cannot be empty.",
+                "trace_id": trace_id
+            }
+        if "\r" in clean_query or "\n" in clean_query:
+            return {
+                "status": "error",
+                "error_code": "GMAIL_INVALID_QUERY",
+                "error": "Invalid search query: contains newline characters.",
+                "trace_id": trace_id
+            }
+        if len(clean_query) > 500:
+            return {
+                "status": "error",
+                "error_code": "GMAIL_INVALID_QUERY",
+                "error": "Search query exceeds maximum allowed length of 500 characters.",
+                "trace_id": trace_id
+            }
+
+        access_token = token_refresh_service.get_valid_access_token(clean_user_id, "google")
+        if not access_token:
+            return {
+                "status": "error",
+                "error_code": "GMAIL_REAUTH_REQUIRED",
+                "error": "Failed to obtain valid Google access token. Please re-authenticate your Google account.",
+                "trace_id": trace_id
+            }
+
+        bounded_limit = max(1, min(int(limit or 20), 100))
+        url = "https://gmail.googleapis.com/gmail/v1/users/me/messages"
+        headers = {"Authorization": f"Bearer {access_token}"}
+        params: Dict[str, Any] = {"maxResults": bounded_limit, "q": clean_query}
+        if page_token:
+            params["pageToken"] = str(page_token).strip()
+
+        try:
+            res = requests.get(url, headers=headers, params=params, timeout=10)
+            if res.status_code != 200:
+                return self._map_gmail_error(res)
+
+            data = res.json()
+            raw_list = data.get("messages", [])
+            next_page = data.get("nextPageToken")
+
+            normalized_list = []
+            for item in raw_list:
+                msg_id = item.get("id")
+                if not msg_id:
+                    continue
+                try:
+                    msg_url = f"https://gmail.googleapis.com/gmail/v1/users/me/messages/{msg_id}?format=full"
+                    msg_res = requests.get(msg_url, headers=headers, timeout=10)
+                    if msg_res.status_code == 200:
+                        normalized_list.append(self._normalize_gmail_message(msg_res.json()))
+                    else:
+                        normalized_list.append({
+                            "id": msg_id,
+                            "thread_id": item.get("threadId", ""),
+                            "sender": "",
+                            "recipient": "",
+                            "subject": "",
+                            "snippet": "",
+                            "content": "",
+                            "timestamp": datetime.utcnow().isoformat(),
+                            "has_attachments": False,
+                            "labels": []
+                        })
+                except Exception:
+                    normalized_list.append({
+                        "id": msg_id,
+                        "thread_id": item.get("threadId", ""),
+                        "sender": "",
+                        "recipient": "",
+                        "subject": "",
+                        "snippet": "",
+                        "content": "",
+                        "timestamp": datetime.utcnow().isoformat(),
+                        "has_attachments": False,
+                        "labels": []
+                    })
+
+            return {
+                "status": "success",
+                "messages": normalized_list,
+                "next_page_token": next_page,
+                "query": clean_query,
+                "trace_id": trace_id
+            }
+        except Exception as exc:
+            logger.error(f"Gmail search_messages exception: {exc}")
+            return {
+                "status": "error",
+                "error_code": "GMAIL_PROVIDER_ERROR",
+                "error": f"Failed communicating with Gmail API: {str(exc)}",
+                "trace_id": trace_id
+            }
+
+    def get_message_gmail(self, user_id: str, message_id: str, trace_id: Optional[str] = None) -> Dict[str, Any]:
+        """Retrieves a single message by ID via users/me/messages/{messageId}."""
+        from app.services.connected_account_service import connected_account_service
+        from app.services.token_refresh_service import token_refresh_service
+
+        clean_user_id = str(user_id or "").strip()
+        if not clean_user_id or clean_user_id.lower() in ("user_default", "default", "none", "null", "anonymous"):
+            return {
+                "status": "error",
+                "error_code": "AUTH_REQUIRED",
+                "error": "Authentication required: message retrieval requires valid user identity.",
+                "trace_id": trace_id
+            }
+
+        if not connected_account_service.has_gmail_read_access(clean_user_id):
+            return {
+                "status": "error",
+                "error_code": "GMAIL_REAUTH_REQUIRED",
+                "error": "Gmail read permission required. Please upgrade Gmail access in Settings.",
+                "trace_id": trace_id
+            }
+
+        clean_msg_id = str(message_id or "").strip()
+        if not clean_msg_id:
+            return {
+                "status": "error",
+                "error_code": "GMAIL_NOT_FOUND",
+                "error": "Message ID is required.",
+                "trace_id": trace_id
+            }
+
+        access_token = token_refresh_service.get_valid_access_token(clean_user_id, "google")
+        if not access_token:
+            return {
+                "status": "error",
+                "error_code": "GMAIL_REAUTH_REQUIRED",
+                "error": "Failed to obtain valid Google access token. Please re-authenticate your Google account.",
+                "trace_id": trace_id
+            }
+
+        url = f"https://gmail.googleapis.com/gmail/v1/users/me/messages/{clean_msg_id}?format=full"
+        headers = {"Authorization": f"Bearer {access_token}"}
+        try:
+            res = requests.get(url, headers=headers, timeout=10)
+            if res.status_code == 200:
+                normalized = self._normalize_gmail_message(res.json())
+                return {
+                    "status": "success",
+                    "message": normalized,
+                    "trace_id": trace_id
+                }
+            else:
+                return self._map_gmail_error(res)
+        except Exception as exc:
+            return {
+                "status": "error",
+                "error_code": "GMAIL_PROVIDER_ERROR",
+                "error": f"Failed communicating with Gmail API: {str(exc)}",
+                "trace_id": trace_id
+            }
+
+    def get_thread_gmail(self, user_id: str, thread_id: str, trace_id: Optional[str] = None) -> Dict[str, Any]:
+        """Retrieves a message thread by ID via users/me/threads/{threadId}."""
+        from app.services.connected_account_service import connected_account_service
+        from app.services.token_refresh_service import token_refresh_service
+
+        clean_user_id = str(user_id or "").strip()
+        if not clean_user_id or clean_user_id.lower() in ("user_default", "default", "none", "null", "anonymous"):
+            return {
+                "status": "error",
+                "error_code": "AUTH_REQUIRED",
+                "error": "Authentication required: thread retrieval requires valid user identity.",
+                "trace_id": trace_id
+            }
+
+        if not connected_account_service.has_gmail_read_access(clean_user_id):
+            return {
+                "status": "error",
+                "error_code": "GMAIL_REAUTH_REQUIRED",
+                "error": "Gmail read permission required. Please upgrade Gmail access in Settings.",
+                "trace_id": trace_id
+            }
+
+        clean_thread_id = str(thread_id or "").strip()
+        if not clean_thread_id:
+            return {
+                "status": "error",
+                "error_code": "GMAIL_NOT_FOUND",
+                "error": "Thread ID is required.",
+                "trace_id": trace_id
+            }
+
+        access_token = token_refresh_service.get_valid_access_token(clean_user_id, "google")
+        if not access_token:
+            return {
+                "status": "error",
+                "error_code": "GMAIL_REAUTH_REQUIRED",
+                "error": "Failed to obtain valid Google access token. Please re-authenticate your Google account.",
+                "trace_id": trace_id
+            }
+
+        url = f"https://gmail.googleapis.com/gmail/v1/users/me/threads/{clean_thread_id}?format=full"
+        headers = {"Authorization": f"Bearer {access_token}"}
+        try:
+            res = requests.get(url, headers=headers, timeout=10)
+            if res.status_code == 200:
+                data = res.json()
+                raw_msgs = data.get("messages", [])
+                normalized_msgs = [self._normalize_gmail_message(m) for m in raw_msgs]
+                return {
+                    "status": "success",
+                    "thread_id": clean_thread_id,
+                    "messages": normalized_msgs,
+                    "trace_id": trace_id
+                }
+            else:
+                return self._map_gmail_error(res)
+        except Exception as exc:
+            return {
+                "status": "error",
+                "error_code": "GMAIL_PROVIDER_ERROR",
+                "error": f"Failed communicating with Gmail API: {str(exc)}",
+                "trace_id": trace_id
+            }
+
+    def download_gmail_attachment(
+        self,
+        user_id: str,
+        message_id: str,
+        attachment_id: str,
+        filename: Optional[str] = None,
+        trace_id: Optional[str] = None
+    ) -> Dict[str, Any]:
+        """
+        Downloads a specific attachment payload on demand.
+        Enforces path traversal protection, user scoping, and 25MB maximum size.
+        """
+        from app.services.connected_account_service import connected_account_service
+        from app.services.token_refresh_service import token_refresh_service
+
+        clean_user_id = str(user_id or "").strip()
+        if not clean_user_id or clean_user_id.lower() in ("user_default", "default", "none", "null", "anonymous"):
+            return {
+                "status": "error",
+                "error_code": "AUTH_REQUIRED",
+                "error": "Authentication required: attachment download requires valid user identity.",
+                "trace_id": trace_id
+            }
+
+        if not connected_account_service.has_gmail_read_access(clean_user_id):
+            return {
+                "status": "error",
+                "error_code": "GMAIL_REAUTH_REQUIRED",
+                "error": "Gmail read permission required. Please upgrade Gmail access in Settings.",
+                "trace_id": trace_id
+            }
+
+        clean_msg_id = str(message_id or "").strip()
+        clean_att_id = str(attachment_id or "").strip()
+        if not clean_msg_id or not clean_att_id:
+            return {
+                "status": "error",
+                "error_code": "GMAIL_INVALID_ATTACHMENT",
+                "error": "Both message_id and attachment_id are required.",
+                "trace_id": trace_id
+            }
+
+        # Safe filename extraction (no path traversal, no absolute paths)
+        raw_name = filename or "attachment.bin"
+        safe_filename = os.path.basename(raw_name).strip()
+        if not safe_filename or safe_filename in (".", "..") or "/" in safe_filename or "\\" in safe_filename:
+            return {
+                "status": "error",
+                "error_code": "GMAIL_INVALID_ATTACHMENT",
+                "error": f"Invalid or unsafe attachment filename: '{filename}'",
+                "trace_id": trace_id
+            }
+
+        access_token = token_refresh_service.get_valid_access_token(clean_user_id, "google")
+        if not access_token:
+            return {
+                "status": "error",
+                "error_code": "GMAIL_REAUTH_REQUIRED",
+                "error": "Failed to obtain valid Google access token. Please re-authenticate your Google account.",
+                "trace_id": trace_id
+            }
+
+        url = f"https://gmail.googleapis.com/gmail/v1/users/me/messages/{clean_msg_id}/attachments/{clean_att_id}"
+        headers = {"Authorization": f"Bearer {access_token}"}
+        try:
+            res = requests.get(url, headers=headers, timeout=15)
+            if res.status_code == 200:
+                att_json = res.json()
+                size = att_json.get("size", 0)
+                if size > 25 * 1024 * 1024:
+                    return {
+                        "status": "error",
+                        "error_code": "GMAIL_ATTACHMENT_TOO_LARGE",
+                        "error": f"Attachment size ({size} bytes) exceeds maximum allowable size of 25MB.",
+                        "trace_id": trace_id
+                    }
+                return {
+                    "status": "success",
+                    "attachment_id": clean_att_id,
+                    "message_id": clean_msg_id,
+                    "filename": safe_filename,
+                    "size": size,
+                    "data_base64": att_json.get("data"),
+                    "trace_id": trace_id
+                }
+            else:
+                return self._map_gmail_error(res)
+        except Exception as exc:
+            return {
+                "status": "error",
+                "error_code": "GMAIL_PROVIDER_ERROR",
+                "error": f"Failed communicating with Gmail API: {str(exc)}",
+                "trace_id": trace_id
+            }
 
     def send_email_outlook_api(self, access_token: str, to_email: str, subject: str, message: str, trace_id: str) -> Optional[Dict[str, Any]]:
         """Send email via official Microsoft Graph API."""

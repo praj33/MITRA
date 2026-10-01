@@ -80,6 +80,14 @@ CommunicationErrorCode = Literal[
     "INTEGRITY_CHECK_FAILED",
     "ACCOUNT_DISCONNECTED",
     "CONCURRENT_EXECUTION_BLOCKED",
+    "GMAIL_REAUTH_REQUIRED",
+    "GMAIL_PERMISSION_DENIED",
+    "GMAIL_NOT_FOUND",
+    "GMAIL_RATE_LIMITED",
+    "GMAIL_INVALID_QUERY",
+    "GMAIL_ATTACHMENT_TOO_LARGE",
+    "GMAIL_INVALID_ATTACHMENT",
+    "GMAIL_PROVIDER_ERROR",
 ]
 
 # Sensitive keys that must NEVER enter canonical contract or result
@@ -137,6 +145,10 @@ class CommunicationAction(BaseModel):
     content: Optional[str] = None
     confirmation_confirmed: bool = False
     idempotency_key: Optional[str] = None
+    query: Optional[str] = None
+    limit: Optional[int] = Field(default=20, le=100)
+    page_token: Optional[str] = None
+    thread_id: Optional[str] = None
     metadata: Optional[Dict[str, Any]] = Field(default_factory=dict)
 
     @validator("user_id")
@@ -191,6 +203,10 @@ class CommunicationAction(BaseModel):
             "content": self.content,
             "confirmation_confirmed": self.confirmation_confirmed,
             "idempotency_key": self.idempotency_key,
+            "query": self.query,
+            "limit": self.limit,
+            "page_token": self.page_token,
+            "thread_id": self.thread_id,
             "metadata": self.metadata or {},
         }
 
@@ -256,6 +272,10 @@ class CommunicationResult(BaseModel):
     idempotency_key: Optional[str] = None
     expires_at: Optional[str] = None
     trace_id: Optional[str] = None
+    messages: Optional[List[Dict[str, Any]]] = None
+    draft_id: Optional[str] = None
+    thread_id: Optional[str] = None
+    next_page_token: Optional[str] = None
     timestamp: str = Field(default_factory=lambda: datetime.utcnow().isoformat())
 
     def to_dict(self) -> Dict[str, Any]:
@@ -276,6 +296,10 @@ class CommunicationResult(BaseModel):
             "idempotency_key": self.idempotency_key,
             "expires_at": self.expires_at,
             "trace_id": self.trace_id,
+            "messages": self.messages,
+            "draft_id": self.draft_id,
+            "thread_id": self.thread_id,
+            "next_page_token": self.next_page_token,
             "timestamp": self.timestamp,
         }
 

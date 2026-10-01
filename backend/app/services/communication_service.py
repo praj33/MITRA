@@ -237,6 +237,141 @@ class CommunicationService:
             )
 
         # ── 4. Non-Send Intents (Draft, Read, Search) ──
+        if action.channel == CommunicationChannel.EMAIL:
+            google_conn = connected_account_service.get_user_connection(user_id=user_id, provider="google") or connected_account_service.get_user_connection(user_id=user_id, provider="gmail")
+            if google_conn:
+                if action.intent == CommunicationIntent.DRAFT_MESSAGE:
+                    extra_meta = action.metadata or {}
+                    draft_res = self.email_executor.create_draft_gmail(
+                        user_id=user_id,
+                        to_email=action.recipient or "",
+                        subject=action.subject or "",
+                        message=action.content or "",
+                        html_body=extra_meta.get("html_body"),
+                        cc=extra_meta.get("cc"),
+                        bcc=extra_meta.get("bcc"),
+                        attachments=extra_meta.get("attachments"),
+                        trace_id=trace_id
+                    )
+                    if isinstance(draft_res, dict) and draft_res.get("status") == "success":
+                        return CommunicationResult(
+                            status="accepted",
+                            delivery_state="pending",
+                            channel=action.channel,
+                            provider="gmail_oauth_api",
+                            sender_account=sender_account,
+                            recipient=action.recipient,
+                            draft_id=str(draft_res.get("draft_id")) if draft_res.get("draft_id") is not None else None,
+                            thread_id=str(draft_res.get("thread_id")) if draft_res.get("thread_id") is not None else None,
+                            message=str(draft_res.get("message") or f"Draft message created for {action.recipient}."),
+                            action=action.to_dict(),
+                            idempotency_key=action.idempotency_key,
+                            trace_id=trace_id,
+                            timestamp=now_iso,
+                        )
+                    else:
+                        err_code = draft_res.get("error_code") if isinstance(draft_res, dict) else "GMAIL_PROVIDER_ERROR"
+                        err_msg = draft_res.get("error") if isinstance(draft_res, dict) else "Failed creating draft in Gmail."
+                        return CommunicationResult(
+                            status="failed",
+                            delivery_state="failed",
+                            channel=action.channel,
+                            provider="gmail_oauth_api",
+                            sender_account=sender_account,
+                            recipient=action.recipient,
+                            error_code=str(err_code) if err_code else "GMAIL_PROVIDER_ERROR",
+                            error=str(err_msg) if err_msg else "Failed creating draft in Gmail.",
+                            message=str(err_msg) if err_msg else "Failed creating draft.",
+                            action=action.to_dict(),
+                            trace_id=trace_id,
+                            timestamp=now_iso,
+                        )
+
+                elif action.intent == CommunicationIntent.READ_MESSAGES:
+                    read_res = self.email_executor.read_inbox_gmail(
+                        user_id=user_id,
+                        limit=action.limit or 20,
+                        page_token=action.page_token,
+                        trace_id=trace_id
+                    )
+                    if isinstance(read_res, dict) and read_res.get("status") == "success":
+                        msg_list = read_res.get("messages", [])
+                        return CommunicationResult(
+                            status="accepted",
+                            delivery_state="unknown",
+                            channel=action.channel,
+                            provider="gmail_oauth_api",
+                            sender_account=sender_account,
+                            recipient=action.recipient,
+                            messages=msg_list if isinstance(msg_list, list) else [],
+                            next_page_token=str(read_res.get("next_page_token")) if read_res.get("next_page_token") is not None else None,
+                            message=f"Retrieved {len(msg_list)} messages from inbox.",
+                            action=action.to_dict(),
+                            trace_id=trace_id,
+                            timestamp=now_iso,
+                        )
+                    else:
+                        err_code = read_res.get("error_code") if isinstance(read_res, dict) else "GMAIL_PROVIDER_ERROR"
+                        err_msg = read_res.get("error") if isinstance(read_res, dict) else "Failed reading Gmail inbox."
+                        return CommunicationResult(
+                            status="failed",
+                            delivery_state="failed",
+                            channel=action.channel,
+                            provider="gmail_oauth_api",
+                            sender_account=sender_account,
+                            recipient=action.recipient,
+                            error_code=str(err_code) if err_code else "GMAIL_PROVIDER_ERROR",
+                            error=str(err_msg) if err_msg else "Failed reading Gmail inbox.",
+                            message=str(err_msg) if err_msg else "Failed reading inbox.",
+                            action=action.to_dict(),
+                            trace_id=trace_id,
+                            timestamp=now_iso,
+                        )
+
+                elif action.intent == CommunicationIntent.SEARCH_MESSAGES:
+                    query = action.query or ""
+                    search_res = self.email_executor.search_messages_gmail(
+                        user_id=user_id,
+                        query=query,
+                        limit=action.limit or 20,
+                        page_token=action.page_token,
+                        trace_id=trace_id
+                    )
+                    if isinstance(search_res, dict) and search_res.get("status") == "success":
+                        msg_list = search_res.get("messages", [])
+                        return CommunicationResult(
+                            status="accepted",
+                            delivery_state="unknown",
+                            channel=action.channel,
+                            provider="gmail_oauth_api",
+                            sender_account=sender_account,
+                            recipient=action.recipient,
+                            messages=msg_list if isinstance(msg_list, list) else [],
+                            next_page_token=str(search_res.get("next_page_token")) if search_res.get("next_page_token") is not None else None,
+                            message=f"Found {len(msg_list)} messages matching query '{query}'.",
+                            action=action.to_dict(),
+                            trace_id=trace_id,
+                            timestamp=now_iso,
+                        )
+                    else:
+                        err_code = search_res.get("error_code") if isinstance(search_res, dict) else "GMAIL_PROVIDER_ERROR"
+                        err_msg = search_res.get("error") if isinstance(search_res, dict) else "Failed searching Gmail."
+                        return CommunicationResult(
+                            status="failed",
+                            delivery_state="failed",
+                            channel=action.channel,
+                            provider="gmail_oauth_api",
+                            sender_account=sender_account,
+                            recipient=action.recipient,
+                            error_code=str(err_code) if err_code else "GMAIL_PROVIDER_ERROR",
+                            error=str(err_msg) if err_msg else "Failed searching Gmail.",
+                            message=str(err_msg) if err_msg else "Failed searching Gmail.",
+                            action=action.to_dict(),
+                            trace_id=trace_id,
+                            timestamp=now_iso,
+                        )
+
+        # Non-email channels or fallback
         if action.intent == CommunicationIntent.DRAFT_MESSAGE:
             return CommunicationResult(
                 status="accepted",
@@ -298,7 +433,7 @@ class CommunicationService:
                     provider=exec_res.get("provider") or exec_res.get("method") or "email",
                     sender_account=exec_res.get("from") or sender_account,
                     recipient=action.recipient,
-                    provider_message_id=exec_res.get("message_id") or exec_res.get("id"),
+                    provider_message_id=exec_res.get("provider_message_id") or exec_res.get("message_id") or exec_res.get("id"),
                     message=f"Email successfully sent to {action.recipient}.",
                     action=action.to_dict(),
                     idempotency_key=action.idempotency_key,
