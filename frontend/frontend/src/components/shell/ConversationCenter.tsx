@@ -436,7 +436,7 @@ interface ConversationCenterProps {
 }
 
 const ConversationCenter: React.FC<ConversationCenterProps> = ({ onNewChat }) => {
-  const { messages, status, clearMessages } = useCompanionStore();
+  const { messages, status, clearMessages, setDraftEditState } = useCompanionStore();
   const bottomRef = useRef<HTMLDivElement>(null);
   const isThinking = status === 'thinking';
 
@@ -536,26 +536,57 @@ const ConversationCenter: React.FC<ConversationCenterProps> = ({ onNewChat }) =>
       actionLower.includes('edit before sending') ||
       actionLower.includes('edit draft')
     ) {
+      let draftId = '';
+      if (action.includes(':')) {
+        draftId = action.split(':', 2)[1].trim();
+      }
       const targetMsg = messages.find(m => m.id === _messageId);
       const data = targetMsg?.capabilityResult?.data || {};
+      if (!draftId && data.draft_id) {
+        draftId = String(data.draft_id);
+      }
       const recipient = data.recipient || data.to || '';
       const subject = data.subject || '';
       const content = data.content || data.body || '';
+      const accountId = data.account_id || '';
 
-      let editPrompt = '';
-      if (recipient && subject && content) {
-        editPrompt = `Send an email to ${recipient} with subject "${subject}" and message "${content}"`;
-      } else if (content) {
-        editPrompt = content;
-      }
+      // Set structured draft edit mode — ZERO synthetic prompt, ZERO send() / LLM calls
+      setDraftEditState({
+        mode: 'email_draft_edit',
+        draftId: draftId || '',
+        to: recipient,
+        subject: subject,
+        body: content,
+        accountId: accountId,
+      });
 
-      if (editPrompt && (window as any).__MITRA_SET_INPUT__) {
-        (window as any).__MITRA_SET_INPUT__(editPrompt);
+      // If draftId is available, refresh canonical draft server-side to guarantee freshest state
+      if (draftId) {
+        fetch(`${getApiBase()}/api/communication/drafts/${encodeURIComponent(draftId)}`, {
+          headers: {
+            'Content-Type': 'application/json',
+            ...getAuthHeaders(),
+          },
+        })
+          .then(res => res.ok ? res.json() : null)
+          .then(serverData => {
+            if (serverData && serverData.draft) {
+              setDraftEditState({
+                mode: 'email_draft_edit',
+                draftId: draftId,
+                to: serverData.draft.recipient || recipient,
+                subject: serverData.draft.subject || subject,
+                body: serverData.draft.content || content,
+                accountId: serverData.draft.account_id || accountId,
+              });
+            }
+          })
+          .catch(() => {});
       }
     } else if (send) {
       send(action);
     }
-  }, [messages]);
+  }, [messages, setDraftEditState]);
 
   return (
     <main className="flex flex-col flex-1 min-w-0 overflow-hidden bg-surface-base w-full h-full">
@@ -651,15 +682,19 @@ const ConversationCenter: React.FC<ConversationCenterProps> = ({ onNewChat }) =>
                   const recipient = viewingDraft.recipient || viewingDraft.to || '';
                   const subject = viewingDraft.subject || '';
                   const content = viewingDraft.content || viewingDraft.snippet || '';
-                  const prompt = `Send an email to ${recipient} with subject "${subject}" and message "${content}"`;
-                  if ((window as any).__MITRA_SET_INPUT__) {
-                    (window as any).__MITRA_SET_INPUT__(prompt);
-                  }
+                  setDraftEditState({
+                    mode: 'email_draft_edit',
+                    draftId: viewingDraft.id || viewingDraft.draft_id || '',
+                    to: recipient,
+                    subject: subject,
+                    body: content,
+                    accountId: viewingDraft.account_id || '',
+                  });
                   setViewingDraft(null);
                 }}
                 className="px-3 py-1.5 rounded-lg text-xs font-medium bg-brand text-white hover:bg-brand-light transition-all"
               >
-                Edit in Chat
+                Edit Draft
               </button>
               <button
                 onClick={() => setViewingDraft(null)}

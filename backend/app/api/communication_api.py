@@ -175,3 +175,59 @@ async def get_draft_endpoint(
     err_code = res.get("error_code", "DRAFT_FETCH_FAILED")
     status_code = 404 if err_code == "GMAIL_NOT_FOUND" else (401 if err_code == "AUTH_REQUIRED" else 400)
     return JSONResponse(status_code=status_code, content=res)
+
+
+class PrepareSendDraftRequest(BaseModel):
+    """
+    Structured payload for preparing to send an edited email draft.
+    Does NOT use natural-language commands.
+    """
+    recipient: Optional[str] = None
+    subject: Optional[str] = None
+    body: Optional[str] = None
+    client_timestamp: Optional[str] = None
+
+
+@router.post("/api/communication/drafts/{draft_id}/prepare-send")
+async def prepare_send_draft_endpoint(
+    draft_id: str,
+    request_body: Optional[PrepareSendDraftRequest] = None,
+    current_user: Dict[str, Any] = Depends(get_current_user),
+    x_trace_id: Optional[str] = Header(None, alias="X-Trace-Id"),
+):
+    """
+    POST /api/communication/drafts/{draft_id}/prepare-send
+    Stages an edited draft as an authenticated pending communication action.
+    - Identity derived strictly from verified JWT
+    - Canonical draft retrieved and validated server-side
+    - Recipient remains bound to canonical draft (or server-validated recipient)
+    - Enforces B.COMM-3 approval policy: requires explicit user confirmation
+    - Zero LLM reinterpretation: directly stages structured CommunicationAction
+    """
+    auth_user_id = current_user.get("user_id")
+    if not auth_user_id or not str(auth_user_id).strip() or str(auth_user_id).strip().lower() in ("user_default", "default", "none", "null", "anonymous"):
+        raise HTTPException(
+            status_code=401,
+            detail={"error": "Authenticated user_id required to prepare draft send.", "error_code": "AUTH_REQUIRED"}
+        )
+
+    clean_uid = str(auth_user_id).strip()
+    res = communication_service.prepare_send_draft(
+        draft_id=draft_id,
+        user_id=clean_uid,
+        subject=request_body.subject if request_body else None,
+        body=request_body.body if request_body else None,
+        recipient=request_body.recipient if request_body else None,
+        trace_id=x_trace_id,
+    )
+
+    if res.get("status") in ("confirmation_required", "success", "accepted", "pending"):
+        return JSONResponse(status_code=200, content=res)
+
+    err_code = res.get("error_code", "PREPARE_SEND_FAILED")
+    status_code = 404 if err_code in ("GMAIL_NOT_FOUND", "DRAFT_NOT_FOUND") else (
+        401 if err_code == "AUTH_REQUIRED" else (
+            403 if err_code in ("ACCOUNT_NOT_AUTHORIZED", "ACCOUNT_NOT_CONNECTED") else 400
+        )
+    )
+    return JSONResponse(status_code=status_code, content=res)

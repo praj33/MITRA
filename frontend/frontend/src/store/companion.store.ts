@@ -61,6 +61,15 @@ export interface UserMemory {
 
 export type AuthStateStatus = 'LOADING' | 'GUEST' | 'AUTHENTICATED' | 'AUTH_ERROR';
 
+export interface DraftEditState {
+  mode?: 'email_draft_edit';
+  draftId: string;
+  to: string;
+  subject: string;
+  body: string;
+  accountId?: string;
+}
+
 // ── Store Interface ─────────────────────────────────────
 interface CompanionStore {
   // Identity
@@ -82,6 +91,9 @@ interface CompanionStore {
   // Conversation
   messages:  Message[];
   isLoading: boolean;
+
+  // Structured Draft Editing
+  draftEditState: DraftEditState | null;
 
   // Layout state
   sidebar:      SidebarState;
@@ -108,6 +120,9 @@ interface CompanionStore {
   setContextPanel: (s: PanelState) => void;
   toggleSidebar: () => void;
   toggleContextPanel: () => void;
+
+  // Draft Edit action
+  setDraftEditState: (draft: DraftEditState | null) => void;
 
   // Mobile actions
   setIsMobile:          (v: boolean) => void;
@@ -182,6 +197,8 @@ export const useCompanionStore = create<CompanionStore>()(
         messages:  [],
         isLoading: false,
 
+        draftEditState: null,
+
         sidebar:      'expanded',
         contextPanel: 'closed',
 
@@ -197,6 +214,9 @@ export const useCompanionStore = create<CompanionStore>()(
         // ── Status ─────────────────────────────────────
         setStatus:    (status)    => set({ status }),
         setSessionId: (sessionId) => set({ sessionId }),
+
+        // ── Draft Edit ─────────────────────────────────
+        setDraftEditState: (draftEditState) => set({ draftEditState }),
 
         // ── Layout ─────────────────────────────────────
         setSidebar:      (sidebar)      => set({ sidebar }),

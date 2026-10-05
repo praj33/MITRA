@@ -852,6 +852,90 @@ class CommunicationService:
             }
         return self.email_executor.get_draft_gmail(user_id=clean_uid, draft_id=draft_id, trace_id=trace_id)
 
+    def prepare_send_draft(
+        self,
+        draft_id: str,
+        user_id: str,
+        subject: Optional[str] = None,
+        body: Optional[str] = None,
+        recipient: Optional[str] = None,
+        trace_id: Optional[str] = None,
+    ) -> Dict[str, Any]:
+        """
+        Stage an edited draft for explicit user confirmation before sending.
+        - Validates user identity and server-side draft ownership
+        - Enforces draft recipient binding
+        - Sets action.content strictly to the edited body (no LLM, no natural-language commands)
+        - Enforces B.COMM-3 approval policy: creates a PendingAction requiring explicit confirmation
+        """
+        now_iso = datetime.utcnow().isoformat()
+        trace_id = trace_id or f"prep_send_{uuid.uuid4().hex[:12]}"
+        clean_uid = str(user_id or "").strip()
+
+        if not clean_uid or clean_uid.lower() in ("user_default", "default", "none", "null", "anonymous"):
+            return {
+                "status": "error",
+                "error_code": "AUTH_REQUIRED",
+                "error": "Authentication required: preparing draft send requires an authenticated user.",
+                "trace_id": trace_id,
+                "timestamp": now_iso,
+            }
+
+        clean_draft_id = str(draft_id or "").strip()
+        if not clean_draft_id:
+            return {
+                "status": "error",
+                "error_code": "DRAFT_NOT_FOUND",
+                "error": "Draft ID is required.",
+                "trace_id": trace_id,
+                "timestamp": now_iso,
+            }
+
+        # 1. Retrieve canonical draft from server to validate ownership and bound fields
+        draft_res = self.get_draft(draft_id=clean_draft_id, user_id=clean_uid, trace_id=trace_id)
+        if draft_res.get("status") != "success":
+            return draft_res
+
+        canonical_draft = draft_res.get("draft") or {}
+
+        # 2. Bind recipient — must come from canonical draft or validated recipient
+        canonical_recipient = canonical_draft.get("recipient")
+        final_recipient = canonical_recipient or recipient
+        if not final_recipient:
+            return {
+                "status": "error",
+                "error_code": "MISSING_RECIPIENT",
+                "error": "Draft recipient is missing.",
+                "trace_id": trace_id,
+                "timestamp": now_iso,
+            }
+
+        # 3. Subject and Body
+        final_subject = subject if subject is not None else (canonical_draft.get("subject") or "")
+        final_body = body if body is not None else (canonical_draft.get("content") or "")
+
+        # 4. Account binding
+        from app.services.connected_account_service import connected_account_service
+        google_conn = connected_account_service.get_user_connection(user_id=clean_uid, provider="google") or connected_account_service.get_user_connection(user_id=clean_uid, provider="gmail")
+        sender_account = (google_conn.get("email") or google_conn.get("account_id")) if google_conn else None
+
+        # 5. Build CommunicationAction with intent SEND_MESSAGE and confirmation_confirmed=False
+        action = CommunicationAction(
+            channel=CommunicationChannel.EMAIL,
+            intent=CommunicationIntent.SEND_MESSAGE,
+            user_id=clean_uid,
+            account_id=sender_account,
+            recipient=final_recipient,
+            subject=final_subject,
+            content=final_body,
+            metadata={"draft_id": clean_draft_id},
+            confirmation_confirmed=False,
+        )
+
+        # 6. Execute action (triggers approval policy & persists pending action)
+        res = self.execute_action(action, trace_id=trace_id)
+        return res.to_dict()
+
 
 # Global singleton instance
 communication_service = CommunicationService()
