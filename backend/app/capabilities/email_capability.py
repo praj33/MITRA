@@ -74,37 +74,13 @@ class EmailCapability(BaseCapability):
                 else:
                     comm_intent = "SEND_MESSAGE"
 
-            # 2. Extract recipient (for DRAFT and SEND)
-            to_addr = ""
-            if isinstance(entities.get("email"), list) and entities["email"]:
-                to_addr = entities["email"][0]
-            if not to_addr and message:
-                match = re.search(r'[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}', message)
-                if match:
-                    to_addr = match.group(0)
-            if not to_addr and params.get("recipient"):
-                to_addr = params.get("recipient")
-            elif not to_addr and params.get("to"):
-                to_addr = params.get("to")
+            # 2. Extract recipient, subject, and content deterministically
+            from app.capabilities.email_entity_extractor import extract_email_entities
 
-            # 3. Extract Subject & Body / Content
-            subject = params.get("subject")
-            body = params.get("body") or params.get("content")
-
-            # Extract saying / body from message if not provided
-            if not body and message:
-                saying_match = re.search(r'\b(?:saying|with\s+(?:the\s+)?(?:message|body|text)|body:?|message:?)\s+["\']?([^"\']+)["\']?$', message, re.IGNORECASE)
-                if saying_match:
-                    body = saying_match.group(1).strip()
-                else:
-                    body = message
-
-            if not subject:
-                subj_match = re.search(r'\b(?:subject:?|about|titled)\s+["\']?([^"\',]+)["\']?', message, re.IGNORECASE)
-                if subj_match:
-                    subject = subj_match.group(1).strip()
-                else:
-                    subject = "Message from Mitra AI"
+            extracted = extract_email_entities(message, params=params)
+            to_addr = extracted["recipient"]
+            subject = extracted["subject"]
+            body = extracted["content"]
 
             # 4. Extract query and limit for READ / SEARCH
             limit = params.get("limit") or 20
@@ -132,7 +108,7 @@ class EmailCapability(BaseCapability):
                 "subject": subject,
                 "body": body,
                 "content": body,
-                "message": message,
+                "message": body,
                 "intent": comm_intent,
                 "query": query,
                 "limit": limit,
@@ -195,6 +171,15 @@ class EmailCapability(BaseCapability):
                 else:
                     summary_text = result.get("message") or f"Email sent to {to_addr}."
 
+                draft_id = result.get("draft_id")
+                if comm_intent == "DRAFT_MESSAGE":
+                    actions = [
+                        {"label": "View full draft", "action": f"view_draft:{draft_id}" if draft_id else "view_draft"},
+                        {"label": "Edit before sending", "action": f"edit_draft:{draft_id}" if draft_id else "edit_draft"},
+                    ]
+                else:
+                    actions = [{"label": "View Details", "action": "view_email"}]
+
                 return CapabilityResult(
                     capability=self.name,
                     intent=comm_intent,
@@ -202,7 +187,7 @@ class EmailCapability(BaseCapability):
                     summary=summary_text,
                     data=result,
                     trace_id=trace_id,
-                    actions=[{"label": "View Details", "action": "view_email"}],
+                    actions=actions,
                 )
             else:
                 err_msg = result.get("error") or result.get("message") or "Email execution failed"

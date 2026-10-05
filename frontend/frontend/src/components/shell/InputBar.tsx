@@ -1,5 +1,5 @@
 // components/shell/InputBar.tsx — Message input with send + voice + attach (responsive)
-import React, { useState, useRef, KeyboardEvent } from 'react';
+import React, { useState, useRef, useEffect, KeyboardEvent } from 'react';
 import { motion } from 'framer-motion';
 import { Send, Mic, Paperclip, Zap, X, Check, Square } from 'lucide-react';
 import { cn } from '../../lib/utils';
@@ -68,6 +68,18 @@ const InputBar: React.FC<Props> = ({ onSend, onStop, disabled }) => {
   const autoSendTimerRef = useRef<NodeJS.Timeout | null>(null);
 
   const isThinking = status === 'thinking';
+
+  useEffect(() => {
+    (window as any).__MITRA_SET_INPUT__ = (newVal: string) => {
+      setValue(newVal);
+      if (textareaRef.current) {
+        textareaRef.current.focus();
+      }
+    };
+    return () => {
+      delete (window as any).__MITRA_SET_INPUT__;
+    };
+  }, []);
 
   const clearAutoSendTimer = () => {
     if (autoSendTimerRef.current) {

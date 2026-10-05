@@ -511,6 +511,91 @@ class EmailExecutor:
                 "trace_id": trace_id
             }
 
+    def get_draft_gmail(
+        self,
+        user_id: str,
+        draft_id: str,
+        trace_id: Optional[str] = None
+    ) -> Dict[str, Any]:
+        """
+        Retrieves a single Gmail draft by ID via users/me/drafts/{id}?format=full.
+        Requires gmail.compose or gmail.readonly scope.
+        Validates user identity and enforces user-bound Gmail connection isolation.
+        """
+        from app.services.connected_account_service import connected_account_service
+        from app.services.token_refresh_service import token_refresh_service
+
+        clean_user_id = str(user_id or "").strip()
+        if not clean_user_id or clean_user_id.lower() in ("user_default", "default", "none", "null", "anonymous"):
+            return {
+                "status": "error",
+                "error_code": "AUTH_REQUIRED",
+                "error": "Authentication required: draft retrieval requires valid user identity.",
+                "trace_id": trace_id
+            }
+
+        # Verify Gmail compose or read access
+        if not (connected_account_service.has_gmail_compose_access(clean_user_id) or connected_account_service.has_gmail_read_access(clean_user_id)):
+            return {
+                "status": "error",
+                "error_code": "GMAIL_REAUTH_REQUIRED",
+                "error": "Gmail draft permission required. Please upgrade Gmail access in Settings.",
+                "trace_id": trace_id
+            }
+
+        clean_draft_id = str(draft_id or "").strip()
+        if not clean_draft_id:
+            return {
+                "status": "error",
+                "error_code": "GMAIL_NOT_FOUND",
+                "error": "Draft ID is required.",
+                "trace_id": trace_id
+            }
+
+        access_token = token_refresh_service.get_valid_access_token(clean_user_id, "google")
+        if not access_token:
+            return {
+                "status": "error",
+                "error_code": "GMAIL_REAUTH_REQUIRED",
+                "error": "Failed to obtain valid Google access token. Please re-authenticate your Google account.",
+                "trace_id": trace_id
+            }
+
+        url = f"https://gmail.googleapis.com/gmail/v1/users/me/drafts/{clean_draft_id}?format=full"
+        headers = {"Authorization": f"Bearer {access_token}"}
+        try:
+            res = requests.get(url, headers=headers, timeout=10)
+            if res.status_code == 200:
+                data = res.json()
+                msg_payload = data.get("message", {})
+                normalized = self._normalize_gmail_message(msg_payload)
+                return {
+                    "status": "success",
+                    "draft_id": clean_draft_id,
+                    "draft": {
+                        "id": clean_draft_id,
+                        "message_id": normalized.get("id"),
+                        "thread_id": normalized.get("thread_id"),
+                        "recipient": normalized.get("recipient"),
+                        "subject": normalized.get("subject"),
+                        "content": normalized.get("content") or normalized.get("snippet", ""),
+                        "snippet": normalized.get("snippet"),
+                        "timestamp": normalized.get("timestamp"),
+                        "has_attachments": normalized.get("has_attachments", False),
+                    },
+                    "trace_id": trace_id
+                }
+            else:
+                return self._map_gmail_error(res)
+        except Exception as exc:
+            logger.error(f"Gmail get_draft exception: {exc}")
+            return {
+                "status": "error",
+                "error_code": "GMAIL_PROVIDER_ERROR",
+                "error": f"Failed communicating with Gmail API: {str(exc)}",
+                "trace_id": trace_id
+            }
+
     def read_inbox_gmail(
         self,
         user_id: str,

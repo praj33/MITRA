@@ -135,6 +135,22 @@ class ExecutionService:
                     # User-owned Email -> route through unified CommunicationService
                     from app.models.communication import CommunicationAction, CommunicationChannel, CommunicationIntent
                     from app.services.communication_service import communication_service
+                    from app.capabilities.email_entity_extractor import extract_email_entities, is_raw_command_text
+
+                    raw_msg = action_data.get("raw_message") or action_data.get("message")
+                    extracted_body = action_data.get("body") or action_data.get("content")
+                    extracted_subject = action_data.get("subject")
+
+                    if not extracted_body or is_raw_command_text(str(extracted_body), raw_msg):
+                        ext = extract_email_entities(raw_msg or "", params=action_data)
+                        if ext.get("content"):
+                            extracted_body = ext["content"]
+                        if not extracted_subject or extracted_subject == "Message from AI Assistant":
+                            extracted_subject = ext.get("subject") or extracted_subject
+
+                    meta = dict(action_data.get("metadata") or {})
+                    if raw_msg and "raw_message" not in meta:
+                        meta["raw_message"] = raw_msg
 
                     comm_action = CommunicationAction(
                         intent=action_data.get("intent", "SEND_MESSAGE"),
@@ -142,15 +158,15 @@ class ExecutionService:
                         user_id=user_id,
                         account_id=action_data.get("account_id"),
                         recipient=action_data.get("recipient", action_data.get("to", "")),
-                        subject=action_data.get("subject", "Message from AI Assistant"),
-                        content=action_data.get("body", action_data.get("message", "")),
+                        subject=extracted_subject or "Message from AI Assistant",
+                        content=extracted_body or "",
                         confirmation_confirmed=bool(action_data.get("confirmation_confirmed", False)),
                         idempotency_key=action_data.get("idempotency_key"),
                         query=action_data.get("query"),
                         limit=action_data.get("limit") or 20,
                         page_token=action_data.get("page_token"),
                         thread_id=action_data.get("thread_id"),
-                        metadata=action_data.get("metadata") or {}
+                        metadata=meta
                     )
                     res = communication_service.execute_action(comm_action, trace_id=trace_id)
                     return res.to_dict()

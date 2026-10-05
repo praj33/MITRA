@@ -149,3 +149,29 @@ async def get_communication_action(
         )
 
     return JSONResponse(status_code=200, content=action.to_dict())
+
+
+@router.get("/api/communication/drafts/{draft_id}")
+async def get_draft_endpoint(
+    draft_id: str,
+    current_user: Dict[str, Any] = Depends(get_current_user),
+    x_trace_id: Optional[str] = Header(None, alias="X-Trace-Id"),
+):
+    """
+    GET /api/communication/drafts/{draft_id}
+    Retrieves draft details for the authenticated user and their bound Gmail account.
+    Enforces user authentication, account ownership, and cross-user isolation.
+    """
+    auth_user_id = current_user.get("user_id")
+    if not auth_user_id or not str(auth_user_id).strip() or str(auth_user_id).strip().lower() in ("user_default", "default", "none", "null", "anonymous"):
+        raise HTTPException(status_code=401, detail="Authentication required.")
+
+    clean_uid = str(auth_user_id).strip()
+    res = communication_service.get_draft(draft_id=draft_id, user_id=clean_uid, trace_id=x_trace_id)
+
+    if res.get("status") == "success":
+        return JSONResponse(status_code=200, content=res)
+
+    err_code = res.get("error_code", "DRAFT_FETCH_FAILED")
+    status_code = 404 if err_code == "GMAIL_NOT_FOUND" else (401 if err_code == "AUTH_REQUIRED" else 400)
+    return JSONResponse(status_code=status_code, content=res)

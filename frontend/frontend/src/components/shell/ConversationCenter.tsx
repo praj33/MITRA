@@ -3,12 +3,14 @@ import { motion, AnimatePresence } from 'framer-motion';
 import {
   Zap, Calendar, ArrowRight, UserPlus,
   ChevronRight, Compass, CheckSquare, Bell,
-  CheckCircle2, AlertTriangle, Circle, Ban, RotateCcw
+  CheckCircle2, AlertTriangle, Circle, Ban, RotateCcw,
+  X, Loader2
 } from 'lucide-react';
 import { cn } from '../../lib/utils';
 import { useCompanionStore } from '../../store/companion.store';
 import { CompanionService } from '../../services/companion.service';
 import { authApi } from '../../services/authApi';
+import { getApiBase, getAuthHeaders } from '../../services/apiConfig';
 import ConversationCard from '../cards/ConversationCard';
 
 const ThinkingIndicator = () => (
@@ -461,6 +463,10 @@ const ConversationCenter: React.FC<ConversationCenterProps> = ({ onNewChat }) =>
     if (nav) nav(section);
   }, []);
 
+  const [viewingDraft, setViewingDraft] = useState<any | null>(null);
+  const [isFetchingDraft, setIsFetchingDraft] = useState(false);
+  const [draftError, setDraftError] = useState<string | null>(null);
+
   const handleActionConfirm = useCallback((action: string, _messageId: string) => {
     const nav = (window as any).__MITRA_NAV__;
     const send = (window as any).__MITRA_SEND__;
@@ -474,10 +480,82 @@ const ConversationCenter: React.FC<ConversationCenterProps> = ({ onNewChat }) =>
       if (nav) nav('reminders');
     } else if (actionLower.includes('workflow')) {
       if (nav) nav('workflows');
+    } else if (
+      actionLower.startsWith('view_draft') ||
+      actionLower.includes('view full draft') ||
+      actionLower.includes('view draft')
+    ) {
+      const targetMsg = messages.find(m => m.id === _messageId);
+      let draftId = '';
+      if (action.includes(':')) {
+        draftId = action.split(':', 2)[1].trim();
+      }
+      if (!draftId && targetMsg?.capabilityResult?.data?.draft_id) {
+        draftId = String(targetMsg.capabilityResult.data.draft_id);
+      }
+
+      if (draftId) {
+        setIsFetchingDraft(true);
+        setDraftError(null);
+        setViewingDraft({ id: draftId, loading: true });
+        fetch(`${getApiBase()}/api/communication/drafts/${encodeURIComponent(draftId)}`, {
+          headers: {
+            'Content-Type': 'application/json',
+            ...getAuthHeaders(),
+          },
+        })
+          .then(async (res) => {
+            if (!res.ok) {
+              const errJson = await res.json().catch(() => ({}));
+              throw new Error(errJson.error || errJson.detail?.error || 'Failed to load draft');
+            }
+            return res.json();
+          })
+          .then((data) => {
+            setViewingDraft(data.draft || data);
+          })
+          .catch((err) => {
+            setDraftError(err.message || 'Failed to load draft details.');
+            if (targetMsg?.capabilityResult?.data) {
+              setViewingDraft({
+                id: draftId,
+                recipient: targetMsg.capabilityResult.data.recipient || targetMsg.capabilityResult.data.to,
+                subject: targetMsg.capabilityResult.data.subject,
+                content: targetMsg.capabilityResult.data.content || targetMsg.capabilityResult.data.body,
+              });
+            }
+          })
+          .finally(() => {
+            setIsFetchingDraft(false);
+          });
+      } else if (targetMsg?.capabilityResult?.data) {
+        setViewingDraft(targetMsg.capabilityResult.data);
+      }
+    } else if (
+      actionLower.startsWith('edit_draft') ||
+      actionLower.includes('edit before sending') ||
+      actionLower.includes('edit draft')
+    ) {
+      const targetMsg = messages.find(m => m.id === _messageId);
+      const data = targetMsg?.capabilityResult?.data || {};
+      const recipient = data.recipient || data.to || '';
+      const subject = data.subject || '';
+      const content = data.content || data.body || '';
+
+      let editPrompt = '';
+      if (recipient && subject && content) {
+        editPrompt = `Send an email to ${recipient} with subject "${subject}" and message "${content}"`;
+      } else if (content) {
+        editPrompt = content;
+      }
+
+      if (editPrompt && (window as any).__MITRA_SET_INPUT__) {
+        (window as any).__MITRA_SET_INPUT__(editPrompt);
+      }
     } else if (send) {
       send(action);
     }
-  }, []);
+  }, [messages]);
 
   return (
     <main className="flex flex-col flex-1 min-w-0 overflow-hidden bg-surface-base w-full h-full">
@@ -511,6 +589,88 @@ const ConversationCenter: React.FC<ConversationCenterProps> = ({ onNewChat }) =>
           <div ref={bottomRef} />
         </div>
       </div>
+
+      {/* Structured Draft Viewer Modal */}
+      {viewingDraft && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-xs">
+          <motion.div
+            initial={{ opacity: 0, scale: 0.95 }}
+            animate={{ opacity: 1, scale: 1 }}
+            exit={{ opacity: 0, scale: 0.95 }}
+            className="w-full max-w-lg p-5 rounded-2xl bg-surface-elevated border border-border-subtle shadow-xl space-y-4"
+          >
+            <div className="flex items-center justify-between pb-3 border-b border-border-subtle">
+              <div className="flex items-center gap-2">
+                <span className="text-lg">📧</span>
+                <h3 className="text-sm font-semibold text-text-primary">Gmail Draft Preview</h3>
+                {viewingDraft.id && (
+                  <span className="text-3xs font-mono text-text-muted bg-surface-overlay px-1.5 py-0.5 rounded">
+                    {String(viewingDraft.id).slice(0, 10)}...
+                  </span>
+                )}
+              </div>
+              <button
+                onClick={() => setViewingDraft(null)}
+                className="text-text-muted hover:text-text-primary p-1 rounded-md"
+              >
+                <X size={16} />
+              </button>
+            </div>
+
+            {isFetchingDraft ? (
+              <div className="flex items-center justify-center py-8 text-xs text-text-muted gap-2">
+                <Loader2 size={16} className="animate-spin text-brand" />
+                <span>Fetching draft details from Gmail...</span>
+              </div>
+            ) : draftError ? (
+              <div className="p-3 rounded-lg bg-state-error/10 border border-state-error/20 text-xs text-state-error">
+                {draftError}
+              </div>
+            ) : (
+              <div className="space-y-2.5 text-xs">
+                <div>
+                  <span className="text-text-muted font-medium">To: </span>
+                  <span className="text-text-primary font-medium">{viewingDraft.recipient || viewingDraft.to || '(No recipient)'}</span>
+                </div>
+                <div>
+                  <span className="text-text-muted font-medium">Subject: </span>
+                  <span className="text-text-primary font-medium">{viewingDraft.subject || '(No subject)'}</span>
+                </div>
+                <div className="pt-1">
+                  <span className="text-text-muted font-medium block mb-1">Body:</span>
+                  <div className="p-3 rounded-lg bg-surface-base border border-border-subtle text-text-primary whitespace-pre-wrap max-h-48 overflow-y-auto leading-relaxed">
+                    {viewingDraft.content || viewingDraft.snippet || '(Empty draft body)'}
+                  </div>
+                </div>
+              </div>
+            )}
+
+            <div className="flex justify-end gap-2 pt-2 border-t border-border-subtle">
+              <button
+                onClick={() => {
+                  const recipient = viewingDraft.recipient || viewingDraft.to || '';
+                  const subject = viewingDraft.subject || '';
+                  const content = viewingDraft.content || viewingDraft.snippet || '';
+                  const prompt = `Send an email to ${recipient} with subject "${subject}" and message "${content}"`;
+                  if ((window as any).__MITRA_SET_INPUT__) {
+                    (window as any).__MITRA_SET_INPUT__(prompt);
+                  }
+                  setViewingDraft(null);
+                }}
+                className="px-3 py-1.5 rounded-lg text-xs font-medium bg-brand text-white hover:bg-brand-light transition-all"
+              >
+                Edit in Chat
+              </button>
+              <button
+                onClick={() => setViewingDraft(null)}
+                className="px-3 py-1.5 rounded-lg text-xs font-medium bg-surface-overlay text-text-muted hover:text-text-primary border border-border-subtle"
+              >
+                Close
+              </button>
+            </div>
+          </motion.div>
+        </div>
+      )}
     </main>
   );
 };

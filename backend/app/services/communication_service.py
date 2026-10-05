@@ -186,6 +186,21 @@ class CommunicationService:
                 timestamp=now_iso,
             )
 
+        # ── 2.5. Defensive Content Validation Layer ──
+        # Invariant: action.content must NEVER be equal to a raw user command utterance
+        # when a structured body/message/saying is present or can be extracted.
+        if action.channel == CommunicationChannel.EMAIL:
+            from app.capabilities.email_entity_extractor import extract_email_entities, is_raw_command_text
+            raw_msg = (action.metadata or {}).get("raw_message") if action.metadata else None
+            if is_raw_command_text(action.content or "", raw_msg):
+                extracted = extract_email_entities(action.content or "", params={"subject": action.subject, "recipient": action.recipient})
+                if extracted.get("content"):
+                    action.content = extracted["content"]
+                if extracted.get("subject") and (not action.subject or action.subject == "Message from AI Assistant"):
+                    action.subject = extracted["subject"]
+                if extracted.get("recipient") and not action.recipient:
+                    action.recipient = extracted["recipient"]
+
         # ── 3. Centralized Approval Policy ──
         requires_confirmation = self.evaluate_approval_policy(action.intent)
 
@@ -816,6 +831,26 @@ class CommunicationService:
             "trace_id": trace_id,
             "timestamp": now_iso,
         }
+
+    def get_draft(
+        self,
+        draft_id: str,
+        user_id: str,
+        trace_id: Optional[str] = None,
+    ) -> Dict[str, Any]:
+        """
+        Secure retrieval of a user-owned draft.
+        Enforces user authentication, account ownership, and cross-user isolation.
+        """
+        clean_uid = str(user_id or "").strip()
+        if not clean_uid or clean_uid.lower() in ("user_default", "default", "none", "null", "anonymous"):
+            return {
+                "status": "error",
+                "error_code": "AUTH_REQUIRED",
+                "error": "Authentication required: reading drafts requires an authenticated user.",
+                "trace_id": trace_id,
+            }
+        return self.email_executor.get_draft_gmail(user_id=clean_uid, draft_id=draft_id, trace_id=trace_id)
 
 
 # Global singleton instance
