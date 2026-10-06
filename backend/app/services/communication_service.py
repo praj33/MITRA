@@ -70,10 +70,16 @@ class CommunicationService:
         If account_id is supplied, verifies it belongs to user_id.
         """
         if channel == CommunicationChannel.EMAIL:
-            # Check Gmail connection
-            gmail_conn = connected_account_service.get_user_connection(user_id=user_id, provider="gmail")
-            # Check Microsoft connection
-            ms_conn = connected_account_service.get_user_connection(user_id=user_id, provider="microsoft")
+            # Check Gmail / Google connection
+            gmail_conn = (
+                connected_account_service.get_user_connection(user_id=user_id, provider="google")
+                or connected_account_service.get_user_connection(user_id=user_id, provider="gmail")
+            )
+            # Check Microsoft / Outlook connection
+            ms_conn = (
+                connected_account_service.get_user_connection(user_id=user_id, provider="microsoft")
+                or connected_account_service.get_user_connection(user_id=user_id, provider="outlook")
+            )
 
             matched_email = None
             if gmail_conn and gmail_conn.get("email"):
@@ -96,14 +102,29 @@ class CommunicationService:
                     logger.debug("Error querying user_integrations: %s", exc)
 
             if account_id:
+                clean_acc = str(account_id).strip()
                 # If specific account_id requested, ensure it matches user's owned account
-                if matched_email and account_id.lower() == matched_email.lower():
+                if matched_email and clean_acc.lower() == matched_email.lower():
                     return matched_email, None
-                # Check provider account ID
-                if gmail_conn and gmail_conn.get("provider_account_id") == account_id:
-                    return gmail_conn.get("email"), None
-                if ms_conn and ms_conn.get("provider_account_id") == account_id:
-                    return ms_conn.get("email"), None
+
+                # Check Gmail / Google connection identifiers (email, provider_account_id, account_id)
+                if gmail_conn:
+                    g_email = str(gmail_conn.get("email") or "").strip()
+                    g_pid = str(gmail_conn.get("provider_account_id") or "").strip()
+                    g_aid = str(gmail_conn.get("account_id") or "").strip()
+                    valid_gmail_ids = [v.lower() for v in (g_email, g_pid, g_aid) if v]
+                    if clean_acc.lower() in valid_gmail_ids:
+                        return gmail_conn.get("email") or g_pid or g_aid, None
+
+                # Check Microsoft / Outlook connection identifiers (email, provider_account_id, account_id)
+                if ms_conn:
+                    m_email = str(ms_conn.get("email") or "").strip()
+                    m_pid = str(ms_conn.get("provider_account_id") or "").strip()
+                    m_aid = str(ms_conn.get("account_id") or "").strip()
+                    valid_ms_ids = [v.lower() for v in (m_email, m_pid, m_aid) if v]
+                    if clean_acc.lower() in valid_ms_ids:
+                        return ms_conn.get("email") or m_pid or m_aid, None
+
                 return None, "ACCOUNT_NOT_AUTHORIZED"
 
             return matched_email, None
@@ -914,10 +935,20 @@ class CommunicationService:
         final_subject = subject if subject is not None else (canonical_draft.get("subject") or "")
         final_body = body if body is not None else (canonical_draft.get("content") or "")
 
-        # 4. Account binding
+        # 4. Account binding: derive canonical account server-side from authenticated user connection
         from app.services.connected_account_service import connected_account_service
-        google_conn = connected_account_service.get_user_connection(user_id=clean_uid, provider="google") or connected_account_service.get_user_connection(user_id=clean_uid, provider="gmail")
-        sender_account = (google_conn.get("email") or google_conn.get("account_id")) if google_conn else None
+        google_conn = (
+            connected_account_service.get_user_connection(user_id=clean_uid, provider="google")
+            or connected_account_service.get_user_connection(user_id=clean_uid, provider="gmail")
+        )
+        sender_account = (
+            google_conn.get("email")
+            or google_conn.get("provider_account_id")
+            or google_conn.get("account_id")
+        ) if google_conn else None
+
+        if not sender_account:
+            sender_account, _ = self.resolve_sender_account(clean_uid, CommunicationChannel.EMAIL)
 
         # 5. Build CommunicationAction with intent SEND_MESSAGE and confirmation_confirmed=False
         action = CommunicationAction(
