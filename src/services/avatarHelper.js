@@ -34,16 +34,22 @@ export const COMPANION_PRESETS = [
 ];
 
 let cachedActiveAvatar = null;
+let cachedIsVideo = null;
 
 export function isVideoAsset(src) {
   if (!src) return false;
+  if (src === cachedActiveAvatar && cachedIsVideo !== null) {
+    return cachedIsVideo;
+  }
   const s = String(src).toLowerCase();
   return s.startsWith('data:video/') || 
          s.endsWith('.mp4') || 
          s.endsWith('.webm') || 
          s.endsWith('.ogg') ||
          s.includes('video/mp4') ||
-         s.includes('video/webm');
+         s.includes('video/webm') ||
+         s.includes('blob:video') ||
+         s.startsWith('blob:'); // blob urls passed from video upload
 }
 
 export function isAnimatedGifOrWebp(src) {
@@ -53,8 +59,16 @@ export function isAnimatedGifOrWebp(src) {
          s.startsWith('data:image/webp') || s.endsWith('.webp');
 }
 
-export function setCachedActiveAvatar(avatar) {
+export function setCachedActiveAvatar(avatar, isVideo = undefined) {
   cachedActiveAvatar = avatar;
+  if (isVideo !== undefined) {
+    cachedIsVideo = isVideo;
+  } else if (avatar) {
+    const s = String(avatar).toLowerCase();
+    cachedIsVideo = s.startsWith('data:video/') || s.endsWith('.mp4') || s.endsWith('.webm');
+  } else {
+    cachedIsVideo = null;
+  }
 }
 
 export function getActiveMitraAvatar(ctxStore) {
@@ -63,14 +77,14 @@ export function getActiveMitraAvatar(ctxStore) {
   }
   if (ctxStore && typeof ctxStore.getAvatar === 'function') {
     const custom = ctxStore.getAvatar();
-    if (custom && custom !== 'default' && custom.length > 20) return custom;
+    if (custom && custom !== 'default' && custom !== 'indexed_db_asset' && custom.length > 20) return custom;
   }
   if (typeof localStorage !== 'undefined') {
     const custom = localStorage.getItem('mitra_companion_asset') || 
                    localStorage.getItem('mitra_avatar_custom') || 
                    localStorage.getItem('mitra_custom_avatar') || 
                    localStorage.getItem('mitra_avatar_data_url');
-    if (custom && custom !== 'default' && custom.length > 20) return custom;
+    if (custom && custom !== 'default' && custom !== 'indexed_db_asset' && custom.length > 20) return custom;
   }
   return MITRA_CANONICAL_AVATAR_DATA_URL;
 }
@@ -79,7 +93,7 @@ export async function initActiveMitraAvatar(ctxStore) {
   try {
     const asset = await companionStorage.getAsset('current_companion');
     if (asset && asset !== 'default' && asset.length > 20) {
-      cachedActiveAvatar = asset;
+      setCachedActiveAvatar(asset);
       if (ctxStore) ctxStore.setAvatar(asset);
       return asset;
     }
@@ -89,7 +103,7 @@ export async function initActiveMitraAvatar(ctxStore) {
 
 export function renderAvatarElement(avatarDataUrl, className = 'mitra-avatar-media') {
   let src = avatarDataUrl;
-  if (!src || src === 'default' || src.length <= 20) {
+  if (!src || src === 'default' || src === 'indexed_db_asset' || src.length <= 20) {
     src = getActiveMitraAvatar();
   }
   
@@ -100,6 +114,7 @@ export function renderAvatarElement(avatarDataUrl, className = 'mitra-avatar-med
     video.autoplay = true;
     video.loop = true;
     video.muted = true;
+    video.defaultMuted = true;
     video.playsInline = true;
     video.setAttribute('autoplay', '');
     video.setAttribute('loop', '');
@@ -111,10 +126,13 @@ export function renderAvatarElement(avatarDataUrl, className = 'mitra-avatar-med
     video.style.pointerEvents = 'none';
     video.draggable = false;
 
-    // Trigger video playback immediately upon DOM mount
+    // Trigger video playback immediately upon DOM mount & on load
+    video.addEventListener('loadeddata', () => {
+      video.play().catch(() => {});
+    });
     setTimeout(() => {
       video.play().catch(() => {});
-    }, 50);
+    }, 10);
 
     return video;
   } else {

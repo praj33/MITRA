@@ -173,8 +173,8 @@ export class AvatarModal {
   }
 
   async applyNewAvatar(newAvatar) {
-    setCachedActiveAvatar(newAvatar);
-    await companionStorage.setAsset('current_companion', newAvatar);
+    const isVideo = isVideoAsset(newAvatar);
+    setCachedActiveAvatar(newAvatar, isVideo);
 
     if (this.contextStore) {
       this.contextStore.setAvatar(newAvatar);
@@ -183,12 +183,16 @@ export class AvatarModal {
       this.eventBus.emit('avatar.changed', { avatar: newAvatar });
     }
     this.close();
+
+    try {
+      await companionStorage.setAsset('current_companion', newAvatar);
+    } catch (e) {
+      console.warn('[AvatarModal] Failed to persist companion asset:', e);
+    }
   }
 
   async resetToOfficial() {
-    setCachedActiveAvatar(MITRA_CANONICAL_AVATAR_DATA_URL);
-    await companionStorage.removeAsset('current_companion');
-
+    setCachedActiveAvatar(MITRA_CANONICAL_AVATAR_DATA_URL, false);
     if (this.contextStore) {
       this.contextStore.setAvatar('default');
     }
@@ -196,14 +200,40 @@ export class AvatarModal {
       this.eventBus.emit('avatar.changed', { avatar: 'default' });
     }
     this.close();
+
+    try {
+      await companionStorage.removeAsset('current_companion');
+    } catch (e) {
+      console.warn('[AvatarModal] Failed to remove companion asset:', e);
+    }
   }
 
   handleFileSelection(file) {
     if (!file) return;
+    const isVideo = file.type ? file.type.startsWith('video/') : (file.name && (file.name.endsWith('.mp4') || file.name.endsWith('.webm')));
+    
+    // 1. Instant 0ms memory preview and UI dispatch
+    const objectUrl = URL.createObjectURL(file);
+    setCachedActiveAvatar(objectUrl, isVideo);
+
+    if (this.contextStore) {
+      this.contextStore.setAvatar(objectUrl);
+    }
+    if (this.eventBus) {
+      this.eventBus.emit('avatar.changed', { avatar: objectUrl });
+    }
+    this.close();
+
+    // 2. Read file to Base64 in background for permanent persistence in IndexedDB
     const reader = new FileReader();
-    reader.onload = (evt) => {
-      const newAvatar = evt.target.result;
-      this.applyNewAvatar(newAvatar);
+    reader.onload = async (evt) => {
+      const dataUrl = evt.target.result;
+      setCachedActiveAvatar(dataUrl, isVideo);
+      try {
+        await companionStorage.setAsset('current_companion', dataUrl);
+      } catch (err) {
+        console.warn('[AvatarModal] Background IndexedDB save warning:', err);
+      }
     };
     reader.readAsDataURL(file);
   }
