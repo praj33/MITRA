@@ -384,8 +384,8 @@
 
     <!-- MITRA Companion Integration -->
     <mitra-companion
-        stylesheet-path="styles/mitra-companion.css"
-        api-base-url="https://mitra-backend-q1f3.onrender.com">
+        stylesheet-path="styles/mitra-companion.css?v=7"
+        api-base-url="http://localhost:8001">
     </mitra-companion>
 
     <!-- Scripts -->
@@ -458,6 +458,13 @@
 
         form.addEventListener('input', clearErrors);
 
+        function getApiUrl() {
+            if (typeof window !== 'undefined' && (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1')) {
+                return 'http://localhost:8001';
+            }
+            return 'https://mitra.blackholeinfiverse.com';
+        }
+
         form.addEventListener('submit', async (e) => {
             e.preventDefault();
             clearErrors();
@@ -516,7 +523,7 @@
             btnText.textContent = 'Creating Account...';
 
             try {
-                const res = await fetch('https://mitra-backend-q1f3.onrender.com/api/auth/signup', {
+                const res = await fetch(`${getApiUrl()}/api/auth/signup`, {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify({ name: nameVal, email: emailVal, password: passwordVal }),
@@ -570,14 +577,14 @@
             accountModal.style.display = 'none';
             showToast(`Signing up with ${providerName}...`, 'success');
             try {
-                const res = await fetch('https://mitra-backend-q1f3.onrender.com/api/auth/signup', {
+                const res = await fetch(`${getApiUrl()}/api/auth/signup`, {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify({ name: email.split('@')[0], email: email, password: `${providerName}SSOPassword123!` }),
                 });
                 let data = await res.json().catch(() => ({}));
                 if (!res.ok && res.status === 400) {
-                    const lRes = await fetch('https://mitra-backend-q1f3.onrender.com/api/auth/login', {
+                    const lRes = await fetch(`${getApiUrl()}/api/auth/login`, {
                         method: 'POST',
                         headers: { 'Content-Type': 'application/json' },
                         body: JSON.stringify({ email: email, password: `${providerName}SSOPassword123!` }),

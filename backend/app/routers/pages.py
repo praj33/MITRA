@@ -222,25 +222,15 @@ async def create_calendar_event(event: CalendarEventCreate, user_id: str = "user
         "synchronized": synchronized,
         "provider": provider,
         "event": {
-<<<<<<< HEAD
-            "id": event_id, "title": clean_title, "start": start_iso_str,
-            "end": end_iso_str, "color": event.color,
-            "description": event.description, "location": event.location,
-            "provider": provider, "provider_event_id": provider_event_id,
-=======
             "id": event_id,
-            "title": event.title,
-            "start": event.start,
-            "end": end_time,
-            "timezone": user_tz,
+            "title": getattr(event, 'title', clean_title),
+            "start": getattr(event, 'start', start_iso_str),
+            "end": end_iso_str,
             "color": event.color,
             "description": event.description,
             "location": event.location,
             "provider": provider,
-            "external_event_id": provider_event_id,
-            "external_event_link": html_link,
             "provider_event_id": provider_event_id,
->>>>>>> origin/main
             "sync_status": sync_status
         },
         "sync_urls": sync_urls

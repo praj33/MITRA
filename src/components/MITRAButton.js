@@ -63,11 +63,9 @@ export class MITRAButton {
       this.updateAvatar(data.avatar);
     });
 
-    // Initial avatar rendering
-    const initialAvatar = contextStore.getAvatar();
-    if (initialAvatar) {
-      this.updateAvatar(initialAvatar);
-    }
+    // Initial avatar rendering (fallback to canonical Mitra avatar)
+    const initialAvatar = contextStore.getAvatar() || 'default';
+    this.updateAvatar(initialAvatar);
   }
 
   updateAvatar(avatarUrl) {
@@ -77,14 +75,11 @@ export class MITRAButton {
     }
 
     const svg = this.element.querySelector('svg');
-    if (avatarUrl) {
-      if (svg) svg.style.display = 'none';
-      const avatarEl = renderAvatarElement(avatarUrl);
-      if (avatarEl) {
-        this.element.appendChild(avatarEl);
-      }
-    } else {
-      if (svg) svg.style.display = 'block';
+    if (svg) svg.style.display = 'none';
+
+    const avatarEl = renderAvatarElement(avatarUrl || 'default');
+    if (avatarEl) {
+      this.element.appendChild(avatarEl);
     }
   }
 

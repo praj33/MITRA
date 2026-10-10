@@ -1,4 +1,5 @@
 import { controlPlane, getApiBaseUrl } from '../services/controlPlane.js';
+import { MITRA_CANONICAL_AVATAR_DATA_URL } from '../services/avatarHelper.js';
 
 export class ConversationPanel {
   constructor(eventBus, contextStore) {
@@ -50,8 +51,28 @@ export class ConversationPanel {
     }
   }
 
+  renderHeroBanner() {
+    const existing = this.element.querySelector('.mitra-hero-banner');
+    if (existing) return;
+
+    const currentAvatar = (typeof localStorage !== 'undefined' && localStorage.getItem('mitra_avatar_data_url')) || MITRA_CANONICAL_AVATAR_DATA_URL;
+
+    const hero = document.createElement('div');
+    hero.className = 'mitra-hero-banner';
+    hero.innerHTML = `
+      <div class="mitra-hero-badge-container">
+        <div class="mitra-hero-badge-glow"></div>
+        <img src="${currentAvatar}" class="mitra-hero-badge-img" alt="MITRA" />
+      </div>
+      <div class="mitra-hero-title">MITRA AI COMPANION</div>
+      <div class="mitra-hero-sub">Universal Intelligence • Connected &amp; Ready</div>
+    `;
+    this.element.prepend(hero);
+  }
+
   renderHistory() {
     this.element.innerHTML = '';
+    this.renderHeroBanner();
     const history = this.contextStore ? this.contextStore.getHistory() : [];
     if (history && history.length > 0) {
       history.forEach(msg => {
@@ -71,7 +92,7 @@ export class ConversationPanel {
   }
 
   async fetchDynamicGreeting() {
-    const defaultGreeting = "Hello. I am MITRA, your Universal Companion across the BHIV ecosystem. How can I assist you today?";
+    const defaultGreeting = "Hello! I'm Mitra, your friendly assistant. How can I help you today?";
     try {
       const userId = this.contextStore ? this.contextStore.getUserId() : null;
       if (!userId) {
@@ -96,14 +117,29 @@ export class ConversationPanel {
   }
 
   addUserMessage(text, date = new Date()) {
+    const row = document.createElement('div');
+    row.className = 'chat-msg-row user';
+
     const bubble = document.createElement('div');
     bubble.className = 'chat-bubble user';
     bubble.innerHTML = `<div style="overflow-wrap: break-word; word-break: break-word; box-sizing: border-box;">${this.escapeHtml(text)}</div><div class="chat-timestamp">${date.toLocaleTimeString()}</div>`;
-    this.element.appendChild(bubble);
+    
+    row.appendChild(bubble);
+    this.element.appendChild(row);
     this.scrollToBottom();
   }
 
   addMitraMessage(text, date = new Date(), intent = null, suggestedActions = [], capabilityResult = null) {
+    const row = document.createElement('div');
+    row.className = 'chat-msg-row mitra';
+
+    const currentAvatar = (typeof localStorage !== 'undefined' && localStorage.getItem('mitra_avatar_data_url')) || MITRA_CANONICAL_AVATAR_DATA_URL;
+
+    const avatarImg = document.createElement('img');
+    avatarImg.src = currentAvatar;
+    avatarImg.className = 'chat-avatar-thumb';
+    avatarImg.alt = 'MITRA';
+
     const bubble = document.createElement('div');
     bubble.className = 'chat-bubble mitra';
     
@@ -130,9 +166,7 @@ export class ConversationPanel {
       }
     }
 
-
-    // Capability results are now natively emitted as 'capability.completed' in controlPlane.js
-    // which automatically triggers the beautiful 'addCapabilityCard' widget renderer instead of a plain text box here.    // Render Suggested Action chips if present
+    // Render Suggested Action chips if present
     if (suggestedActions && suggestedActions.length > 0) {
       const actionsHtml = suggestedActions.map(action => 
         `<button class="mitra-action-chip" style="margin:4px 6px 0 0; background:linear-gradient(135deg, rgba(108,92,231,0.3), rgba(0,230,118,0.2)); border:1px solid rgba(255,255,255,0.25); color:#fff; padding:5px 12px; border-radius:14px; font-size:11px; font-weight:500; cursor:pointer; font-family:inherit; transition:0.2s;">✨ ${this.escapeHtml(action)}</button>`
@@ -178,7 +212,9 @@ export class ConversationPanel {
       });
     }
 
-    this.element.appendChild(bubble);
+    row.appendChild(avatarImg);
+    row.appendChild(bubble);
+    this.element.appendChild(row);
     this.scrollToBottom();
   }
 
@@ -884,7 +920,7 @@ export class ConversationPanel {
             const token = localStorage.getItem('authToken') || localStorage.getItem('token');
             if (token) headers['Authorization'] = `Bearer ${token}`;
             
-            await fetch(`https://mitra-backend-q1f3.onrender.com/api/pages/tasks/update?task_id=${encodeURIComponent(taskId)}&status=${newStatus}&user_id=${encodeURIComponent(userId)}`, {
+            await fetch(`${getApiBaseUrl()}/api/pages/tasks/update?task_id=${encodeURIComponent(taskId)}&status=${newStatus}&user_id=${encodeURIComponent(userId)}`, {
               method: 'POST',
               headers
             });

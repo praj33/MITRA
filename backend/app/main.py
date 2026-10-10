@@ -209,26 +209,26 @@ app = FastAPI(
 # CORS - Explicit origins for production security
 # -------------------------------------------------
 def _get_allowed_origins() -> list[str]:
-    """Build CORS allowed origins from environment. No hardcoded URLs."""
+    """Build CORS allowed origins from environment."""
     origins = [
+        "http://localhost:8080",
+        "http://127.0.0.1:8080",
         "http://localhost:3000",
         "http://localhost:3001",
+        "http://localhost:5173",
         "http://127.0.0.1:3000",
         "http://127.0.0.1:3001",
+        "http://127.0.0.1:5173",
         "https://mitra.blackholeinfiverse.com",
         "https://artha.blackholeinfiverse.com",
         "https://samachar.blackholeinfiverse.com",
         "https://uniguru.blackholeinfiverse.com",
         "https://setu.blackholeinfiverse.com",
+        "*",
     ]
     frontend_url = os.getenv("FRONTEND_URL", "").strip()
     if frontend_url:
         origins.append(frontend_url)
-        if frontend_url.startswith("https://"):
-            origins.append(frontend_url.replace("https://", "http://"))
-        elif frontend_url.startswith("http://"):
-            origins.append(frontend_url.replace("http://", "https://"))
-    # Additional CORS origins from env (comma-separated)
     extra_origins = os.getenv("CORS_ORIGINS", "").strip()
     if extra_origins:
         for origin in extra_origins.split(","):
@@ -239,11 +239,11 @@ def _get_allowed_origins() -> list[str]:
 
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=_get_allowed_origins(),
+    allow_origins=["*"],
     allow_credentials=True,
-    allow_methods=["GET", "POST", "PUT", "DELETE", "OPTIONS"],
-    allow_headers=["Content-Type", "X-API-Key", "Authorization"],
-    expose_headers=["X-Request-Id"],
+    allow_methods=["*"],
+    allow_headers=["*"],
+    expose_headers=["*"],
 )
 
 # -------------------------------------------------

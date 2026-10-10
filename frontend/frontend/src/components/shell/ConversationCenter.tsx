@@ -198,18 +198,6 @@ const CompanionHomeView: React.FC<{
         transition={{ duration: 0.18 }}
         className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 p-4 sm:p-5 rounded-2xl bg-surface-elevated/90 border border-border-subtle shadow-sm"
       >
-<<<<<<< HEAD
-        <div className="w-20 h-20 sm:w-24 sm:h-24 rounded-3xl bg-surface-raised border border-border-subtle flex items-center justify-center shadow-glow">
-          <MessageSquare size={40} className="text-brand-light" />
-        </div>
-        <div className="mt-4">
-          <h2 className="text-xl sm:text-2xl font-bold text-text-primary mb-2">
-            Start a conversation
-          </h2>
-          <p className="text-sm sm:text-base text-text-muted max-w-md leading-relaxed mx-auto">
-            I'm your unified AI assistant with multi-agent capabilities, safety enforcement, and intelligent routing.
-          </p>
-=======
         <div className="flex items-center gap-3 min-w-0">
           <div className="w-10 h-10 rounded-xl bg-brand/15 border border-brand/30 flex items-center justify-center text-brand-light flex-shrink-0 shadow-xs">
             <Zap size={18} className="text-brand-light" />
@@ -245,7 +233,6 @@ const CompanionHomeView: React.FC<{
             <CalIcon size={12} className="flex-shrink-0" />
             <span>{calInfo.label}</span>
           </div>
->>>>>>> origin/main
         </div>
       </motion.div>
 
