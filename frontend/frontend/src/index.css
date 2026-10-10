@@ -57,6 +57,7 @@
   --inputbar-height:     72px;
   --bottomnav-height:    56px;
   --min-touch-target:    44px;
+  --conversation-max-width: 880px;
 
   /* Safe area insets for notched phones */
   --safe-top:    env(safe-area-inset-top, 0px);
@@ -183,16 +184,17 @@ body {
     "topbar   topbar  topbar"
     "sidebar  center  context"
     "sidebar  input   context";
-  grid-template-rows:    var(--topbar-height) 1fr var(--inputbar-height);
-  grid-template-columns: var(--sidebar-width) 1fr auto;
+  grid-template-rows:    var(--topbar-height) 1fr auto;
+  grid-template-columns: var(--sidebar-width) minmax(0, 1fr) auto;
   height: 100vh;
   height: 100dvh;
   width:  100vw;
+  max-width: 100vw;
   overflow: hidden;
 }
 
 .mitra-shell.sidebar-collapsed {
-  grid-template-columns: var(--sidebar-collapsed) 1fr auto;
+  grid-template-columns: var(--sidebar-collapsed) minmax(0, 1fr) auto;
 }
 
 .mitra-shell.context-hidden {
@@ -200,11 +202,11 @@ body {
     "topbar   topbar  topbar"
     "sidebar  center  context"
     "sidebar  input   context";
-  grid-template-columns: var(--sidebar-width) 1fr auto;
+  grid-template-columns: var(--sidebar-width) minmax(0, 1fr) auto;
 }
 
 .mitra-shell.sidebar-collapsed.context-hidden {
-  grid-template-columns: var(--sidebar-collapsed) 1fr auto;
+  grid-template-columns: var(--sidebar-collapsed) minmax(0, 1fr) auto;
 }
 
 /* ── Mobile & Tablet Screens (<1024px) ─────────────────────────── */
@@ -265,7 +267,17 @@ body {
 
 /* ── Zone Assignments ────────────────────────────────── */
 .zone-topbar   { grid-area: topbar; }
-.zone-sidebar  { grid-area: sidebar; }
+.zone-sidebar {
+  grid-area: sidebar;
+  width: var(--sidebar-width);
+  min-width: var(--sidebar-width);
+  max-width: var(--sidebar-width);
+}
+.mitra-shell.sidebar-collapsed .zone-sidebar {
+  width: var(--sidebar-collapsed);
+  min-width: var(--sidebar-collapsed);
+  max-width: var(--sidebar-collapsed);
+}
 .zone-center   { grid-area: center; }
 .zone-context  { grid-area: context; }
 .zone-input    { grid-area: input; }
@@ -392,23 +404,26 @@ body {
 
 .companion-container {
   width: 100%;
-  max-width: 880px;
-  margin-left: 0;
+  max-width: var(--conversation-max-width, 880px);
+  margin-left: auto;
   margin-right: auto;
-  padding-left: 0.5rem;
-  padding-right: 0.5rem;
+  padding-left: 0.75rem;
+  padding-right: 0.75rem;
 }
 
 @media (min-width: 640px) {
   .companion-container {
-    padding-left: 1rem;
+    padding-left: 1.5rem;
     padding-right: 1.5rem;
   }
 }
 
 @media (min-width: 1440px) {
+  :root {
+    --conversation-max-width: 960px;
+  }
   .companion-container {
-    max-width: 960px;
+    max-width: var(--conversation-max-width, 960px);
   }
 }
 
@@ -607,7 +622,7 @@ body {
 
 @media (max-width: 1023px) {
   .page-container {
-    padding: 12px 14px 96px 14px;
+    padding: 12px 14px 20px 14px;
   }
   .page-header {
     margin-bottom: 16px;
@@ -2094,4 +2109,30 @@ input[type="datetime-local"]::-webkit-calendar-picker-indicator {
     transition-duration: 0.01ms !important;
     scroll-behavior: auto !important;
   }
+}
+
+/* ── MITRA Formatted Markdown & KaTeX Math Styling ─────────────── */
+.formatted-markdown .katex {
+  color: var(--text-primary);
+  font-size: 1.05em;
+}
+
+.formatted-markdown .katex-display {
+  margin: 0.75rem 0 !important;
+  padding: 0.5rem 0;
+  overflow-x: auto;
+  overflow-y: hidden;
+  max-width: 100%;
+}
+
+.formatted-markdown .katex-display > .katex {
+  white-space: normal;
+}
+
+.formatted-markdown .katex .fbox,
+.formatted-markdown .katex .fcolorbox {
+  border-color: var(--brand-light) !important;
+  padding: 0.35em 0.5em !important;
+  border-radius: var(--radius-sm);
+  background: rgba(124, 111, 247, 0.08);
 }

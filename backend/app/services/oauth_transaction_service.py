@@ -88,6 +88,23 @@ class OAuthTransactionService:
 
         return dict(record)
 
+    def get_transaction(self, state: str) -> Optional[Dict[str, Any]]:
+        """Retrieve transaction record by state without consuming it."""
+        if not state:
+            return None
+        if state in _IN_MEMORY_OAUTH_TRANSACTIONS:
+            return dict(_IN_MEMORY_OAUTH_TRANSACTIONS[state])
+        db = _get_db()
+        if db is not None:
+            try:
+                rec = db[self.collection_name].find_one({"state": state})
+                if rec:
+                    rec.pop("_id", None)
+                    return rec
+            except Exception:
+                pass
+        return None
+
     def validate_and_consume_transaction(
         self,
         state: str,

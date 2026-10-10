@@ -8,3 +8,4 @@ export { default as TimelineCard }      from './TimelineCard';
 export { default as KPICard }           from './KPICard';
 export { default as StatusCard }        from './StatusCard';
 export { default as SystemCard }        from './SystemCard';
+export { default as CommunicationConfirmationCard } from './CommunicationConfirmationCard';

@@ -1,6 +1,7 @@
 from fastapi import APIRouter, Request, HTTPException
 from typing import Dict, Any
 import os
+import hmac
 from datetime import datetime
 
 from app.inbound.whatsapp_inbound_handler import handle_whatsapp_webhook
@@ -28,8 +29,8 @@ async def whatsapp_webhook_verify(request: Request):
     challenge = request.query_params.get("hub.challenge")
 
     verify_token = (os.getenv("WHATSAPP_VERIFY_TOKEN") or os.getenv("META_VERIFY_TOKEN") or "").strip()
-    if mode == "subscribe" and token and verify_token and token == verify_token:
-        return int(challenge) if challenge else "ok"
+    if mode == "subscribe" and token and verify_token and hmac.compare_digest(token, verify_token):
+        return int(challenge) if challenge and challenge.isdigit() else (challenge or "ok")
     raise HTTPException(status_code=403, detail="Verification failed")
 
 
@@ -166,8 +167,8 @@ async def instagram_webhook_verify(request: Request):
     challenge = request.query_params.get("hub.challenge")
 
     verify_token = os.getenv("META_VERIFY_TOKEN", "mitra_verify_token")
-    if mode == "subscribe" and token == verify_token:
-        return int(challenge) if challenge else "ok"
+    if mode == "subscribe" and token and verify_token and hmac.compare_digest(token, verify_token):
+        return int(challenge) if challenge and challenge.isdigit() else (challenge or "ok")
     raise HTTPException(status_code=403, detail="Verification failed")
 
 

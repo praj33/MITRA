@@ -31,8 +31,11 @@ export const IntegrationsModal: React.FC<IntegrationsModalProps> = ({ isOpen, on
   const [googleConnected, setGoogleConnected] = useState(false);
   const [googleStatus, setGoogleStatus] = useState<'not_connected' | 'active' | 'needs_reauthorization'>('not_connected');
   const [googleAddress, setGoogleAddress] = useState('');
+  const [googleAccessLevel, setGoogleAccessLevel] = useState<string>('full');
+  const [googleUpgradeRequired, setGoogleUpgradeRequired] = useState(false);
   const [isConnectingGoogle, setIsConnectingGoogle] = useState(false);
   const [isDisconnectingGoogle, setIsDisconnectingGoogle] = useState(false);
+  const [isUpgradingGoogle, setIsUpgradingGoogle] = useState(false);
 
   // Microsoft Connection State (backed by backend GET /api/connections)
   const [microsoftConnected, setMicrosoftConnected] = useState(false);
@@ -100,6 +103,10 @@ export const IntegrationsModal: React.FC<IntegrationsModalProps> = ({ isOpen, on
       if (googleConn) {
         setGoogleConnected(true);
         setGoogleAddress(googleConn.email || 'Connected Google Account');
+        const accessLevel = (googleConn as any).gmail_access_level || 'send_only';
+        const upgradeReq = (googleConn as any).gmail_upgrade_required ?? (accessLevel !== 'full');
+        setGoogleAccessLevel(accessLevel);
+        setGoogleUpgradeRequired(upgradeReq);
         if (googleConn.status === 'needs_reauthorization') {
           setGoogleStatus('needs_reauthorization');
         } else {
@@ -109,6 +116,8 @@ export const IntegrationsModal: React.FC<IntegrationsModalProps> = ({ isOpen, on
         setGoogleConnected(false);
         setGoogleStatus('not_connected');
         setGoogleAddress('');
+        setGoogleAccessLevel('none');
+        setGoogleUpgradeRequired(false);
       }
 
       // Check Microsoft connection
@@ -222,6 +231,24 @@ export const IntegrationsModal: React.FC<IntegrationsModalProps> = ({ isOpen, on
     } catch (err: any) {
       setIsConnectingGoogle(false);
       setErrorMessage(err.message || "Failed starting Google connection. Please try again.");
+    }
+  };
+
+  // 1b. Real Google OAuth Upgrade Flow Handler
+  const handleUpgradeGoogle = async () => {
+    setIsUpgradingGoogle(true);
+    setStatusMessage("Initiating Gmail permissions upgrade (read, search, draft)...");
+    setErrorMessage(null);
+    try {
+      const data = await authApi.startOAuth('google', 'upgrade_gmail');
+      if (data.url) {
+        window.location.href = data.url;
+      } else {
+        throw new Error("No authorization URL returned from OAuth upgrade endpoint.");
+      }
+    } catch (err: any) {
+      setIsUpgradingGoogle(false);
+      setErrorMessage(err.message || "Failed starting Gmail upgrade flow. Please try again.");
     }
   };
 
@@ -534,7 +561,22 @@ export const IntegrationsModal: React.FC<IntegrationsModalProps> = ({ isOpen, on
               <div className="flex items-center gap-2 self-start sm:self-center shrink-0">
                 {googleStatus === 'active' ? (
                   <>
-                    <ConnectionStatusBadge status={syncingProvider === 'google' ? 'SYNCING' : 'CONNECTED'} />
+                    {googleUpgradeRequired ? (
+                      <span className="px-2 py-0.5 rounded-full bg-amber-500/20 text-amber-300 border border-amber-500/30 text-[11px] font-semibold">
+                        Gmail Send Only
+                      </span>
+                    ) : (
+                      <ConnectionStatusBadge status={syncingProvider === 'google' ? 'SYNCING' : 'CONNECTED'} />
+                    )}
+                    {googleUpgradeRequired && (
+                      <button
+                        onClick={handleUpgradeGoogle}
+                        disabled={isUpgradingGoogle}
+                        className="px-3 py-1.5 bg-amber-500/20 hover:bg-amber-500/30 text-amber-300 border border-amber-500/40 text-xs font-semibold rounded-xl transition-colors cursor-pointer active:scale-95 disabled:opacity-50"
+                      >
+                        {isUpgradingGoogle ? "Redirecting..." : "Upgrade Gmail Access"}
+                      </button>
+                    )}
                     <button
                       onClick={() => handleSync('google')}
                       disabled={syncingProvider === 'google'}
@@ -582,9 +624,24 @@ export const IntegrationsModal: React.FC<IntegrationsModalProps> = ({ isOpen, on
                     <ShieldCheck size={12} /> AES-256 Encrypted
                   </span>
                 </div>
+
+                {googleUpgradeRequired && (
+                  <div className="p-2.5 rounded-xl bg-amber-500/10 border border-amber-500/20 text-amber-200 text-xs flex items-center justify-between gap-2">
+                    <span>MITRA needs additional Gmail permissions to read messages, search mailbox, and save drafts.</span>
+                    <button
+                      onClick={handleUpgradeGoogle}
+                      disabled={isUpgradingGoogle}
+                      className="shrink-0 px-2.5 py-1 bg-amber-500 text-black font-semibold text-[11px] rounded-lg hover:bg-amber-400 transition-colors cursor-pointer"
+                    >
+                      Upgrade Now
+                    </button>
+                  </div>
+                )}
+
                 <div className="flex flex-wrap gap-2 pt-0.5">
                   <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-white/5 border border-white/10 text-gray-300 text-[11px]">
-                    <Mail size={12} className="text-blue-400" /> Gmail API (Send)
+                    <Mail size={12} className={googleUpgradeRequired ? "text-amber-400" : "text-blue-400"} />
+                    {googleUpgradeRequired ? "Gmail Send Only" : (googleAccessLevel === 'full' ? "Gmail API (Send, Read, Draft)" : `Gmail API (${googleAccessLevel})`)}
                   </span>
                   <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-white/5 border border-white/10 text-gray-300 text-[11px]">
                     <Calendar size={12} className="text-emerald-400" /> Google Calendar API

@@ -71,6 +71,11 @@ class IntentFlow:
             if not any(k in text_lower for k in news_keywords):
                 return 'general'
 
+        # Email priority: if text explicitly refers to inbox, email(s), or mailbox
+        if re.search(r'\b(?:inbox|emails?|mailbox|gmail|drafts?)\b', text_lower):
+            if not any(k in text_lower for k in ("schedule a meeting", "book a meeting", "add to calendar", "calendar event")):
+                return 'email'
+
         for intent, keywords in self.intent_patterns.items():
             if intent == 'general':
                 continue

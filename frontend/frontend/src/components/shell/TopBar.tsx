@@ -20,7 +20,9 @@ const TopBar: React.FC<Props> = ({ onSearch }) => {
     status, userName, userEmail, isAuthenticated, isGuest, authStatus, notifications,
     toggleContextPanel, contextPanel,
     isMobile, toggleMobileMenu,
+    sidebar,
   } = useCompanionStore();
+  const sidebarCollapsed = sidebar === 'collapsed';
   const unread = notifications.filter(n => !n.read).length;
   const [notifOpen, setNotifOpen] = useState(false);
   const [toolsOpen, setToolsOpen] = useState(false);
@@ -40,9 +42,12 @@ const TopBar: React.FC<Props> = ({ onSearch }) => {
 
   return (
     <header className="zone-topbar glass w-full select-none z-30 border-b border-border-subtle/80">
-      <div className="w-full h-full flex items-center justify-between px-3.5 sm:px-6 lg:px-7 gap-3 sm:gap-4">
+      <div className="w-full h-full flex items-center justify-between px-3.5 sm:px-4 lg:px-4 gap-3 sm:gap-4">
         {/* ── ZONE 1 (LEFT): MITRA Logo + Brand + Status ── */}
-        <div className="flex items-center gap-2.5 sm:gap-3 flex-shrink-0 min-w-0">
+        <div className={cn(
+          "flex items-center gap-2 sm:gap-2.5 flex-shrink-0 min-w-0 transition-all duration-300",
+          !isMobile && (sidebarCollapsed ? "w-[var(--sidebar-collapsed)]" : "w-[var(--sidebar-width)]")
+        )}>
           {/* Mobile hamburger */}
           {isMobile && (
             <button
@@ -135,7 +140,7 @@ const TopBar: React.FC<Props> = ({ onSearch }) => {
                     animate={{ opacity: 1, y: 0, scale: 1 }}
                     exit={{ opacity: 0, y: 8, scale: 0.96 }}
                     transition={{ duration: 0.18 }}
-                    className="absolute right-0 top-11 w-64 sm:w-72 p-2 rounded-2xl bg-surface-elevated border border-border-default shadow-2xl z-50 flex flex-col gap-1 select-none"
+                    className="absolute right-0 top-11 w-64 sm:w-72 p-2 rounded-2xl bg-surface-elevated border border-border-default shadow-2xl z-50 flex flex-col gap-1 select-none max-h-[calc(100dvh-5.5rem)] overflow-y-auto overscroll-contain"
                     role="menu"
                     aria-label="Tools Navigation"
                   >

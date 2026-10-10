@@ -222,18 +222,20 @@ async def send_whatsapp_otp(
     # Generate cryptographically secure OTP and store hash
     raw_otp = otp_service.generate_otp(user_id=auth_user_id, phone=phone)
 
-    # Dispatch via WhatsAppExecutor
+    # Dispatch via WhatsAppExecutor (System Authentication OTP Gateway)
     try:
         from app.executors.whatsapp_executor import WhatsAppExecutor
         executor = WhatsAppExecutor()
-        executor.send_message(
+        dispatch_result = executor.send_message(
             to_number=phone,
             message=f"Your Mitra Universal Verification Code is: {raw_otp}. Valid for 10 minutes.",
             trace_id=f"otp_{auth_user_id}",
-            user_id=auth_user_id
+            is_system_otp=True
         )
+        if dispatch_result.get("status") != "success":
+            logger.warning(f"Twilio system OTP dispatch note: {dispatch_result.get('error')}")
     except Exception as exc:
-        logger.warning(f"WhatsApp dispatch exception: {exc}")
+        logger.warning(f"WhatsApp OTP dispatch exception: {exc}")
 
     return {
         "status": "success",

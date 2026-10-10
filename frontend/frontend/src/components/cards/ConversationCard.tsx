@@ -5,6 +5,7 @@ import { Volume2, VolumeX } from 'lucide-react';
 import { cn, formatTime } from '../../lib/utils';
 import { Message } from '../../store/companion.store';
 import ActionCard from './ActionCard';
+import CommunicationConfirmationCard from './CommunicationConfirmationCard';
 import FormattedMarkdown from '../primitives/FormattedMarkdown';
 import { getApiBase, getAuthHeaders } from '../../services/apiConfig';
 
@@ -106,8 +107,21 @@ const ConversationCard: React.FC<Props> = ({ message, onActionConfirm }) => {
           {isAssistant ? <FormattedMarkdown content={message.content} /> : message.content}
         </div>
 
-        {/* Inline capability result */}
-        {isAssistant && message.capabilityResult && (
+        {/* Inline communication approval card (B.COMM-3 Structured Pending Action) */}
+        {isAssistant && message.capabilityResult && message.capabilityResult.data?.confirmation && (
+          <CommunicationConfirmationCard
+            confirmation={message.capabilityResult.data.confirmation}
+            onConfirm={(result) => {
+              // Structured confirmation executed via dedicated REST endpoint — zero LLM reinterpretation
+            }}
+            onCancel={() => {
+              // Action cancelled via dedicated REST endpoint
+            }}
+          />
+        )}
+
+        {/* Inline capability result (for other capabilities or non-confirmation results) */}
+        {isAssistant && message.capabilityResult && !message.capabilityResult.data?.confirmation && (
           <ActionCard
             capability={message.capabilityResult.capability}
             intent={message.capabilityResult.intent}

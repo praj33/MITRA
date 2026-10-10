@@ -54,8 +54,23 @@ from app.mitra_system_health import get_system_health_snapshot
 from app.core.monitoring import init_monitoring, init_prometheus_metrics
 
 # -------------------------------------------------
-# Companion / Runtime / Extended routers (from praj33)
+# Companion / Runtime / Extended routers (from praj33 & bhiv/main)
 # -------------------------------------------------
+try:
+    from app.api.oauth_api import router as oauth_router
+except ImportError:
+    oauth_router = None
+
+try:
+    from app.api.integrations import router as integrations_router
+except ImportError:
+    integrations_router = None
+
+try:
+    from app.api.communication_api import router as communication_router
+except ImportError:
+    communication_router = None
+
 try:
     from app.api.companion_api import router as companion_router
 except ImportError:
@@ -249,8 +264,15 @@ app.add_middleware(
 # -------------------------------------------------
 # Register API Routers
 # -------------------------------------------------
-app.include_router(assistant_router)
 app.include_router(auth_router)
+if oauth_router:
+    app.include_router(oauth_router)
+if integrations_router:
+    app.include_router(integrations_router)
+if communication_router:
+    app.include_router(communication_router)
+
+app.include_router(assistant_router)
 app.include_router(mitra_router)
 app.include_router(webhook_router)
 app.include_router(tts_router)
@@ -321,6 +343,26 @@ async def security_middleware(request: Request, call_next):
     response = await call_next(request)
     return response
 
+# -------------------------------------------------
+# Direct LLM Test Endpoint (bypasses broken routers package)
+# -------------------------------------------------
+from pydantic import BaseModel as _BaseModel
+from typing import Optional as _Optional
+from app.core.llm_bridge import llm_bridge as _llm_bridge
+
+class _LLMRequest(_BaseModel):
+    prompt: str
+    model: str = "uniguru"
+
+@app.post("/external_llm")
+async def call_external_llm(request: _LLMRequest):
+    response = await _llm_bridge.call_llm(request.model, request.prompt)
+    return {"response": response}
+
+# -------------------------------------------------
+# System Endpoints
+# -------------------------------------------------
+>>>>>>> bhiv/main
 @app.get("/")
 async def root():
     return {

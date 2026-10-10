@@ -21,12 +21,52 @@ export interface ChatResponse {
   suggested_actions?: string[];
 }
 
+export function parseSSELine(line: string): {
+  type: 'token' | 'done' | 'error' | 'ignore' | 'event';
+  content?: string;
+  event?: any;
+} {
+  const cleanLine = line.endsWith('\r') ? line.slice(0, -1) : line;
+  if (!cleanLine.startsWith('data:')) {
+    return { type: 'ignore' };
+  }
+
+  let dataContent = cleanLine.slice(5);
+  // Per SSE spec, if the character immediately following 'data:' is a single space, remove it
+  if (dataContent.startsWith(' ')) {
+    dataContent = dataContent.slice(1);
+  }
+
+  if (dataContent === '[DONE]') {
+    return { type: 'done' };
+  }
+  if (dataContent.startsWith('Error:')) {
+    return { type: 'error', content: dataContent.slice(6).trim() };
+  }
+
+  // Check if payload is a structured JSON event
+  if (dataContent.startsWith('{') && dataContent.endsWith('}')) {
+    try {
+      const parsed = JSON.parse(dataContent);
+      if (parsed && typeof parsed === 'object' && parsed.type) {
+        return { type: 'event', event: parsed };
+      }
+    } catch {
+      // Non-JSON falls through to plain token
+    }
+  }
+
+  return { type: 'token', content: dataContent };
+}
+
 export const CompanionService = {
+  parseSSELine,
   // ── Core Chat ──────────────────────────────────────
   async chat(
     userId: string,
     message: string,
     platform = 'web',
+    signal?: AbortSignal,
   ): Promise<ChatResponse> {
     const url = `${getApiBase()}/api/companion/chat`;
     const headers = getAuthHeaders();
@@ -36,6 +76,7 @@ export const CompanionService = {
         method: 'POST',
         headers,
         body: JSON.stringify({ user_id: userId, message, platform }),
+        signal,
       });
 
       if (!resp.ok) {
@@ -48,11 +89,95 @@ export const CompanionService = {
       return await resp.json();
     } catch (err: any) {
       if (err instanceof Error && err.name === 'AbortError') {
-        throw new Error('Request timed out. Please try again.');
+        throw err;
       }
       if (err.message && err.message.includes('Failed to fetch')) {
         console.error('[CompanionService] Network connection error communicating with backend.');
         throw new Error('Unable to connect to backend server. Please verify your connection.');
+      }
+      throw err;
+    }
+  },
+
+  // ── High-Speed SSE Streaming Chat ───────────────────
+  async chatStream(
+    userId: string,
+    message: string,
+    onToken: (token: string) => void,
+    signal?: AbortSignal,
+    platform = 'web',
+    onEvent?: (event: any) => void,
+  ): Promise<string> {
+    const url = `${getApiBase()}/api/companion/chat/stream`;
+    const headers = getAuthHeaders();
+
+    try {
+      const resp = await fetch(url, {
+        method: 'POST',
+        headers,
+        body: JSON.stringify({ user_id: userId, message, platform }),
+        signal,
+      });
+
+      if (!resp.ok) {
+        const errorBody = await resp.json().catch(() => ({}));
+        const diagnosticMsg = formatApiError(resp.status, errorBody);
+        throw new Error(diagnosticMsg);
+      }
+
+      if (!resp.body) {
+        throw new Error('Streaming not supported by browser response.');
+      }
+
+      const reader = resp.body.getReader();
+      const decoder = new TextDecoder('utf-8');
+      let accumulated = '';
+      let buffer = '';
+
+      while (true) {
+        const { value, done } = await reader.read();
+        if (done) break;
+
+        buffer += decoder.decode(value, { stream: true });
+        const lines = buffer.split('\n');
+        buffer = lines.pop() || '';
+
+        for (const line of lines) {
+          const parsed = parseSSELine(line);
+          if (parsed.type === 'ignore') continue;
+          if (parsed.type === 'done') {
+            return accumulated;
+          }
+          if (parsed.type === 'error') {
+            throw new Error(parsed.content || 'Streaming error');
+          }
+          if (parsed.type === 'event' && parsed.event) {
+            const evt = parsed.event;
+            if (evt.type === 'assistant_delta' && evt.delta !== undefined) {
+              accumulated += evt.delta;
+              onToken(evt.delta);
+            } else if (evt.type === 'message_complete') {
+              if (evt.message && !accumulated) {
+                accumulated = evt.message;
+              }
+              if (onEvent) onEvent(evt);
+            } else if (evt.type === 'error') {
+              throw new Error(evt.error || 'Streaming error');
+            } else {
+              if (onEvent) onEvent(evt);
+            }
+          }
+          if (parsed.type === 'token' && parsed.content !== undefined) {
+            accumulated += parsed.content;
+            onToken(parsed.content);
+          }
+        }
+      }
+
+      return accumulated;
+    } catch (err: any) {
+      if (err instanceof Error && err.name === 'AbortError') {
+        throw err;
       }
       throw err;
     }

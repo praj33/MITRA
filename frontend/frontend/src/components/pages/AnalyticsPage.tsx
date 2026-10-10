@@ -134,7 +134,7 @@ export const AnalyticsPage: React.FC<{ onChatNavigate: (msg: string) => void }> 
   const peakWindow = data?.peak_focus_window || '8:30 AM – 11:30 AM (Morning Peak)';
 
   return (
-    <motion.div initial={{ opacity: 0, y: 12 }} animate={{ opacity: 1, y: 0 }} className="page-container pb-20">
+    <motion.div initial={{ opacity: 0, y: 12 }} animate={{ opacity: 1, y: 0 }} className="page-container pb-6">
       {/* Header */}
       <div className="page-header flex-col sm:flex-row gap-3">
         <div className="flex items-center gap-3">

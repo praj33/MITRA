@@ -55,6 +55,28 @@ class ConnectedAccountService:
             sanitized.pop("refresh_token", None)
             sanitized.pop("app_password", None)
             sanitized.pop("encrypted_app_password", None)
+
+        if sanitized.get("provider") == "google":
+            scopes = sanitized.get("scopes") or []
+            has_read = "https://www.googleapis.com/auth/gmail.readonly" in scopes
+            has_compose = "https://www.googleapis.com/auth/gmail.compose" in scopes
+            has_send = "https://www.googleapis.com/auth/gmail.send" in scopes
+
+            if has_read and has_compose and has_send:
+                access_level = "full"
+                upgrade_req = False
+            elif has_send:
+                access_level = "send_only"
+                upgrade_req = True
+            else:
+                access_level = "none"
+                upgrade_req = True
+
+            sanitized["gmail_read_enabled"] = has_read
+            sanitized["gmail_compose_enabled"] = has_compose
+            sanitized["gmail_send_enabled"] = has_send
+            sanitized["gmail_access_level"] = access_level
+            sanitized["gmail_upgrade_required"] = upgrade_req
             
         return sanitized
 
@@ -253,5 +275,46 @@ class ConnectedAccountService:
                 pass
         if key in _IN_MEMORY_CONNECTED_ACCOUNTS:
             _IN_MEMORY_CONNECTED_ACCOUNTS[key]["last_used_at"] = now_iso
+
+    def get_gmail_access_state(self, user_id: str) -> Dict[str, Any]:
+        """
+        Determines current Gmail access state for the user's connected Google account.
+        """
+        conn = self.get_user_connection(user_id, "google", include_decrypted_tokens=False)
+        if not conn or conn.get("status") != "connected":
+            return {
+                "connected": False,
+                "email": None,
+                "gmail_read_enabled": False,
+                "gmail_compose_enabled": False,
+                "gmail_send_enabled": False,
+                "gmail_access_level": "not_connected",
+                "gmail_upgrade_required": True,
+                "scopes": []
+            }
+        scopes = conn.get("scopes") or []
+        has_read = "https://www.googleapis.com/auth/gmail.readonly" in scopes
+        has_compose = "https://www.googleapis.com/auth/gmail.compose" in scopes
+        has_send = "https://www.googleapis.com/auth/gmail.send" in scopes
+        access_level = "full" if (has_read and has_compose and has_send) else ("send_only" if has_send else "none")
+        upgrade_req = access_level != "full"
+        return {
+            "connected": True,
+            "email": conn.get("email"),
+            "gmail_read_enabled": has_read,
+            "gmail_compose_enabled": has_compose,
+            "gmail_send_enabled": has_send,
+            "gmail_access_level": access_level,
+            "gmail_upgrade_required": upgrade_req,
+            "scopes": scopes
+        }
+
+    def has_gmail_read_access(self, user_id: str) -> bool:
+        state = self.get_gmail_access_state(user_id)
+        return bool(state.get("connected") and state.get("gmail_read_enabled"))
+
+    def has_gmail_compose_access(self, user_id: str) -> bool:
+        state = self.get_gmail_access_state(user_id)
+        return bool(state.get("connected") and state.get("gmail_compose_enabled"))
 
 connected_account_service = ConnectedAccountService()

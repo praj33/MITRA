@@ -66,22 +66,114 @@ class ExecutionService:
                 action_data = self._apply_rewrite(action_data, action_type)
 
             # Route to appropriate real execution method
-            user_id = action_data.get("user_id", "user_default")
+            is_system_action = bool(action_data.get("is_system_action", False))
+            is_system_otp = bool(action_data.get("is_system_otp", False))
+
+            # Security Isolation for User-Owned Communication Channels (Email / WhatsApp):
+            # Communication actions must NEVER silently fall back to 'user_default' or system credentials
+            # unless explicitly flagged as a legitimate system action (e.g. system authentication OTP).
+            if action_type.lower() in ("whatsapp", "email"):
+                if not is_system_action and not (action_type.lower() == "whatsapp" and is_system_otp):
+                    comm_user_id = action_data.get("user_id")
+                    if not comm_user_id or not str(comm_user_id).strip() or str(comm_user_id).strip().lower() in ("user_default", "default", "none", "null"):
+                        logger.warning(
+                            "Unauthorized communication action rejected: missing or invalid user_id '%s' for action '%s'",
+                            comm_user_id, action_type
+                        )
+                        return {
+                            "status": "error",
+                            "action_type": action_type,
+                            "error": f"Authorization error: user-owned {action_type} action requires an authenticated, non-default user_id.",
+                            "error_code": "AUTH_REQUIRED",
+                            "trace_id": trace_id,
+                            "timestamp": datetime.utcnow().isoformat(),
+                            "service": "execution_service"
+                        }
+                    user_id = str(comm_user_id).strip()
+                else:
+                    user_id = action_data.get("user_id")
+            else:
+                user_id = action_data.get("user_id", "user_default")
+
             if action_type.lower() == "whatsapp":
-                return self.whatsapp.send_message(
-                    to_number=action_data.get("recipient", action_data.get("to", "")),
-                    message=action_data.get("message", ""),
-                    trace_id=trace_id,
-                    user_id=user_id
-                )
+                if is_system_otp:
+                    return self.whatsapp.send_message(
+                        to_number=action_data.get("recipient", action_data.get("to", "")),
+                        message=action_data.get("message", ""),
+                        trace_id=trace_id,
+                        is_system_otp=True
+                    )
+                else:
+                    # User-owned WhatsApp -> route through unified CommunicationService
+                    from app.models.communication import CommunicationAction, CommunicationChannel, CommunicationIntent
+                    from app.services.communication_service import communication_service
+
+                    comm_action = CommunicationAction(
+                        intent=action_data.get("intent", "SEND_MESSAGE"),
+                        channel=CommunicationChannel.WHATSAPP,
+                        user_id=user_id,
+                        account_id=action_data.get("account_id"),
+                        recipient=action_data.get("recipient", action_data.get("to", "")),
+                        content=action_data.get("message", ""),
+                        confirmation_confirmed=bool(action_data.get("confirmation_confirmed", False)),
+                        idempotency_key=action_data.get("idempotency_key"),
+                        query=action_data.get("query"),
+                        limit=action_data.get("limit") or 20,
+                        page_token=action_data.get("page_token"),
+                        thread_id=action_data.get("thread_id"),
+                        metadata=action_data.get("metadata") or {}
+                    )
+                    res = communication_service.execute_action(comm_action, trace_id=trace_id)
+                    return res.to_dict()
+
             elif action_type.lower() == "email":
-                return self.email.send_message(
-                    to_email=action_data.get("recipient", action_data.get("to", "")),
-                    subject=action_data.get("subject", "Message from AI Assistant"),
-                    message=action_data.get("body", action_data.get("message", "")),
-                    trace_id=trace_id,
-                    user_id=user_id
-                )
+                if is_system_action:
+                    return self.email.send_message(
+                        to_email=action_data.get("recipient", action_data.get("to", "")),
+                        subject=action_data.get("subject", "Message from AI Assistant"),
+                        message=action_data.get("body", action_data.get("message", "")),
+                        trace_id=trace_id,
+                        is_system_action=True
+                    )
+                else:
+                    # User-owned Email -> route through unified CommunicationService
+                    from app.models.communication import CommunicationAction, CommunicationChannel, CommunicationIntent
+                    from app.services.communication_service import communication_service
+                    from app.capabilities.email_entity_extractor import extract_email_entities, is_raw_command_text
+
+                    raw_msg = action_data.get("raw_message") or action_data.get("message")
+                    extracted_body = action_data.get("body") or action_data.get("content")
+                    extracted_subject = action_data.get("subject")
+
+                    if not extracted_body or is_raw_command_text(str(extracted_body), raw_msg):
+                        ext = extract_email_entities(raw_msg or "", params=action_data)
+                        if ext.get("content"):
+                            extracted_body = ext["content"]
+                        if not extracted_subject or extracted_subject == "Message from AI Assistant":
+                            extracted_subject = ext.get("subject") or extracted_subject
+
+                    meta = dict(action_data.get("metadata") or {})
+                    if raw_msg and "raw_message" not in meta:
+                        meta["raw_message"] = raw_msg
+
+                    comm_action = CommunicationAction(
+                        intent=action_data.get("intent", "SEND_MESSAGE"),
+                        channel=CommunicationChannel.EMAIL,
+                        user_id=user_id,
+                        account_id=action_data.get("account_id"),
+                        recipient=action_data.get("recipient", action_data.get("to", "")),
+                        subject=extracted_subject or "Message from AI Assistant",
+                        content=extracted_body or "",
+                        confirmation_confirmed=bool(action_data.get("confirmation_confirmed", False)),
+                        idempotency_key=action_data.get("idempotency_key"),
+                        query=action_data.get("query"),
+                        limit=action_data.get("limit") or 20,
+                        page_token=action_data.get("page_token"),
+                        thread_id=action_data.get("thread_id"),
+                        metadata=meta
+                    )
+                    res = communication_service.execute_action(comm_action, trace_id=trace_id)
+                    return res.to_dict()
             elif action_type.lower() == "instagram":
                 return self.instagram.send_message(
                     recipient_id=action_data.get("recipient", action_data.get("to", "")),

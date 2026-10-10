@@ -61,6 +61,15 @@ export interface UserMemory {
 
 export type AuthStateStatus = 'LOADING' | 'GUEST' | 'AUTHENTICATED' | 'AUTH_ERROR';
 
+export interface DraftEditState {
+  mode?: 'email_draft_edit';
+  draftId: string;
+  to: string;
+  subject: string;
+  body: string;
+  accountId?: string;
+}
+
 // ── Store Interface ─────────────────────────────────────
 interface CompanionStore {
   // Identity
@@ -82,6 +91,9 @@ interface CompanionStore {
   // Conversation
   messages:  Message[];
   isLoading: boolean;
+
+  // Structured Draft Editing
+  draftEditState: DraftEditState | null;
 
   // Layout state
   sidebar:      SidebarState;
@@ -109,6 +121,9 @@ interface CompanionStore {
   toggleSidebar: () => void;
   toggleContextPanel: () => void;
 
+  // Draft Edit action
+  setDraftEditState: (draft: DraftEditState | null) => void;
+
   // Mobile actions
   setIsMobile:          (v: boolean) => void;
   setMobileMenuOpen:    (v: boolean) => void;
@@ -117,6 +132,7 @@ interface CompanionStore {
   toggleMobileContext:  () => void;
 
   addMessage:    (msg: Omit<Message, 'id' | 'timestamp'>) => void;
+  updateMessage: (id: string, updates: Partial<Message>) => void;
   clearMessages: () => void;
 
   setContextItems:  (items: ContextItem[]) => void;
@@ -181,6 +197,8 @@ export const useCompanionStore = create<CompanionStore>()(
         messages:  [],
         isLoading: false,
 
+        draftEditState: null,
+
         sidebar:      'expanded',
         contextPanel: 'closed',
 
@@ -196,6 +214,9 @@ export const useCompanionStore = create<CompanionStore>()(
         // ── Status ─────────────────────────────────────
         setStatus:    (status)    => set({ status }),
         setSessionId: (sessionId) => set({ sessionId }),
+
+        // ── Draft Edit ─────────────────────────────────
+        setDraftEditState: (draftEditState) => set({ draftEditState }),
 
         // ── Layout ─────────────────────────────────────
         setSidebar:      (sidebar)      => set({ sidebar }),
@@ -229,6 +250,9 @@ export const useCompanionStore = create<CompanionStore>()(
               timestamp: new Date().toISOString(),
             },
           ],
+        })),
+        updateMessage: (id, updates) => set(s => ({
+          messages: s.messages.map(m => m.id === id ? { ...m, ...updates } : m),
         })),
         clearMessages: () => set({ messages: [] }),
 
@@ -306,7 +330,7 @@ export const useCompanionStore = create<CompanionStore>()(
   )
 );
 
-// ── Custom hook: sync isMobile/tablet with window resize ──
+// ── Custom hook: sync isMobile with window resize (< 1024px) ──
 export function useIsMobile() {
   const setIsMobile = useCompanionStore(s => s.setIsMobile);
   const setSidebar = useCompanionStore(s => s.setSidebar);
@@ -314,18 +338,13 @@ export function useIsMobile() {
   const isMobile = useCompanionStore(s => s.isMobile);
 
   useEffect(() => {
-    const mobileMql = window.matchMedia('(max-width: 767px)');
-    const tabletMql = window.matchMedia('(min-width: 768px) and (max-width: 1023px)');
+    const mobileMql = typeof window !== 'undefined' && window.matchMedia ? window.matchMedia('(max-width: 1023px)') : null;
 
     const handleResize = () => {
-      const mobile = mobileMql.matches;
-      const tablet = tabletMql.matches;
+      const mobile = mobileMql ? mobileMql.matches : false;
       setIsMobile(mobile);
 
       if (mobile) {
-        setSidebar('collapsed');
-        setContextPanel('closed');
-      } else if (tablet) {
         setSidebar('collapsed');
         setContextPanel('closed');
       }
@@ -333,11 +352,13 @@ export function useIsMobile() {
 
     handleResize();
 
-    mobileMql.addEventListener('change', handleResize);
-    tabletMql.addEventListener('change', handleResize);
+    if (mobileMql?.addEventListener) {
+      mobileMql.addEventListener('change', handleResize);
+    }
     return () => {
-      mobileMql.removeEventListener('change', handleResize);
-      tabletMql.removeEventListener('change', handleResize);
+      if (mobileMql?.removeEventListener) {
+        mobileMql.removeEventListener('change', handleResize);
+      }
     };
   }, [setIsMobile, setSidebar, setContextPanel]);
 

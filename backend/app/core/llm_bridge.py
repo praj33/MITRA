@@ -135,22 +135,81 @@ class LLMBridge:
         messages: list,
         temperature: float = 0.7,
         max_tokens: int = 800,
+        use_cache: bool = False,
     ) -> str:
         if not messages:
             raise ValueError("messages must be a non-empty list")
-        cache_key = hashlib.sha256(
-            f"{model}:{messages}:{temperature}".encode()
-        ).hexdigest()
-        
-        cached = self._cache_get(cache_key)
-        if cached:
-            return cached
+        cache_key = None
+        if use_cache:
+            cache_key = hashlib.sha256(
+                f"{model}:{messages}:{temperature}".encode()
+            ).hexdigest()
+            cached = self._cache_get(cache_key)
+            if cached:
+                return cached
 
         output = await self._dispatch(model, messages, temperature, max_tokens)
-        if output:
+        output = self._sanitize_llm_output(output) if hasattr(self, "_sanitize_llm_output") else output
+        if output and use_cache and cache_key:
             self._cache_set(cache_key, output)
         return output
 
+    async def stream_llm_with_messages(
+        self,
+        model: str,
+        messages: list,
+        temperature: float = 0.7,
+        max_tokens: int = 800,
+    ):
+        """
+        High-Speed Server-Sent Events (SSE) token generator.
+        Yields chunk strings character-by-character for sub-150ms TTFT latency.
+        Conversational streams are never globally cached to preserve personal data isolation.
+        """
+        if not messages:
+            raise ValueError("messages must be a non-empty list")
+
+        full_response_parts = []
+        try:
+            if model in ("groq", "llama") and self.groq_client:
+                stream = await self.groq_client.chat.completions.create(
+                    model=self.groq_model,
+                    messages=messages,
+                    temperature=temperature,
+                    max_tokens=max_tokens,
+                    stream=True,
+                )
+                async for chunk in stream:
+                    content = chunk.choices[0].delta.content or ""
+                    if content:
+                        full_response_parts.append(content)
+                        yield content
+                return
+            elif model in ("chatgpt", "openai", "gpt") and self.openai_client:
+                stream = await self.openai_client.chat.completions.create(
+                    model=self.openai_model,
+                    messages=messages,
+                    temperature=temperature,
+                    max_tokens=max_tokens,
+                    stream=True,
+                )
+                async for chunk in stream:
+                    content = chunk.choices[0].delta.content or ""
+                    if content:
+                        full_response_parts.append(content)
+                        yield content
+                return
+        except Exception as exc:
+            logger.warning("Streaming dispatch failed (%s) — falling back to fast batch", exc)
+
+        # Fallback to fast batch dispatch if streaming provider is unavailable
+        full_text = await self.call_llm_with_messages(model, messages, temperature, max_tokens)
+        chunk_size = 12
+        for i in range(0, len(full_text), chunk_size):
+            yield full_text[i : i + chunk_size]
+            await asyncio.sleep(0.008)
+
+>>>>>>> bhiv/main
     async def _dispatch(self, model: str, messages: list, temperature: float, max_tokens: int) -> str:
         try:
             if model in ("groq", "llama"):

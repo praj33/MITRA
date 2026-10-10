@@ -2,16 +2,20 @@
 companion_orchestrator.py — Mitra Companion Brain
 
 Main entry point for all companion interactions.
-Flow: message → intent classify → capability route OR conversation
-    → safety gate → LLM response → memory update → return
+Unifies streaming and non-streaming requests into a single canonical pipeline:
+message → context/session → normalize & coreference → store user turn (once)
+        → intent classify → safety gate → capability route OR conversation
+        → response synthesis → store assistant turn (once) → return/stream events
 """
 from __future__ import annotations
 
 import os
+import re
+import json
 import logging
 from dataclasses import dataclass, field
 from datetime import datetime, timezone
-from typing import Any, Dict, List, Optional
+from typing import Any, AsyncIterator, Dict, List, Optional
 
 from app.companion.companion_config import get_companion_config
 from app.companion.companion_memory import companion_memory
@@ -53,6 +57,29 @@ _CAPABILITY_INTENT_MAP: Dict[str, str] = {
     "knowledge":     "uniguru",
 }
 
+# Patterns for direct self-referential / identity questions
+_SELF_IDENTITY_PATTERNS = [
+    r"what(?:'s|\s+is)\s+your\s+name",
+    r"what\s+are\s+you\s+called",
+    r"what\s+should\s+i\s+call\s+you",
+    r"tell\s+me\s+your\s+name",
+    r"who\s+are\s+you",
+    r"what\s+are\s+you",
+    r"who\s+(?:created|made|built|programmed|developed|designed)\s+you",
+    r"who\s+is\s+your\s+creator",
+    r"what\s+can\s+you\s+do",
+    r"what\s+do\s+you\s+do",
+    r"what\s+are\s+your\s+capabilities",
+    r"what\s+can\s+you\s+help\s+(?:me\s+)?with",
+    r"how\s+can\s+you\s+help\s+me",
+    r"are\s+you\s+(?:an?\s+)?ai\b",
+    r"are\s+you\s+(?:an?\s+)?(?:chat)?bot\b",
+    r"are\s+you\s+human\b",
+    r"what\s+(?:ai\s+)?model\s+are\s+you",
+    r"what\s+ai\s+are\s+you",
+    r"which\s+(?:ai\s+)?model\s+are\s+you",
+    r"are\s+you\s+(?:chatgpt|gpt|openai|claude|llama|gemini)",
+]
 
 _KNOWLEDGE_KEYWORDS = {
     "explain", "what is", "how does", "define", "teach",
@@ -72,11 +99,11 @@ class CompanionResponse:
 
     def to_dict(self) -> Dict[str, Any]:
         return {
-            "message":          self.message,
+            "message":           self.message,
             "capability_result": self.capability_result,
-            "session_id":       self.session_id,
-            "trace_id":         self.trace_id,
-            "intent":           self.intent,
+            "session_id":        self.session_id,
+            "trace_id":          self.trace_id,
+            "intent":            self.intent,
             "suggested_actions": self.suggested_actions,
         }
 
@@ -84,6 +111,7 @@ class CompanionResponse:
 class CompanionOrchestrator:
     """
     The Mitra companion brain.
+    Unified canonical pipeline for streaming and non-streaming requests:
     Routes each user message to the right handler:
     - Capability invocation (email, calendar, tasks, etc.)
     - Knowledge query (UniGuru)
@@ -93,8 +121,15 @@ class CompanionOrchestrator:
 
     def __init__(self) -> None:
         self._config = get_companion_config()
+        # Ensure capabilities are registered in registry if not yet populated
+        if not capability_registry.get_capabilities():
+            try:
+                from app.capabilities import register_all_capabilities
+                register_all_capabilities()
+            except Exception as e:
+                logger.warning("Could not auto-register capabilities in CompanionOrchestrator: %s", e)
 
-    async def process(
+    async def process_stream(
         self,
         user_id: str,
         message: str,
@@ -102,15 +137,21 @@ class CompanionOrchestrator:
         device: str = "browser",
         trace_id: Optional[str] = None,
         page_context: Optional[Dict[str, Any]] = None,
-    ) -> CompanionResponse:
+    ) -> AsyncIterator[Dict[str, Any]]:
         """
-        Process a user message and return a CompanionResponse.
-        Enforces canonical context (trace_id, correlation_id, execution_id),
-        syncs active DOM page context, and streams real-time runtime state events.
+        Canonical streaming pipeline for all Mitra conversational interactions.
+        Yields structured SSE events:
+          - message_start
+          - capability_started
+          - approval_required (if pending confirmation card is needed)
+          - capability_result
+          - assistant_delta
+          - message_complete
+          - error
         """
         from app.runtime.canonical_context import create_canonical_context
         from app.runtime.runtime_event_bus import runtime_event_bus
-        import json
+        from app.core.text_normalizer import normalize_text_async, resolve_coreference_query_async
 
         # Store page_context if provided directly in request
         if page_context:
@@ -148,7 +189,18 @@ class CompanionOrchestrator:
             ttl_hours=self._config.session_ttl_hours,
         )
 
-        # 2. Store user turn
+        yield {
+            "type": "message_start",
+            "request_id": ctx.execution_id,
+            "session_id": session.session_id,
+        }
+
+        # 2. Dynamic Zero-Shot LLM & Algorithmic Typo Correction + Coreference Resolution
+        normalized_message = await normalize_text_async(message)
+        recent_history = await session_manager.get_history(user_id, limit=6)
+        resolved_message = await resolve_coreference_query_async(normalized_message, recent_history)
+
+        # Store original user turn exactly once in session history
         await session_manager.add_turn(user_id, role="user", content=message)
 
         # 3. Classify intent
@@ -178,17 +230,24 @@ class CompanionOrchestrator:
                     execution_id=ctx.execution_id,
                     data={"reason": block_reason or "safety_gate_blocked"},
                 )
-                return CompanionResponse(
-                    message=response_text,
-                    session_id=session.session_id,
-                    trace_id=ctx.trace_id,
-                    intent=intent,
-                )
+                yield {
+                    "type": "assistant_delta",
+                    "request_id": ctx.execution_id,
+                    "delta": response_text,
+                }
+                yield {
+                    "type": "message_complete",
+                    "request_id": ctx.execution_id,
+                    "message": response_text,
+                    "intent": intent,
+                }
+                return
 
         # 5. Route: capability / knowledge / conversation
         capability_result: Optional[CapabilityResult] = None
-        response_text: str
+        response_text: str = ""
 
+<<<<<<< HEAD
         # Check active UI context from request page_context
         active_host_app = (page_context or {}).get("host_app", "")
 
@@ -211,9 +270,24 @@ class CompanionOrchestrator:
         else:
             capability_name = _CAPABILITY_INTENT_MAP.get(intent)
             is_knowledge = self._is_knowledge_query(message, intent)
+=======
+        is_self_identity = self._is_self_identity_query(message) or self._is_self_identity_query(resolved_message)
+        if is_self_identity:
+            capability_name = None
+            is_knowledge = False
+        else:
+            capability_name = _CAPABILITY_INTENT_MAP.get(intent)
+            is_knowledge = self._is_knowledge_query(resolved_message, intent)
+>>>>>>> bhiv/main
 
         if capability_name and capability_name in self._config.enabled_capabilities:
             # ── Capability path ───────────────────────────────────────
+            yield {
+                "type": "capability_started",
+                "request_id": ctx.execution_id,
+                "capability": capability_name,
+                "intent": intent,
+            }
             await runtime_event_bus.publish(
                 event_type="capability_running",
                 user_id=user_id,
@@ -223,17 +297,27 @@ class CompanionOrchestrator:
                 data={"intent": intent},
             )
             params = {
+<<<<<<< HEAD
                 "message":   message,
                 "entities":  intent_data.get("entities", {}),
                 "dates":     intent_data.get("dates_times", {}),
                 "context":   intent_data.get("context", {}),
                 "user_id":   user_id,
                 "trace_id":  ctx.trace_id,
+=======
+                "message":      resolved_message,
+                "entities":     intent_data.get("entities", {}),
+                "dates":        intent_data.get("dates_times", {}),
+                "context":      intent_data.get("context", {}),
+                "user_id":      user_id,
+                "trace_id":     ctx.trace_id,
+>>>>>>> bhiv/main
                 "execution_id": ctx.execution_id,
             }
             capability_result = await capability_registry.execute(
                 intent=intent, params=params, trace_id=ctx.trace_id
             )
+<<<<<<< HEAD
             if capability_result and capability_result.status == "success":
                 if capability_result.capability == "samachar":
                     # Generate a conversational news response using LLM with returned data
@@ -312,10 +396,68 @@ class CompanionOrchestrator:
                     except Exception as llm_exc:
                         logger.warning("Failed to synthesize news with LLM: %s — using clean deterministic Samachar report", llm_exc)
                         response_text = _deterministic_report
+=======
+
+            # Check if action requires structured approval confirmation (B.COMM-3)
+            is_approval = False
+            pending_action_id = None
+            confirmation_data = None
+            if capability_result and capability_result.data:
+                res_status = capability_result.data.get("status")
+                if capability_result.status == "pending" or res_status in ("confirmation_required", "pending"):
+                    is_approval = True
+                    confirmation_data = capability_result.data.get("confirmation")
+                    pending_action_id = capability_result.data.get("pending_action_id") or (
+                        confirmation_data.get("pending_action_id") if isinstance(confirmation_data, dict) else None
+                    )
+
+            if is_approval:
+                yield {
+                    "type": "approval_required",
+                    "request_id": ctx.execution_id,
+                    "capability": capability_name,
+                    "intent": capability_result.intent or intent,
+                    "pending_action_id": pending_action_id,
+                    "confirmation": self._sanitize_client_data(confirmation_data),
+                    "summary": capability_result.summary,
+                }
+
+            if capability_result:
+                yield {
+                    "type": "capability_result",
+                    "request_id": ctx.execution_id,
+                    "capability": capability_name,
+                    "status": capability_result.status,
+                    "summary": capability_result.summary,
+                    "data": self._sanitize_client_data(capability_result.data),
+                }
+
+            # Response synthesis
+            if capability_result and (capability_result.status in ("success", "pending") or is_approval):
+                if capability_name in ("browser", "samachar"):
+                    async for token in self._stream_conversation(
+                        message=resolved_message,
+                        user_id=user_id,
+                        extra_context=f"[REAL-TIME LIVE DATA CONTEXT]:\n{capability_result.summary}",
+                        raw_message=message,
+                    ):
+                        response_text += token
+                        yield {
+                            "type": "assistant_delta",
+                            "request_id": ctx.execution_id,
+                            "delta": token,
+                        }
+>>>>>>> bhiv/main
                 else:
                     response_text = personality_engine.build_capability_confirm(
                         capability_result.summary
                     )
+                    yield {
+                        "type": "assistant_delta",
+                        "request_id": ctx.execution_id,
+                        "delta": response_text,
+                    }
+
                 await companion_memory.log_capability_use(
                     user_id, capability_result.capability, intent, success=True
                 )
@@ -326,11 +468,16 @@ class CompanionOrchestrator:
                     trace_id=ctx.trace_id,
                     execution_id=ctx.execution_id,
                     capability=capability_name,
-                    data={"status": "success"},
+                    data={"status": capability_result.status},
                 )
             else:
                 err = capability_result.error if capability_result else "Unknown error"
                 response_text = personality_engine.build_capability_fail(err)
+                yield {
+                    "type": "assistant_delta",
+                    "request_id": ctx.execution_id,
+                    "delta": response_text,
+                }
                 if capability_result:
                     await companion_memory.log_capability_use(
                         user_id, capability_result.capability, intent, success=False
@@ -346,6 +493,12 @@ class CompanionOrchestrator:
 
         elif is_knowledge and "uniguru" in self._config.enabled_capabilities:
             # ── UniGuru knowledge path ────────────────────────────────
+            yield {
+                "type": "capability_started",
+                "request_id": ctx.execution_id,
+                "capability": "uniguru",
+                "intent": "knowledge",
+            }
             await runtime_event_bus.publish(
                 event_type="capability_running",
                 user_id=user_id,
@@ -353,6 +506,7 @@ class CompanionOrchestrator:
                 execution_id=ctx.execution_id,
                 capability="uniguru",
             )
+<<<<<<< HEAD
             response_text = await self._call_knowledge(message, user_id)
             capability_result = CapabilityResult(
                 capability="uniguru",
@@ -367,6 +521,15 @@ class CompanionOrchestrator:
                 },
                 trace_id=ctx.trace_id
             )
+=======
+            async for token in self._stream_knowledge(resolved_message, user_id, raw_message=message):
+                response_text += token
+                yield {
+                    "type": "assistant_delta",
+                    "request_id": ctx.execution_id,
+                    "delta": token,
+                }
+>>>>>>> bhiv/main
             await runtime_event_bus.publish(
                 event_type="completed",
                 user_id=user_id,
@@ -377,6 +540,12 @@ class CompanionOrchestrator:
 
         else:
             # ── General conversation path ─────────────────────────────
+            yield {
+                "type": "capability_started",
+                "request_id": ctx.execution_id,
+                "capability": "conversation",
+                "intent": intent,
+            }
             await runtime_event_bus.publish(
                 event_type="capability_running",
                 user_id=user_id,
@@ -384,7 +553,17 @@ class CompanionOrchestrator:
                 execution_id=ctx.execution_id,
                 capability="conversation",
             )
+<<<<<<< HEAD
             response_text = await self._call_conversation(message, user_id)
+=======
+            async for token in self._stream_conversation(resolved_message, user_id, raw_message=message):
+                response_text += token
+                yield {
+                    "type": "assistant_delta",
+                    "request_id": ctx.execution_id,
+                    "delta": token,
+                }
+>>>>>>> bhiv/main
             await runtime_event_bus.publish(
                 event_type="completed",
                 user_id=user_id,
@@ -393,7 +572,7 @@ class CompanionOrchestrator:
                 capability="conversation",
             )
 
-        # 6. Store assistant turn
+        # 6. Store assistant turn exactly once in session history
         await session_manager.add_turn(
             user_id,
             role="assistant",
@@ -404,14 +583,71 @@ class CompanionOrchestrator:
         # 7. Auto-extract facts from message (name, preferences)
         await self._extract_facts(user_id, message, intent_data)
 
+        # 8. Emit final complete event
+        yield {
+            "type": "message_complete",
+            "request_id": ctx.execution_id,
+            "message": response_text,
+            "capability_result": self._sanitize_client_data(capability_result.to_dict()) if capability_result else None,
+            "intent": intent,
+            "suggested_actions": self._suggest_actions(intent, capability_result),
+        }
+
+    async def process(
+        self,
+        user_id: str,
+        message: str,
+        platform: str = "web",
+        device: str = "browser",
+        trace_id: Optional[str] = None,
+        page_context: Optional[Dict[str, Any]] = None,
+    ) -> CompanionResponse:
+        """
+        Non-streaming response wrapper delegating to canonical process_stream pipeline.
+        Guarantees exact parity between streaming and REST responses.
+        """
+        final_message = ""
+        cap_result_dict = None
+        session_id = None
+        intent = None
+        suggested_actions: List[str] = []
+
+        async for event in self.process_stream(
+            user_id=user_id,
+            message=message,
+            platform=platform,
+            device=device,
+            trace_id=trace_id,
+            page_context=page_context,
+        ):
+            etype = event.get("type")
+            if etype == "message_start":
+                session_id = event.get("session_id")
+            elif etype == "assistant_delta":
+                final_message += event.get("delta", "")
+            elif etype == "message_complete":
+                final_message = event.get("message", final_message)
+                cap_result_dict = event.get("capability_result")
+                intent = event.get("intent")
+                suggested_actions = event.get("suggested_actions", [])
+
         return CompanionResponse(
-            message=response_text,
-            capability_result=capability_result.to_dict() if capability_result else None,
-            session_id=session.session_id,
+            message=final_message,
+            capability_result=cap_result_dict,
+            session_id=session_id,
             trace_id=trace_id,
             intent=intent,
-            suggested_actions=self._suggest_actions(intent, capability_result),
+            suggested_actions=suggested_actions,
         )
+
+    async def stream_conversation_tokens(self, message: str, user_id: str) -> AsyncIterator[str]:
+        """
+        Token generator delegating to canonical process_stream pipeline.
+        Maintains backwards compatibility for callers expecting a stream of delta strings.
+        """
+        async for event in self.process_stream(user_id=user_id, message=message):
+            if event.get("type") == "assistant_delta":
+                yield event.get("delta", "")
 
     async def get_greeting(self, user_id: str) -> str:
         """Return a personalized greeting for the user."""
@@ -421,6 +657,54 @@ class CompanionOrchestrator:
         return personality_engine.build_greeting(user_name=user_name)
 
     # ── private helpers ───────────────────────────────────────────
+
+    def _build_llm_messages(
+        self,
+        system_prompt: str,
+        history: List[Dict[str, Any]],
+        current_user_message: str,
+        raw_message: Optional[str] = None,
+    ) -> List[Dict[str, str]]:
+        """
+        Construct LLM messages array ensuring the current user message appears exactly once.
+        Strips any trailing user turn from history that matches raw_message or current_user_message
+        to prevent duplicate user messages when history is retrieved after add_turn().
+        """
+        clean_history = [
+            {"role": h.get("role", "user"), "content": h.get("content", "")}
+            for h in history
+        ]
+        if clean_history and clean_history[-1].get("role") == "user":
+            last_content = clean_history[-1].get("content", "")
+            if (raw_message and last_content == raw_message) or last_content == current_user_message:
+                clean_history.pop()
+
+        return (
+            [{"role": "system", "content": system_prompt}]
+            + clean_history
+            + [{"role": "user", "content": current_user_message}]
+        )
+
+    def _sanitize_client_data(self, data: Any) -> Any:
+        """Strip sensitive credentials, token hashes, and internal keys before emitting to client."""
+        if not isinstance(data, dict):
+            return data
+        sensitive_keys = {
+            "access_token", "refresh_token", "token", "credentials",
+            "secret", "token_hash", "encryption_key", "internal_trace_id",
+            "_debug", "client_secret",
+        }
+        sanitized = {}
+        for k, v in data.items():
+            if str(k).lower() in sensitive_keys:
+                continue
+            if isinstance(v, dict):
+                sanitized[k] = self._sanitize_client_data(v)
+            elif isinstance(v, list):
+                sanitized[k] = [self._sanitize_client_data(i) if isinstance(i, dict) else i for i in v]
+            else:
+                sanitized[k] = v
+        return sanitized
 
     async def _safety_check(
         self, message: str, user_id: str, trace_id: Optional[str]
@@ -448,8 +732,19 @@ class CompanionOrchestrator:
             logger.warning("Safety gate error: %s — failing open for conversation", exc)
             return False, ""
 
+<<<<<<< HEAD
     async def _call_conversation(self, message: str, user_id: str) -> str:
         """General LLM conversation with full context & live web/market integration."""
+=======
+    async def _stream_conversation(
+        self,
+        message: str,
+        user_id: str,
+        extra_context: Optional[str] = None,
+        raw_message: Optional[str] = None,
+    ) -> AsyncIterator[str]:
+        """Stream general LLM conversation tokens with full context & live web/market integration."""
+>>>>>>> bhiv/main
         facts = await companion_memory.get_user_facts(user_id)
         user_name = facts.get("name") or "there"
         system_prompt = personality_engine.build_system_prompt(
@@ -458,10 +753,8 @@ class CompanionOrchestrator:
             enabled_capabilities=self._config.enabled_capabilities,
         )
 
-        # Inject Active UI DOM Context if present (from host app DOM Extractor)
         if "active_ui_context" in facts:
             try:
-                import json
                 ctx_obj = json.loads(facts["active_ui_context"])
                 buttons_str = ", ".join(ctx_obj.get("buttons", [])) or "None detected"
                 headings_str = ", ".join(ctx_obj.get("headings", [])) or "None detected"
@@ -509,41 +802,113 @@ class CompanionOrchestrator:
         history = await session_manager.get_history(
             user_id, limit=self._config.max_history_turns
         )
-        messages = [{"role": "system", "content": system_prompt}] + history
-        return await llm_bridge.call_llm_with_messages(
+        messages = self._build_llm_messages(
+            system_prompt=system_prompt,
+            history=history,
+            current_user_message=message,
+            raw_message=raw_message,
+        )
+<<<<<<< HEAD
+
+=======
+        async for token in llm_bridge.stream_llm_with_messages(
             model=self._config.llm_provider,
             messages=messages,
             temperature=0.7,
+        ):
+            yield token
+
+    async def _call_conversation(
+        self,
+        message: str,
+        user_id: str,
+        extra_context: Optional[str] = None,
+        raw_message: Optional[str] = None,
+    ) -> str:
+        """Non-streaming general LLM conversation."""
+        tokens = []
+        async for token in self._stream_conversation(
+            message=message,
+            user_id=user_id,
+            extra_context=extra_context,
+            raw_message=raw_message,
+        ):
+            tokens.append(token)
+        return "".join(tokens)
+>>>>>>> bhiv/main
+
+    def _is_self_identity_query(self, message: str) -> bool:
+        """Check if message is asking about Mitra's self-identity or capabilities."""
+        if not message:
+            return False
+        cleaned = re.sub(r"[^\w\s']", " ", message.lower()).strip()
+        cleaned = re.sub(r"\s+", " ", cleaned)
+        return any(bool(re.search(pat, cleaned)) for pat in _SELF_IDENTITY_PATTERNS)
+
+    def _is_knowledge_query(self, message: str, intent: str) -> bool:
+        if self._is_self_identity_query(message):
+            return False
+        msg_lower = message.lower()
+        return any(kw in msg_lower for kw in _KNOWLEDGE_KEYWORDS)
+
+    async def _stream_knowledge(
+        self,
+        message: str,
+        user_id: str,
+        raw_message: Optional[str] = None,
+    ) -> AsyncIterator[str]:
+        """Stream primary LLM for knowledge queries, preserving Mitra identity with educational depth."""
+        facts = await companion_memory.get_user_facts(user_id)
+        user_name = facts.get("name") or "there"
+        knowledge_instruction = (
+            "Knowledge & Explanation Guidelines:\n"
+            "- Explain concepts clearly, accurately, and with structured depth for the user.\n"
+            "- Use clean Markdown headings, bullet points, and tables where helpful.\n"
+            "- For mathematical or scientific formulas, use standard LaTeX formatting (e.g., \\[ ... \\] for display equations, \\( ... \\) or $...$ for inline expressions).\n"
+            "- Keep explanations engaging, maintain your identity as Mitra, and offer to go deeper or give examples."
         )
-
-
-    async def _call_knowledge(self, message: str, user_id: str) -> str:
-        """Route to primary LLM / UniGuru for knowledge queries."""
+        system_prompt = personality_engine.build_system_prompt(
+            user_name=user_name,
+            user_facts=facts,
+            enabled_capabilities=self._config.enabled_capabilities,
+            extra_context=knowledge_instruction,
+        )
         history = await session_manager.get_history(user_id, limit=6)
-        messages = [
-            {"role": "system", "content": (
-                "You are an educational assistant. Explain concepts clearly, "
-                "accurately, and at the appropriate depth for the user. "
-                "Offer to go deeper or give examples if the user wants."
-            )}
-        ] + history + [{"role": "user", "content": message}]
-        primary = os.getenv("COMPANION_LLM_PROVIDER", "groq")
-        return await llm_bridge.call_llm_with_messages(
+        messages = self._build_llm_messages(
+            system_prompt=system_prompt,
+            history=history,
+            current_user_message=message,
+            raw_message=raw_message,
+        )
+        primary = os.getenv("COMPANION_LLM_PROVIDER", self._config.llm_provider)
+        async for token in llm_bridge.stream_llm_with_messages(
             model=primary,
             messages=messages,
             temperature=0.5,
-        )
+        ):
+            yield token
 
-    def _is_knowledge_query(self, message: str, intent: str) -> bool:
-        msg_lower = message.lower()
-        return any(kw in msg_lower for kw in _KNOWLEDGE_KEYWORDS)
+    async def _call_knowledge(
+        self,
+        message: str,
+        user_id: str,
+        raw_message: Optional[str] = None,
+    ) -> str:
+        """Route to primary LLM for knowledge queries."""
+        tokens = []
+        async for token in self._stream_knowledge(
+            message=message,
+            user_id=user_id,
+            raw_message=raw_message,
+        ):
+            tokens.append(token)
+        return "".join(tokens)
 
     async def _extract_facts(
         self, user_id: str, message: str, intent_data: Dict
     ) -> None:
         """Auto-extract user facts (name, preferences) from message."""
         msg_lower = message.lower()
-        # Name extraction
         for phrase in ("my name is ", "i am ", "i'm ", "call me "):
             if phrase in msg_lower:
                 idx = msg_lower.index(phrase) + len(phrase)
@@ -557,7 +922,7 @@ class CompanionOrchestrator:
         intent: str,
         cap_result: Optional[CapabilityResult],
     ) -> List[str]:
-        if not cap_result or cap_result.status != "success":
+        if not cap_result or cap_result.status not in ("success", "pending"):
             return []
         suggestions = {
             "email":    ["View full draft", "Edit before sending"],

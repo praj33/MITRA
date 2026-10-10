@@ -70,19 +70,19 @@ def _is_browser_request(request: Optional[Request]) -> bool:
 @router.get("/api/auth/{provider}")  # Compatible route alias
 async def start_oauth_flow(
     provider: str,
-    purpose: str = Query("connect", description="OAuth transaction purpose: 'connect', 'login', or 'signup'"),
+    purpose: str = Query("connect", description="OAuth transaction purpose: 'connect', 'login', 'signup', or 'upgrade_gmail'"),
     user_id: Optional[str] = Query(None, description="Ignored: identity is derived strictly from Bearer token"),
     request: Request = None
 ):
     """
     Initiates secure OAuth 2.0 PKCE transaction.
-    For 'connect' purpose: requires valid non-guest JWT bearer token.
+    For 'connect' or 'upgrade_gmail' purpose: requires valid non-guest JWT bearer token.
     For 'login' or 'signup' purpose: public endpoint; binds guest session ID if present.
     Returns JSON authorization URL or HTTP 302 redirect.
     """
     provider_name = provider.lower()
-    if purpose not in ("connect", "login", "signup"):
-        raise HTTPException(status_code=400, detail=f"Invalid OAuth purpose: '{purpose}'. Must be 'connect', 'login', or 'signup'.")
+    if purpose not in ("connect", "login", "signup", "upgrade_gmail"):
+        raise HTTPException(status_code=400, detail=f"Invalid OAuth purpose: '{purpose}'. Must be 'connect', 'login', 'signup', or 'upgrade_gmail'.")
 
     try:
         provider_inst = oauth_provider_registry.get(provider_name)
@@ -92,7 +92,7 @@ async def start_oauth_flow(
     auth_user_id = None
     auth_header = request.headers.get("Authorization") if request else None
 
-    if purpose == "connect":
+    if purpose in ("connect", "upgrade_gmail"):
         # Extract JWT identity strictly from Authorization header
         if not auth_header or not auth_header.strip().lower().startswith("bearer "):
             raise HTTPException(status_code=401, detail="Authentication required for connecting service accounts.")
@@ -147,6 +147,8 @@ async def start_oauth_flow(
                 "email",
                 "profile",
                 "https://www.googleapis.com/auth/gmail.send",
+                "https://www.googleapis.com/auth/gmail.readonly",
+                "https://www.googleapis.com/auth/gmail.compose",
                 "https://www.googleapis.com/auth/calendar"
             ]
 
@@ -263,7 +265,7 @@ async def oauth_callback(
             raise exc
 
         purpose = tx.get("purpose", "connect")
-        if purpose not in ("connect", "login", "signup"):
+        if purpose not in ("connect", "login", "signup", "upgrade_gmail"):
             if is_browser:
                 return RedirectResponse(url=f"{frontend_url}/?error=invalid_purpose", status_code=302)
             raise HTTPException(status_code=400, detail="Invalid or missing OAuth purpose in transaction state.")
@@ -327,7 +329,7 @@ async def oauth_callback(
             granted_scopes = ["openid", "email", "profile"]
 
         # 4. Handle connection or login/signup persistence
-        if purpose == "connect":
+        if purpose in ("connect", "upgrade_gmail"):
             current_stage = "PERSIST_CONNECTION"
             user_id = tx.get("user_id")
             if not user_id:
@@ -348,23 +350,28 @@ async def oauth_callback(
             )
 
             logger.info(
-                "OAuth connection persisted successfully | provider: %s | email_domain: %s | user_id: %s",
+                "OAuth connection persisted successfully | provider: %s | purpose: %s | email_domain: %s | user_id: %s",
                 provider_name,
+                purpose,
                 email.split("@")[-1] if "@" in email else "unknown",
                 user_id
             )
 
             redirect_target = f"{frontend_url}/settings?status=success&provider={provider_name}&email={quote_plus(email)}"
+            if purpose == "upgrade_gmail":
+                redirect_target += "&upgraded=gmail"
 
             if is_browser:
                 return RedirectResponse(url=redirect_target, status_code=302)
 
+            msg = f"Successfully upgraded {provider_name.capitalize()} account access ({email})." if purpose == "upgrade_gmail" else f"Successfully connected {provider_name.capitalize()} account ({email})."
             return {
                 "status": "success",
-                "message": f"Successfully connected {provider_name.capitalize()} account ({email}).",
+                "message": msg,
                 "provider": provider_name,
                 "email": email,
-                "user_id": user_id
+                "user_id": user_id,
+                "purpose": purpose
             }
 
         else:

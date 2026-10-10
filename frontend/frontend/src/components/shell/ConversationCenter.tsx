@@ -3,15 +3,20 @@ import { motion, AnimatePresence } from 'framer-motion';
 import {
   Zap, Calendar, ArrowRight, UserPlus,
   ChevronRight, Compass, CheckSquare, Bell,
-  CheckCircle2, AlertTriangle, Circle, Ban
+  CheckCircle2, AlertTriangle, Circle, Ban, RotateCcw,
+  X, Loader2
 } from 'lucide-react';
 import { cn } from '../../lib/utils';
 import { useCompanionStore } from '../../store/companion.store';
 import { CompanionService } from '../../services/companion.service';
 import { authApi } from '../../services/authApi';
+import { getApiBase, getAuthHeaders } from '../../services/apiConfig';
 import ConversationCard from '../cards/ConversationCard';
+<<<<<<< HEAD
 import { DailyBriefingCard } from '../cards/DailyBriefingCard';
 import { MessageSquare } from 'lucide-react';
+=======
+>>>>>>> bhiv/main
 
 const ThinkingIndicator = () => (
   <motion.div
@@ -190,7 +195,7 @@ const CompanionHomeView: React.FC<{
   ];
 
   return (
-    <div className="w-full max-w-4xl flex flex-col gap-4 sm:gap-5 py-3 sm:py-5">
+    <div className="w-full flex flex-col gap-4 sm:gap-5 py-3 sm:py-5">
       {/* ── 1. Compact MITRA Companion Hero Header ── */}
       <motion.div
         initial={{ opacity: 0, y: -4 }}
@@ -360,10 +365,93 @@ const CompanionHomeView: React.FC<{
   );
 };
 
-const ConversationCenter: React.FC = () => {
-  const { messages, status } = useCompanionStore();
+const CompactConversationHeader: React.FC<{
+  onNavigate: (section: string) => void;
+  onClearChat: () => void;
+}> = ({ onNavigate, onClearChat }) => {
+  const { userName, userEmail, isGuest } = useCompanionStore();
+  const userFirstName = isGuest
+    ? 'Guest User'
+    : (userName ? userName.trim().split(' ')[0] : (userEmail ? userEmail.split('@')[0] : 'Mitra User'));
+
+  const getGreetingTime = () => {
+    const hour = new Date().getHours();
+    if (hour >= 5 && hour < 12) return 'Good morning';
+    if (hour >= 12 && hour < 17) return 'Good afternoon';
+    if (hour >= 17 && hour < 22) return 'Good evening';
+    return 'Good night';
+  };
+
+  const currentDateDisplay = new Date().toLocaleDateString('en-US', {
+    weekday: 'short',
+    month: 'short',
+    day: 'numeric',
+  });
+
+  return (
+    <motion.div
+      initial={{ opacity: 0, y: -6 }}
+      animate={{ opacity: 1, y: 0 }}
+      transition={{ duration: 0.18 }}
+      className="flex items-center justify-between gap-3 px-3.5 py-2 sm:px-4 sm:py-2.5 rounded-xl bg-surface-elevated/70 border border-border-subtle/80 backdrop-blur-sm shadow-2xs"
+    >
+      <div className="flex items-center gap-2.5 min-w-0">
+        <div className="w-7 h-7 rounded-lg bg-brand/15 border border-brand/30 flex items-center justify-center text-brand-light flex-shrink-0">
+          <Zap size={14} className="text-brand-light" />
+        </div>
+        <div className="min-w-0">
+          <div className="flex items-center gap-2">
+            <span className="text-xs font-semibold text-text-primary tracking-tight truncate">
+              {getGreetingTime()}, {userFirstName}
+            </span>
+            <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded-full bg-emerald-500/10 border border-emerald-500/20 text-emerald-400 text-3xs font-medium">
+              <span className="w-1 h-1 rounded-full bg-emerald-400 animate-pulse" />
+              <span>Active</span>
+            </span>
+          </div>
+          <p className="text-3xs text-text-muted mt-0.5">{currentDateDisplay}</p>
+        </div>
+      </div>
+
+      <div className="flex items-center gap-2 flex-shrink-0">
+        <button
+          onClick={() => onNavigate('calendar')}
+          className="hidden sm:inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg border border-border-subtle hover:border-brand/40 bg-surface-overlay/80 hover:bg-surface-hover text-2xs font-medium text-text-muted hover:text-text-primary transition-colors cursor-pointer"
+          title="Open Calendar"
+        >
+          <Calendar size={12} className="text-brand-light flex-shrink-0" />
+          <span>Calendar</span>
+        </button>
+
+        <button
+          onClick={onClearChat}
+          className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg border border-border-subtle hover:border-red-500/30 bg-surface-overlay/80 hover:bg-red-500/10 text-2xs font-medium text-text-muted hover:text-red-400 transition-colors cursor-pointer"
+          title="Start fresh conversation"
+        >
+          <RotateCcw size={11} className="flex-shrink-0" />
+          <span>New Chat</span>
+        </button>
+      </div>
+    </motion.div>
+  );
+};
+
+interface ConversationCenterProps {
+  onNewChat?: () => void;
+}
+
+const ConversationCenter: React.FC<ConversationCenterProps> = ({ onNewChat }) => {
+  const { messages, status, clearMessages, setDraftEditState } = useCompanionStore();
   const bottomRef = useRef<HTMLDivElement>(null);
   const isThinking = status === 'thinking';
+
+  const handleClearChat = useCallback(() => {
+    if (onNewChat) {
+      onNewChat();
+    } else {
+      clearMessages();
+    }
+  }, [onNewChat, clearMessages]);
 
   useEffect(() => {
     bottomRef.current?.scrollIntoView({ behavior: 'smooth' });
@@ -380,6 +468,10 @@ const ConversationCenter: React.FC = () => {
     if (nav) nav(section);
   }, []);
 
+  const [viewingDraft, setViewingDraft] = useState<any | null>(null);
+  const [isFetchingDraft, setIsFetchingDraft] = useState(false);
+  const [draftError, setDraftError] = useState<string | null>(null);
+
   const handleActionConfirm = useCallback((action: string, _messageId: string) => {
     const nav = (window as any).__MITRA_NAV__;
     const send = (window as any).__MITRA_SEND__;
@@ -393,13 +485,116 @@ const ConversationCenter: React.FC = () => {
       if (nav) nav('reminders');
     } else if (actionLower.includes('workflow')) {
       if (nav) nav('workflows');
+    } else if (
+      actionLower.startsWith('view_draft') ||
+      actionLower.includes('view full draft') ||
+      actionLower.includes('view draft')
+    ) {
+      const targetMsg = messages.find(m => m.id === _messageId);
+      let draftId = '';
+      if (action.includes(':')) {
+        draftId = action.split(':', 2)[1].trim();
+      }
+      if (!draftId && targetMsg?.capabilityResult?.data?.draft_id) {
+        draftId = String(targetMsg.capabilityResult.data.draft_id);
+      }
+
+      if (draftId) {
+        setIsFetchingDraft(true);
+        setDraftError(null);
+        setViewingDraft({ id: draftId, loading: true });
+        fetch(`${getApiBase()}/api/communication/drafts/${encodeURIComponent(draftId)}`, {
+          headers: {
+            'Content-Type': 'application/json',
+            ...getAuthHeaders(),
+          },
+        })
+          .then(async (res) => {
+            if (!res.ok) {
+              const errJson = await res.json().catch(() => ({}));
+              throw new Error(errJson.error || errJson.detail?.error || 'Failed to load draft');
+            }
+            return res.json();
+          })
+          .then((data) => {
+            setViewingDraft(data.draft || data);
+          })
+          .catch((err) => {
+            setDraftError(err.message || 'Failed to load draft details.');
+            if (targetMsg?.capabilityResult?.data) {
+              setViewingDraft({
+                id: draftId,
+                recipient: targetMsg.capabilityResult.data.recipient || targetMsg.capabilityResult.data.to,
+                subject: targetMsg.capabilityResult.data.subject,
+                content: targetMsg.capabilityResult.data.content || targetMsg.capabilityResult.data.body,
+              });
+            }
+          })
+          .finally(() => {
+            setIsFetchingDraft(false);
+          });
+      } else if (targetMsg?.capabilityResult?.data) {
+        setViewingDraft(targetMsg.capabilityResult.data);
+      }
+    } else if (
+      actionLower.startsWith('edit_draft') ||
+      actionLower.includes('edit before sending') ||
+      actionLower.includes('edit draft')
+    ) {
+      let draftId = '';
+      if (action.includes(':')) {
+        draftId = action.split(':', 2)[1].trim();
+      }
+      const targetMsg = messages.find(m => m.id === _messageId);
+      const data = targetMsg?.capabilityResult?.data || {};
+      if (!draftId && data.draft_id) {
+        draftId = String(data.draft_id);
+      }
+      const recipient = data.recipient || data.to || '';
+      const subject = data.subject || '';
+      const content = data.content || data.body || '';
+      const accountId = data.account_id || '';
+
+      // Set structured draft edit mode — ZERO synthetic prompt, ZERO send() / LLM calls
+      setDraftEditState({
+        mode: 'email_draft_edit',
+        draftId: draftId || '',
+        to: recipient,
+        subject: subject,
+        body: content,
+        accountId: accountId,
+      });
+
+      // If draftId is available, refresh canonical draft server-side to guarantee freshest state
+      if (draftId) {
+        fetch(`${getApiBase()}/api/communication/drafts/${encodeURIComponent(draftId)}`, {
+          headers: {
+            'Content-Type': 'application/json',
+            ...getAuthHeaders(),
+          },
+        })
+          .then(res => res.ok ? res.json() : null)
+          .then(serverData => {
+            if (serverData && serverData.draft) {
+              setDraftEditState({
+                mode: 'email_draft_edit',
+                draftId: draftId,
+                to: serverData.draft.recipient || recipient,
+                subject: serverData.draft.subject || subject,
+                body: serverData.draft.content || content,
+                accountId: serverData.draft.account_id || accountId,
+              });
+            }
+          })
+          .catch(() => {});
+      }
     } else if (send) {
       send(action);
     }
-  }, []);
+  }, [messages, setDraftEditState]);
 
   return (
-    <main className="zone-center flex flex-col overflow-hidden bg-surface-base w-full">
+    <main className="flex flex-col flex-1 min-w-0 overflow-hidden bg-surface-base w-full h-full">
       <div className="flex-1 overflow-y-auto px-2.5 sm:px-6 py-4 overscroll-contain">
         <div className="companion-container">
           {messages.length === 0 ? (
@@ -409,8 +604,11 @@ const ConversationCenter: React.FC = () => {
             />
           ) : (
             <div className="space-y-3 sm:space-y-4">
+              <CompactConversationHeader
+                onNavigate={handleNavigate}
+                onClearChat={handleClearChat}
+              />
               <AnimatePresence initial={false}>
-                <DailyBriefingCard onActionClick={handleActionSend} />
                 {messages.map(msg => (
                   <ConversationCard
                     key={msg.id}
@@ -427,6 +625,92 @@ const ConversationCenter: React.FC = () => {
           <div ref={bottomRef} />
         </div>
       </div>
+
+      {/* Structured Draft Viewer Modal */}
+      {viewingDraft && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-xs">
+          <motion.div
+            initial={{ opacity: 0, scale: 0.95 }}
+            animate={{ opacity: 1, scale: 1 }}
+            exit={{ opacity: 0, scale: 0.95 }}
+            className="w-full max-w-lg p-5 rounded-2xl bg-surface-elevated border border-border-subtle shadow-xl space-y-4"
+          >
+            <div className="flex items-center justify-between pb-3 border-b border-border-subtle">
+              <div className="flex items-center gap-2">
+                <span className="text-lg">📧</span>
+                <h3 className="text-sm font-semibold text-text-primary">Gmail Draft Preview</h3>
+                {viewingDraft.id && (
+                  <span className="text-3xs font-mono text-text-muted bg-surface-overlay px-1.5 py-0.5 rounded">
+                    {String(viewingDraft.id).slice(0, 10)}...
+                  </span>
+                )}
+              </div>
+              <button
+                onClick={() => setViewingDraft(null)}
+                className="text-text-muted hover:text-text-primary p-1 rounded-md"
+              >
+                <X size={16} />
+              </button>
+            </div>
+
+            {isFetchingDraft ? (
+              <div className="flex items-center justify-center py-8 text-xs text-text-muted gap-2">
+                <Loader2 size={16} className="animate-spin text-brand" />
+                <span>Fetching draft details from Gmail...</span>
+              </div>
+            ) : draftError ? (
+              <div className="p-3 rounded-lg bg-state-error/10 border border-state-error/20 text-xs text-state-error">
+                {draftError}
+              </div>
+            ) : (
+              <div className="space-y-2.5 text-xs">
+                <div>
+                  <span className="text-text-muted font-medium">To: </span>
+                  <span className="text-text-primary font-medium">{viewingDraft.recipient || viewingDraft.to || '(No recipient)'}</span>
+                </div>
+                <div>
+                  <span className="text-text-muted font-medium">Subject: </span>
+                  <span className="text-text-primary font-medium">{viewingDraft.subject || '(No subject)'}</span>
+                </div>
+                <div className="pt-1">
+                  <span className="text-text-muted font-medium block mb-1">Body:</span>
+                  <div className="p-3 rounded-lg bg-surface-base border border-border-subtle text-text-primary whitespace-pre-wrap max-h-48 overflow-y-auto leading-relaxed">
+                    {viewingDraft.content || viewingDraft.snippet || '(Empty draft body)'}
+                  </div>
+                </div>
+              </div>
+            )}
+
+            <div className="flex justify-end gap-2 pt-2 border-t border-border-subtle">
+              <button
+                onClick={() => {
+                  const recipient = viewingDraft.recipient || viewingDraft.to || '';
+                  const subject = viewingDraft.subject || '';
+                  const content = viewingDraft.content || viewingDraft.snippet || '';
+                  setDraftEditState({
+                    mode: 'email_draft_edit',
+                    draftId: viewingDraft.id || viewingDraft.draft_id || '',
+                    to: recipient,
+                    subject: subject,
+                    body: content,
+                    accountId: viewingDraft.account_id || '',
+                  });
+                  setViewingDraft(null);
+                }}
+                className="px-3 py-1.5 rounded-lg text-xs font-medium bg-brand text-white hover:bg-brand-light transition-all"
+              >
+                Edit Draft
+              </button>
+              <button
+                onClick={() => setViewingDraft(null)}
+                className="px-3 py-1.5 rounded-lg text-xs font-medium bg-surface-overlay text-text-muted hover:text-text-primary border border-border-subtle"
+              >
+                Close
+              </button>
+            </div>
+          </motion.div>
+        </div>
+      )}
     </main>
   );
 };
