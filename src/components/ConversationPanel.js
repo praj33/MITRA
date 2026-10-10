@@ -1,5 +1,5 @@
 import { controlPlane, getApiBaseUrl } from '../services/controlPlane.js';
-import { MITRA_CANONICAL_AVATAR_DATA_URL, getActiveMitraAvatar } from '../services/avatarHelper.js';
+import { MITRA_CANONICAL_AVATAR_DATA_URL, getActiveMitraAvatar, renderAvatarElement } from '../services/avatarHelper.js';
 
 export class ConversationPanel {
   constructor(eventBus, contextStore) {
@@ -52,10 +52,21 @@ export class ConversationPanel {
       // Dynamic avatar update listener
       eventBus.on('avatar.changed', () => {
         const newAvatar = getActiveMitraAvatar(this.contextStore);
-        const heroImg = this.element.querySelector('.mitra-hero-badge-img');
-        if (heroImg) heroImg.src = newAvatar;
-        const thumbs = this.element.querySelectorAll('.chat-avatar-thumb');
-        thumbs.forEach(img => { img.src = newAvatar; });
+        const heroBadge = this.element.querySelector('.mitra-hero-badge-container');
+        if (heroBadge) {
+          const oldMedia = heroBadge.querySelector('.mitra-hero-badge-img');
+          if (oldMedia) oldMedia.remove();
+          const newMedia = renderAvatarElement(newAvatar, 'mitra-hero-badge-img');
+          heroBadge.appendChild(newMedia);
+        }
+        const thumbContainers = this.element.querySelectorAll('.chat-msg-row.mitra');
+        thumbContainers.forEach(row => {
+          const oldThumb = row.querySelector('.chat-avatar-thumb');
+          if (oldThumb) {
+            const newThumb = renderAvatarElement(newAvatar, 'chat-avatar-thumb');
+            row.replaceChild(newThumb, oldThumb);
+          }
+        });
       });
     }
   }
@@ -68,14 +79,29 @@ export class ConversationPanel {
 
     const hero = document.createElement('div');
     hero.className = 'mitra-hero-banner';
-    hero.innerHTML = `
-      <div class="mitra-hero-badge-container">
-        <div class="mitra-hero-badge-glow"></div>
-        <img src="${currentAvatar}" class="mitra-hero-badge-img" alt="MITRA" />
-      </div>
-      <div class="mitra-hero-title">MITRA AI COMPANION</div>
-      <div class="mitra-hero-sub">Universal Intelligence • Connected &amp; Ready</div>
-    `;
+    
+    const badgeContainer = document.createElement('div');
+    badgeContainer.className = 'mitra-hero-badge-container';
+    
+    const glow = document.createElement('div');
+    glow.className = 'mitra-hero-badge-glow';
+    badgeContainer.appendChild(glow);
+
+    const avatarEl = renderAvatarElement(currentAvatar, 'mitra-hero-badge-img');
+    badgeContainer.appendChild(avatarEl);
+
+    hero.appendChild(badgeContainer);
+
+    const title = document.createElement('div');
+    title.className = 'mitra-hero-title';
+    title.textContent = 'MITRA AI COMPANION';
+    hero.appendChild(title);
+
+    const sub = document.createElement('div');
+    sub.className = 'mitra-hero-sub';
+    sub.textContent = 'Universal Intelligence • Connected & Ready';
+    hero.appendChild(sub);
+
     this.element.prepend(hero);
   }
 
@@ -144,11 +170,7 @@ export class ConversationPanel {
     row.className = 'chat-msg-row mitra';
 
     const currentAvatar = getActiveMitraAvatar(this.contextStore);
-
-    const avatarImg = document.createElement('img');
-    avatarImg.src = currentAvatar;
-    avatarImg.className = 'chat-avatar-thumb';
-    avatarImg.alt = 'MITRA';
+    const avatarMedia = renderAvatarElement(currentAvatar, 'chat-avatar-thumb');
 
     const bubble = document.createElement('div');
     bubble.className = 'chat-bubble mitra';
@@ -223,7 +245,7 @@ export class ConversationPanel {
       });
     }
 
-    row.appendChild(avatarImg);
+    row.appendChild(avatarMedia);
     row.appendChild(bubble);
     this.element.appendChild(row);
     this.scrollToBottom();

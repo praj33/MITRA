@@ -150,6 +150,16 @@
   display: block;
 }
 
+.mitra-avatar-media {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  border-radius: 50%;
+  display: block;
+  pointer-events: none;
+  z-index: 2;
+}
+
 /* Notification Badge */
 .mitra-notification-badge {
   position: absolute;
@@ -580,13 +590,16 @@
   gap: 10px;
 }
 .mitra-avatar-preview-ring {
-  width: 80px;
-  height: 80px;
+  width: 88px;
+  height: 88px;
   border-radius: 50%;
   border: 2px solid #a29bfe;
-  box-shadow: 0 0 16px rgba(108, 92, 231, 0.6);
+  box-shadow: 0 0 20px rgba(108, 92, 231, 0.7);
   overflow: hidden;
   background: #000;
+  display: flex;
+  align-items: center;
+  justify-content: center;
 }
 .mitra-avatar-preview-img {
   width: 100%;
@@ -603,11 +616,69 @@
   padding: 3px 10px;
   border-radius: 12px;
 }
+.mitra-supported-formats-bar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: center;
+  gap: 4px 6px;
+  margin: 4px 0 6px;
+}
+.mitra-format-tag {
+  font-size: 9.5px;
+  font-weight: 700;
+  color: #a29bfe;
+  background: rgba(108, 92, 231, 0.15);
+  border: 1px solid rgba(162, 155, 254, 0.25);
+  padding: 2px 6px;
+  border-radius: 6px;
+}
+.mitra-transparency-pill {
+  width: 100%;
+  text-align: center;
+  font-size: 10px;
+  font-weight: 600;
+  color: #00e676;
+  background: rgba(0, 230, 118, 0.1);
+  border: 1px solid rgba(0, 230, 118, 0.25);
+  padding: 3px 8px;
+  border-radius: 8px;
+  margin-top: 2px;
+}
+.mitra-avatar-dropzone {
+  width: 100%;
+  border: 1.5px dashed rgba(162, 155, 254, 0.4);
+  background: rgba(255, 255, 255, 0.02);
+  border-radius: 12px;
+  padding: 12px 10px;
+  text-align: center;
+  cursor: pointer;
+  transition: all 0.2s;
+  box-sizing: border-box;
+}
+.mitra-avatar-dropzone:hover, .mitra-avatar-dropzone.drag-over {
+  border-color: #00e676;
+  background: rgba(0, 230, 118, 0.06);
+  transform: scale(1.01);
+}
+.mitra-dropzone-icon {
+  font-size: 18px;
+  margin-bottom: 2px;
+}
+.mitra-dropzone-text {
+  font-size: 12px;
+  color: #fff;
+  margin-bottom: 2px;
+}
+.mitra-dropzone-sub {
+  font-size: 10px;
+  color: rgba(255, 255, 255, 0.5);
+}
 .mitra-avatar-modal-actions {
   width: 100%;
   display: flex;
   flex-direction: column;
-  gap: 10px;
+  gap: 8px;
 }
 .mitra-avatar-btn {
   width: 100%;
