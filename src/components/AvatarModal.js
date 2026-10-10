@@ -1,4 +1,5 @@
-import { getActiveMitraAvatar, renderAvatarElement, isVideoAsset, COMPANION_PRESETS, MITRA_CANONICAL_AVATAR_DATA_URL } from '../services/avatarHelper.js';
+import { getActiveMitraAvatar, renderAvatarElement, isVideoAsset, setCachedActiveAvatar, COMPANION_PRESETS, MITRA_CANONICAL_AVATAR_DATA_URL } from '../services/avatarHelper.js';
+import { companionStorage } from '../services/companionStorage.js';
 
 export class AvatarModal {
   constructor(eventBus, contextStore) {
@@ -13,23 +14,23 @@ export class AvatarModal {
 
   render() {
     const activeAvatar = getActiveMitraAvatar(this.contextStore);
-    const isCustom = this.contextStore && this.contextStore.getAvatar() && this.contextStore.getAvatar() !== 'default' && this.contextStore.getAvatar().length > 20;
+    const isDefault = !activeAvatar || activeAvatar === 'default' || activeAvatar === MITRA_CANONICAL_AVATAR_DATA_URL;
 
-    let activeType = '🤖 Official Robot';
+    let activeType = '🤖 Official Robot Active';
     if (isVideoAsset(activeAvatar)) {
-      activeType = '🎬 Animated Video Loop (MP4/WebM)';
+      activeType = '🎬 MP4 / WebM Looping Video Active';
     } else if (activeAvatar.startsWith('data:image/gif') || activeAvatar.includes('.gif')) {
-      activeType = '✨ Animated GIF';
+      activeType = '✨ Animated GIF Active';
     } else if (activeAvatar.startsWith('data:image/webp') || activeAvatar.includes('.webp')) {
-      activeType = '🌟 Transparent WebP';
-    } else if (isCustom) {
+      activeType = '🌟 Transparent WebP Active';
+    } else if (!isDefault) {
       activeType = '🎨 Custom Companion Active';
     }
 
     const presetsHtml = COMPANION_PRESETS.map(preset => {
-      const isSelected = activeAvatar === preset.src || (!isCustom && preset.id === 'official-robot');
+      const isSelected = activeAvatar === preset.src || (isDefault && preset.id === 'official-robot');
       return `
-        <div class="mitra-preset-card ${isSelected ? 'selected' : ''}" data-preset-id="${preset.id}">
+        <div class="mitra-preset-card ${isSelected ? 'selected' : ''}" data-preset-id="${preset.id}" title="${preset.name}">
           <div class="mitra-preset-thumb-wrap">
             <img src="${preset.src}" class="mitra-preset-thumb" alt="${preset.name}" />
           </div>
@@ -48,14 +49,14 @@ export class AvatarModal {
         
         <div class="mitra-avatar-preview-wrap">
           <div class="mitra-avatar-preview-ring" id="modal-preview-ring">
-            <!-- Live Media Preview -->
+            <!-- Live Media Preview (Image or Video) -->
           </div>
           <div class="mitra-avatar-status-badge" id="modal-status-badge">
             ${activeType}
           </div>
         </div>
 
-        <!-- Format Badges -->
+        <!-- Format Compatibility Badges -->
         <div class="mitra-supported-formats-bar">
           <span class="mitra-format-tag">PNG</span>
           <span class="mitra-format-tag">JPG</span>
@@ -78,7 +79,7 @@ export class AvatarModal {
         <div class="mitra-avatar-dropzone" id="avatar-dropzone">
           <div class="mitra-dropzone-icon">📁</div>
           <div class="mitra-dropzone-text"><strong>Upload Custom Companion Asset</strong></div>
-          <div class="mitra-dropzone-sub">Drag &amp; drop PNG, JPG, GIF, WebP, or MP4 video loop</div>
+          <div class="mitra-dropzone-sub">Drag &amp; drop or click to upload PNG, JPG, GIF, WebP, or MP4</div>
         </div>
 
         <div class="mitra-avatar-modal-actions">
@@ -171,13 +172,10 @@ export class AvatarModal {
     });
   }
 
-  applyNewAvatar(newAvatar) {
-    if (typeof localStorage !== 'undefined') {
-      localStorage.setItem('mitra_companion_asset', newAvatar);
-      localStorage.setItem('mitra_avatar_custom', newAvatar);
-      localStorage.setItem('mitra_custom_avatar', newAvatar);
-      localStorage.setItem('mitra_avatar_data_url', newAvatar);
-    }
+  async applyNewAvatar(newAvatar) {
+    setCachedActiveAvatar(newAvatar);
+    await companionStorage.setAsset('current_companion', newAvatar);
+
     if (this.contextStore) {
       this.contextStore.setAvatar(newAvatar);
     }
@@ -187,13 +185,10 @@ export class AvatarModal {
     this.close();
   }
 
-  resetToOfficial() {
-    if (typeof localStorage !== 'undefined') {
-      localStorage.removeItem('mitra_companion_asset');
-      localStorage.removeItem('mitra_avatar_data_url');
-      localStorage.removeItem('mitra_avatar_custom');
-      localStorage.removeItem('mitra_custom_avatar');
-    }
+  async resetToOfficial() {
+    setCachedActiveAvatar(MITRA_CANONICAL_AVATAR_DATA_URL);
+    await companionStorage.removeAsset('current_companion');
+
     if (this.contextStore) {
       this.contextStore.setAvatar('default');
     }

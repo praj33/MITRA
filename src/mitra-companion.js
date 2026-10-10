@@ -6,6 +6,7 @@ import { NotificationCenter } from './components/NotificationCenter.js';
 import { DockController } from './components/DockController.js';
 import { contextStore } from './services/contextStore.js';
 import { AvatarModal } from './components/AvatarModal.js';
+import { initActiveMitraAvatar } from './services/avatarHelper.js';
 
 class MitraCompanion extends HTMLElement {
   constructor() {
@@ -16,6 +17,7 @@ class MitraCompanion extends HTMLElement {
   async connectedCallback() {
     try {
       window.__mitra_event_bus = eventBus;
+      await initActiveMitraAvatar(contextStore);
       this.render();
       await runtimeService.connectAll();
     } catch (err) {
