@@ -362,7 +362,6 @@ async def call_external_llm(request: _LLMRequest):
 # -------------------------------------------------
 # System Endpoints
 # -------------------------------------------------
->>>>>>> bhiv/main
 @app.get("/")
 async def root():
     return {

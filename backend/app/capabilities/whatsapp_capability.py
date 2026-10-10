@@ -19,36 +19,16 @@ class WhatsAppCapability(BaseCapability):
 
     @property
     def supported_intents(self) -> List[str]:
-<<<<<<< HEAD
-        return ["telegram", "whatsapp", "send_whatsapp", "send_telegram", "send_message", "instagram", "send_instagram"]
-=======
         return [
-            "telegram", "whatsapp", "send_whatsapp", "send_message",
-            "SEND_MESSAGE", "DRAFT_MESSAGE", "READ_MESSAGES", "SEARCH_MESSAGES",
+            "telegram", "whatsapp", "send_whatsapp", "send_telegram", "send_message",
+            "instagram", "send_instagram", "SEND_MESSAGE", "DRAFT_MESSAGE", "READ_MESSAGES", "SEARCH_MESSAGES",
         ]
->>>>>>> bhiv/main
 
     async def execute(self, intent: str, params: Dict[str, Any], trace_id: Optional[str] = None) -> CapabilityResult:
         try:
             from app.mitra_system_registry import mitra_registry
             execution_svc = mitra_registry.execution_service
-<<<<<<< HEAD
             raw_message = params.get("message", "")
-=======
-
-            # Security Requirement: User-owned WhatsApp actions must carry authenticated user context
-            user_id = params.get("user_id")
-            if not user_id or not str(user_id).strip() or str(user_id).strip().lower() in ("user_default", "default", "none", "null"):
-                logger.warning("WhatsAppCapability rejected execution: missing or invalid authenticated user_id '%s'", user_id)
-                return CapabilityResult.error_result(
-                    self.name,
-                    intent,
-                    "Authentication required: user-owned WhatsApp actions require an authenticated user identity.",
-                    trace_id
-                )
-
-            message = params.get("message", "")
->>>>>>> bhiv/main
             entities = params.get("entities", {})
             contact = entities.get("contact", "") or params.get("contact", "")
             user_id = params.get("user_id", "user_default")

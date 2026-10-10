@@ -61,20 +61,18 @@ async def get_integrations(
     """
     auth_user_id = current_user["user_id"]
     db = _get_db()
-pref = _CALENDAR_PREF_CACHE.get(user_id, "google")
+    pref = _CALENDAR_PREF_CACHE.get(user_id or auth_user_id, "google")
 
-# Generate signed WebCal token for secure device calendar subscriptions
+    # Generate signed WebCal token for secure device calendar subscriptions
     feed_token = create_access_token({"user_id": auth_user_id, "feed": True})
     result = {
         "user_id": auth_user_id,
         "gmail": {"connected": False, "email": ""},
         "whatsapp": {"verified": False, "phone": ""},
         "calendar": {
-"preferred_provider": pref,
+            "preferred_provider": pref,
             "supported_providers": ["google", "apple", "microsoft", "zoho"],
-            "webcal_url": f"http://localhost:8000/api/calendar/feed.ics?user_id={user_id}"
-
-"webcal_url": f"http://localhost:8000/api/calendar/feed.ics?token={feed_token}"
+            "webcal_url": f"http://localhost:8000/api/calendar/feed.ics?token={feed_token}"
         }
     }
 

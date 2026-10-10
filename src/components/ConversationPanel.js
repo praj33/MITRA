@@ -1,5 +1,5 @@
 import { controlPlane, getApiBaseUrl } from '../services/controlPlane.js';
-import { MITRA_CANONICAL_AVATAR_DATA_URL } from '../services/avatarHelper.js';
+import { MITRA_CANONICAL_AVATAR_DATA_URL, getActiveMitraAvatar } from '../services/avatarHelper.js';
 
 export class ConversationPanel {
   constructor(eventBus, contextStore) {
@@ -48,6 +48,15 @@ export class ConversationPanel {
       eventBus.on('context.cleared', () => {
         this.renderHistory();
       });
+
+      // Dynamic avatar update listener
+      eventBus.on('avatar.changed', () => {
+        const newAvatar = getActiveMitraAvatar(this.contextStore);
+        const heroImg = this.element.querySelector('.mitra-hero-badge-img');
+        if (heroImg) heroImg.src = newAvatar;
+        const thumbs = this.element.querySelectorAll('.chat-avatar-thumb');
+        thumbs.forEach(img => { img.src = newAvatar; });
+      });
     }
   }
 
@@ -55,7 +64,7 @@ export class ConversationPanel {
     const existing = this.element.querySelector('.mitra-hero-banner');
     if (existing) return;
 
-    const currentAvatar = (typeof localStorage !== 'undefined' && localStorage.getItem('mitra_avatar_data_url')) || MITRA_CANONICAL_AVATAR_DATA_URL;
+    const currentAvatar = getActiveMitraAvatar(this.contextStore);
 
     const hero = document.createElement('div');
     hero.className = 'mitra-hero-banner';
@@ -122,7 +131,8 @@ export class ConversationPanel {
 
     const bubble = document.createElement('div');
     bubble.className = 'chat-bubble user';
-    bubble.innerHTML = `<div style="overflow-wrap: break-word; word-break: break-word; box-sizing: border-box;">${this.escapeHtml(text)}</div><div class="chat-timestamp">${date.toLocaleTimeString()}</div>`;
+    const timeStr = date.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+    bubble.innerHTML = `<div style="overflow-wrap: break-word; word-break: break-word; box-sizing: border-box;">${this.escapeHtml(text)}</div><div class="chat-timestamp">${timeStr}</div>`;
     
     row.appendChild(bubble);
     this.element.appendChild(row);
@@ -133,7 +143,7 @@ export class ConversationPanel {
     const row = document.createElement('div');
     row.className = 'chat-msg-row mitra';
 
-    const currentAvatar = (typeof localStorage !== 'undefined' && localStorage.getItem('mitra_avatar_data_url')) || MITRA_CANONICAL_AVATAR_DATA_URL;
+    const currentAvatar = getActiveMitraAvatar(this.contextStore);
 
     const avatarImg = document.createElement('img');
     avatarImg.src = currentAvatar;
@@ -149,20 +159,20 @@ export class ConversationPanel {
     }
 
     let html = `
-      <div style="display:flex; justify-content:space-between; align-items:flex-start; gap:8px;">
-        <div style="white-space: pre-wrap; flex:1; overflow-wrap: break-word; word-break: break-word; box-sizing: border-box; min-width: 0;">${this.formatMarkdown(text)}</div>
-        <button class="mitra-speaker-btn" title="Listen to AI voice" style="background:none; border:none; color:rgba(255,255,255,0.6); cursor:pointer; padding:2px; font-size:14px; transition:0.2s; flex-shrink:0;">🔊</button>
+      <div class="chat-text-row">
+        <div class="chat-text-body">${this.formatMarkdown(text)}</div>
+        <button class="mitra-speaker-btn" title="Listen to AI voice">🔊</button>
       </div>
     `;
     
     // Add Intent badge if present
     if (intent && intent !== 'general') {
       if (intent === 'summarize') {
-        html += `<div style="margin-top:8px; font-size:10px; background:rgba(0,230,118,0.15); border:1px solid rgba(0,230,118,0.35); color:#00e676; padding:2px 8px; border-radius:10px; display:inline-flex; align-items:center; gap:4px;">📄 AI Summary</div>`;
+        html += `<div style="margin-top:6px; font-size:10px; background:rgba(0,230,118,0.15); border:1px solid rgba(0,230,118,0.35); color:#00e676; padding:2px 8px; border-radius:10px; display:inline-flex; align-items:center; gap:4px; width:fit-content;">📄 AI Summary</div>`;
       } else if (intent === 'summarize_prompt') {
-        html += `<div style="margin-top:8px; font-size:10px; background:rgba(255,183,0,0.15); border:1px solid rgba(255,183,0,0.35); color:#ffb700; padding:2px 8px; border-radius:10px; display:inline-flex; align-items:center; gap:4px;">💡 Input required</div>`;
+        html += `<div style="margin-top:6px; font-size:10px; background:rgba(255,183,0,0.15); border:1px solid rgba(255,183,0,0.35); color:#ffb700; padding:2px 8px; border-radius:10px; display:inline-flex; align-items:center; gap:4px; width:fit-content;">💡 Input required</div>`;
       } else if (intent !== 'reminder_alert') {
-        html += `<div style="margin-top:8px; font-size:10px; opacity:0.85; background:rgba(108,92,231,0.25); border:1px solid rgba(108,92,231,0.4); padding:2px 8px; border-radius:10px; display:inline-flex; align-items:center; gap:4px;">⚡ Intent: ${this.escapeHtml(intent)}</div>`;
+        html += `<div style="margin-top:6px; font-size:10px; opacity:0.85; background:rgba(108,92,231,0.25); border:1px solid rgba(108,92,231,0.4); padding:2px 8px; border-radius:10px; display:inline-flex; align-items:center; gap:4px; width:fit-content;">⚡ Intent: ${this.escapeHtml(intent)}</div>`;
       }
     }
 
@@ -171,10 +181,11 @@ export class ConversationPanel {
       const actionsHtml = suggestedActions.map(action => 
         `<button class="mitra-action-chip" style="margin:4px 6px 0 0; background:linear-gradient(135deg, rgba(108,92,231,0.3), rgba(0,230,118,0.2)); border:1px solid rgba(255,255,255,0.25); color:#fff; padding:5px 12px; border-radius:14px; font-size:11px; font-weight:500; cursor:pointer; font-family:inherit; transition:0.2s;">✨ ${this.escapeHtml(action)}</button>`
       ).join('');
-      html += `<div style="margin-top:10px; display:flex; flex-wrap:wrap;">${actionsHtml}</div>`;
+      html += `<div style="margin-top:8px; display:flex; flex-wrap:wrap;">${actionsHtml}</div>`;
     }
 
-    html += `<div class="chat-timestamp">${date.toLocaleTimeString()}</div>`;
+    const timeStr = date.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+    html += `<div class="chat-timestamp">${timeStr}</div>`;
     bubble.innerHTML = html;
 
     // Attach click listener for Speaker Button (Speech Output)

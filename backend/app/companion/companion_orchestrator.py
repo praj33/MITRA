@@ -247,11 +247,14 @@ class CompanionOrchestrator:
         capability_result: Optional[CapabilityResult] = None
         response_text: str = ""
 
-<<<<<<< HEAD
         # Check active UI context from request page_context
         active_host_app = (page_context or {}).get("host_app", "")
 
-        if intent in ("setu", "inventory", "stock", "orders") or any(kw in message.lower() for kw in ["inventory", "stock", "tea leaves", "setu", "sku"]):
+        is_self_identity = self._is_self_identity_query(message) or self._is_self_identity_query(resolved_message)
+        if is_self_identity:
+            capability_name = None
+            is_knowledge = False
+        elif intent in ("setu", "inventory", "stock", "orders") or any(kw in message.lower() for kw in ["inventory", "stock", "tea leaves", "setu", "sku"]):
             capability_name = "setu"
             intent = "setu"
             is_knowledge = False
@@ -269,16 +272,7 @@ class CompanionOrchestrator:
             is_knowledge = False
         else:
             capability_name = _CAPABILITY_INTENT_MAP.get(intent)
-            is_knowledge = self._is_knowledge_query(message, intent)
-=======
-        is_self_identity = self._is_self_identity_query(message) or self._is_self_identity_query(resolved_message)
-        if is_self_identity:
-            capability_name = None
-            is_knowledge = False
-        else:
-            capability_name = _CAPABILITY_INTENT_MAP.get(intent)
             is_knowledge = self._is_knowledge_query(resolved_message, intent)
->>>>>>> bhiv/main
 
         if capability_name and capability_name in self._config.enabled_capabilities:
             # ── Capability path ───────────────────────────────────────
@@ -297,27 +291,17 @@ class CompanionOrchestrator:
                 data={"intent": intent},
             )
             params = {
-<<<<<<< HEAD
-                "message":   message,
-                "entities":  intent_data.get("entities", {}),
-                "dates":     intent_data.get("dates_times", {}),
-                "context":   intent_data.get("context", {}),
-                "user_id":   user_id,
-                "trace_id":  ctx.trace_id,
-=======
                 "message":      resolved_message,
                 "entities":     intent_data.get("entities", {}),
                 "dates":        intent_data.get("dates_times", {}),
                 "context":      intent_data.get("context", {}),
                 "user_id":      user_id,
                 "trace_id":     ctx.trace_id,
->>>>>>> bhiv/main
                 "execution_id": ctx.execution_id,
             }
             capability_result = await capability_registry.execute(
                 intent=intent, params=params, trace_id=ctx.trace_id
             )
-<<<<<<< HEAD
             if capability_result and capability_result.status == "success":
                 if capability_result.capability == "samachar":
                     # Generate a conversational news response using LLM with returned data
@@ -396,7 +380,6 @@ class CompanionOrchestrator:
                     except Exception as llm_exc:
                         logger.warning("Failed to synthesize news with LLM: %s — using clean deterministic Samachar report", llm_exc)
                         response_text = _deterministic_report
-=======
 
             # Check if action requires structured approval confirmation (B.COMM-3)
             is_approval = False
@@ -447,7 +430,6 @@ class CompanionOrchestrator:
                             "request_id": ctx.execution_id,
                             "delta": token,
                         }
->>>>>>> bhiv/main
                 else:
                     response_text = personality_engine.build_capability_confirm(
                         capability_result.summary
@@ -506,22 +488,6 @@ class CompanionOrchestrator:
                 execution_id=ctx.execution_id,
                 capability="uniguru",
             )
-<<<<<<< HEAD
-            response_text = await self._call_knowledge(message, user_id)
-            capability_result = CapabilityResult(
-                capability="uniguru",
-                intent="knowledge",
-                status="success",
-                summary="UniGuru Knowledge Answer",
-                data={
-                    "answer": response_text,
-                    "source": "llm_fallback",
-                    "verification_status": "VERIFIED",
-                    "result": response_text
-                },
-                trace_id=ctx.trace_id
-            )
-=======
             async for token in self._stream_knowledge(resolved_message, user_id, raw_message=message):
                 response_text += token
                 yield {
@@ -529,7 +495,6 @@ class CompanionOrchestrator:
                     "request_id": ctx.execution_id,
                     "delta": token,
                 }
->>>>>>> bhiv/main
             await runtime_event_bus.publish(
                 event_type="completed",
                 user_id=user_id,
@@ -553,9 +518,6 @@ class CompanionOrchestrator:
                 execution_id=ctx.execution_id,
                 capability="conversation",
             )
-<<<<<<< HEAD
-            response_text = await self._call_conversation(message, user_id)
-=======
             async for token in self._stream_conversation(resolved_message, user_id, raw_message=message):
                 response_text += token
                 yield {
@@ -563,7 +525,6 @@ class CompanionOrchestrator:
                     "request_id": ctx.execution_id,
                     "delta": token,
                 }
->>>>>>> bhiv/main
             await runtime_event_bus.publish(
                 event_type="completed",
                 user_id=user_id,
@@ -732,10 +693,6 @@ class CompanionOrchestrator:
             logger.warning("Safety gate error: %s — failing open for conversation", exc)
             return False, ""
 
-<<<<<<< HEAD
-    async def _call_conversation(self, message: str, user_id: str) -> str:
-        """General LLM conversation with full context & live web/market integration."""
-=======
     async def _stream_conversation(
         self,
         message: str,
@@ -744,7 +701,6 @@ class CompanionOrchestrator:
         raw_message: Optional[str] = None,
     ) -> AsyncIterator[str]:
         """Stream general LLM conversation tokens with full context & live web/market integration."""
->>>>>>> bhiv/main
         facts = await companion_memory.get_user_facts(user_id)
         user_name = facts.get("name") or "there"
         system_prompt = personality_engine.build_system_prompt(
@@ -808,9 +764,7 @@ class CompanionOrchestrator:
             current_user_message=message,
             raw_message=raw_message,
         )
-<<<<<<< HEAD
 
-=======
         async for token in llm_bridge.stream_llm_with_messages(
             model=self._config.llm_provider,
             messages=messages,
@@ -835,7 +789,6 @@ class CompanionOrchestrator:
         ):
             tokens.append(token)
         return "".join(tokens)
->>>>>>> bhiv/main
 
     def _is_self_identity_query(self, message: str) -> bool:
         """Check if message is asking about Mitra's self-identity or capabilities."""

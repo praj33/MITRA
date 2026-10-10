@@ -208,8 +208,6 @@ class LLMBridge:
         for i in range(0, len(full_text), chunk_size):
             yield full_text[i : i + chunk_size]
             await asyncio.sleep(0.008)
-
->>>>>>> bhiv/main
     async def _dispatch(self, model: str, messages: list, temperature: float, max_tokens: int) -> str:
         try:
             if model in ("groq", "llama"):

@@ -12,11 +12,8 @@ import { CompanionService } from '../../services/companion.service';
 import { authApi } from '../../services/authApi';
 import { getApiBase, getAuthHeaders } from '../../services/apiConfig';
 import ConversationCard from '../cards/ConversationCard';
-<<<<<<< HEAD
 import { DailyBriefingCard } from '../cards/DailyBriefingCard';
 import { MessageSquare } from 'lucide-react';
-=======
->>>>>>> bhiv/main
 
 const ThinkingIndicator = () => (
   <motion.div
