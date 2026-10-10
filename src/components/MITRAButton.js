@@ -1,6 +1,6 @@
 import { NotificationBadge } from './NotificationBadge.js';
 import { eventBus } from '../services/eventBus.js';
-import { renderAvatarElement } from '../services/avatarHelper.js';
+import { renderAvatarElement, getActiveMitraAvatar } from '../services/avatarHelper.js';
 import { contextStore } from '../services/contextStore.js';
 
 export class MITRAButton {
@@ -60,11 +60,11 @@ export class MITRAButton {
 
     // Listen for avatar updates
     eventBus.on('avatar.changed', (data) => {
-      this.updateAvatar(data.avatar);
+      this.updateAvatar(getActiveMitraAvatar(contextStore));
     });
 
     // Initial avatar rendering (fallback to canonical Mitra avatar)
-    const initialAvatar = contextStore.getAvatar() || 'default';
+    const initialAvatar = getActiveMitraAvatar(contextStore);
     this.updateAvatar(initialAvatar);
   }
 

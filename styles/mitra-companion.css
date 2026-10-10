@@ -513,3 +513,134 @@
   box-shadow: 0 0 4px rgba(255, 255, 255, 0.1);
   background: rgba(0, 0, 0, 0.2);
 }
+
+/* Avatar Customization Modal */
+.mitra-avatar-modal-overlay {
+  position: absolute;
+  inset: 0;
+  background: rgba(8, 8, 12, 0.85);
+  backdrop-filter: blur(16px);
+  -webkit-backdrop-filter: blur(16px);
+  z-index: 100;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 20px;
+  box-sizing: border-box;
+  animation: fadeInModal 0.25s ease;
+}
+@keyframes fadeInModal {
+  from { opacity: 0; transform: scale(0.96); }
+  to { opacity: 1; transform: scale(1); }
+}
+.mitra-avatar-modal-card {
+  width: 100%;
+  max-width: 320px;
+  background: rgba(22, 22, 34, 0.95);
+  border: 1px solid rgba(162, 155, 254, 0.35);
+  border-radius: 20px;
+  padding: 22px 20px;
+  box-shadow: 0 12px 36px rgba(0, 0, 0, 0.6), 0 0 20px rgba(108, 92, 231, 0.25);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 16px;
+  box-sizing: border-box;
+}
+.mitra-avatar-modal-header {
+  width: 100%;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+.mitra-avatar-modal-title {
+  font-size: 14px;
+  font-weight: 700;
+  color: #ffffff;
+  letter-spacing: -0.2px;
+}
+.mitra-avatar-modal-close {
+  background: none;
+  border: none;
+  color: rgba(255, 255, 255, 0.6);
+  font-size: 14px;
+  cursor: pointer;
+  padding: 4px;
+  border-radius: 6px;
+  transition: all 0.2s;
+}
+.mitra-avatar-modal-close:hover {
+  color: #fff;
+  background: rgba(255, 255, 255, 0.1);
+}
+.mitra-avatar-preview-wrap {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 10px;
+}
+.mitra-avatar-preview-ring {
+  width: 80px;
+  height: 80px;
+  border-radius: 50%;
+  border: 2px solid #a29bfe;
+  box-shadow: 0 0 16px rgba(108, 92, 231, 0.6);
+  overflow: hidden;
+  background: #000;
+}
+.mitra-avatar-preview-img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  display: block;
+}
+.mitra-avatar-status-badge {
+  font-size: 11px;
+  font-weight: 600;
+  color: #a29bfe;
+  background: rgba(108, 92, 231, 0.2);
+  border: 1px solid rgba(162, 155, 254, 0.3);
+  padding: 3px 10px;
+  border-radius: 12px;
+}
+.mitra-avatar-modal-actions {
+  width: 100%;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+.mitra-avatar-btn {
+  width: 100%;
+  padding: 10px 14px;
+  border-radius: 12px;
+  font-size: 12.5px;
+  font-weight: 600;
+  font-family: inherit;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  transition: all 0.2s;
+  box-sizing: border-box;
+}
+.mitra-avatar-btn.primary {
+  background: linear-gradient(135deg, #6c5ce7, #5f27cd);
+  border: 1px solid rgba(255, 255, 255, 0.2);
+  color: #fff;
+  box-shadow: 0 4px 14px rgba(108, 92, 231, 0.4);
+}
+.mitra-avatar-btn.primary:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 6px 18px rgba(108, 92, 231, 0.6);
+}
+.mitra-avatar-btn.secondary {
+  background: rgba(255, 255, 255, 0.06);
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  color: #e4e4e7;
+}
+.mitra-avatar-btn.secondary:hover {
+  background: rgba(255, 255, 255, 0.12);
+  color: #fff;
+}
+

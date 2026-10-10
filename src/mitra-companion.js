@@ -5,6 +5,7 @@ import { MITRAWindow } from './components/MITRAWindow.js';
 import { NotificationCenter } from './components/NotificationCenter.js';
 import { DockController } from './components/DockController.js';
 import { contextStore } from './services/contextStore.js';
+import { AvatarModal } from './components/AvatarModal.js';
 
 class MitraCompanion extends HTMLElement {
   constructor() {
@@ -109,26 +110,12 @@ class MitraCompanion extends HTMLElement {
     eventBus.on('capability.finished', () => mitraButton.setThinking(false));
     eventBus.on('notification.received', () => mitraButton.setThinking(false));
 
-    // Hidden avatar file input setup
-    const fileInput = document.createElement('input');
-    fileInput.type = 'file';
-    fileInput.accept = 'image/png, image/jpeg, image/gif, image/webp, video/mp4, video/webm';
-    fileInput.style.display = 'none';
-    shell.appendChild(fileInput);
+    // Avatar customization modal setup
+    const avatarModal = new AvatarModal(eventBus, contextStore);
+    shell.appendChild(avatarModal.element);
 
     eventBus.on('avatar.request_change', () => {
-      fileInput.click();
-    });
-
-    fileInput.addEventListener('change', (e) => {
-      const file = e.target.files[0];
-      if (file) {
-        const reader = new FileReader();
-        reader.onload = (evt) => {
-          contextStore.setAvatar(evt.target.result);
-        };
-        reader.readAsDataURL(file);
-      }
+      avatarModal.open();
     });
 
     // Drag-and-drop tracking

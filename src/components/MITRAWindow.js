@@ -4,7 +4,7 @@ import { Footer } from './Footer.js';
 import { CapabilityLauncher } from './CapabilityLauncher.js';
 import { HealthPanel } from './HealthPanel.js';
 import { ActivityIndicator } from './ActivityIndicator.js';
-import { renderAvatarElement } from '../services/avatarHelper.js';
+import { renderAvatarElement, getActiveMitraAvatar } from '../services/avatarHelper.js';
 import { contextStore } from '../services/contextStore.js';
 
 export class MITRAWindow {
@@ -52,11 +52,12 @@ export class MITRAWindow {
     });
 
     // Initial and dynamic avatar updates
-    const initialAvatar = contextStore.getAvatar() || 'default';
+    const initialAvatar = getActiveMitraAvatar(contextStore);
     this.header.updateAvatar(initialAvatar, renderAvatarElement);
 
     this.eventBus.on('avatar.changed', (data) => {
-      this.header.updateAvatar(data.avatar || 'default', renderAvatarElement);
+      const activeAvatar = getActiveMitraAvatar(contextStore);
+      this.header.updateAvatar(activeAvatar, renderAvatarElement);
     });
 
     // Listen for health status changes to update header indicator

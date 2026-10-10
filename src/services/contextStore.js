@@ -163,12 +163,23 @@ export class ContextStore {
 
   setAvatar(avatarDataUrl) {
     this.state.avatar = avatarDataUrl;
+    if (typeof localStorage !== 'undefined') {
+      if (avatarDataUrl && avatarDataUrl !== 'default' && avatarDataUrl.length > 20) {
+        localStorage.setItem('mitra_avatar_custom', avatarDataUrl);
+        localStorage.setItem('mitra_custom_avatar', avatarDataUrl);
+        localStorage.setItem('mitra_avatar_data_url', avatarDataUrl);
+      } else {
+        localStorage.removeItem('mitra_avatar_data_url');
+        localStorage.removeItem('mitra_avatar_custom');
+        localStorage.removeItem('mitra_custom_avatar');
+      }
+    }
     this.saveState();
     eventBus.emit('avatar.changed', { avatar: avatarDataUrl });
   }
 
   getAvatar() {
-    return this.state.avatar || null;
+    return this.state.avatar || (typeof localStorage !== 'undefined' ? (localStorage.getItem('mitra_avatar_custom') || localStorage.getItem('mitra_custom_avatar') || localStorage.getItem('mitra_avatar_data_url')) : null);
   }
 
   // ─── Window State ────────────────────────────────────────────────────────────
